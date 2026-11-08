@@ -1,0 +1,32 @@
+Ludex 1.0.0 — локальная библиотека игр
+
+Copyright (c) 2026 Ludex
+
+Программа бесплатна для личного использования. Она распространяется «как есть»,
+без каких-либо гарантий.
+
+Что делает программа:
+  • просматривает папки, которые вы указали, и находит в них игры (.exe);
+  • определяет название игры по имени папки и файла запуска;
+  • скачивает обложки из каталога Steam (и, при наличии вашего ключа API,
+    из SteamGridDB);
+  • запускает игры и открывает их папки.
+
+Что программа НЕ делает:
+  • не изменяет, не перемещает и не удаляет файлы ваших игр;
+  • не требует учётной записи, не отправляет ваши файлы на серверы;
+  • в интернет уходят только запросы поиска обложек (название игры).
+
+Данные программы (база библиотеки, кэш обложек, настройки) хранятся в папке
+%LOCALAPPDATA%\Ludex и удаляются вместе с программой при деинсталляции
+(по вашему выбору).
+
+-------------------------------------------------------------------------------
+Ludex 1.0.0 — local game library
+
+This software is free for personal use and provided "as is", without warranty.
+It scans the folders you choose, finds game executables, recognizes titles,
+downloads cover art from the Steam catalog (and SteamGridDB when you provide
+your own API key), launches games and opens their folders.
+Your game files are never modified or deleted. Only game titles are sent to the
+artwork providers.

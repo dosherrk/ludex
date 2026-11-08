@@ -1,0 +1,165 @@
+using System;
+using System.Collections.Generic;
+
+namespace Ludex;
+
+public static class Loc
+{
+    private static string _lang = "ru";
+
+    public static string Lang
+    {
+        get => _lang;
+        set
+        {
+            if (value != "ru" && value != "en") value = "ru";
+            _lang = value;
+            Changed?.Invoke();
+        }
+    }
+
+    public static bool IsRu => _lang == "ru";
+
+    public static event Action? Changed;
+
+    public static string T(string key)
+    {
+        if (!Map.TryGetValue(key, out var pair)) return key;
+        return _lang == "en" ? pair.en : pair.ru;
+    }
+
+    public static string F(string key, params object[] args) => string.Format(T(key), args);
+
+    private static readonly Dictionary<string, (string ru, string en)> Map = new()
+    {
+        ["app.name"] = ("LUDEX", "LUDEX"),
+        ["app.tagline"] = ("Моя библиотека игр", "My game library"),
+        ["btn.scan"] = ("Сканировать", "Scan"),
+        ["btn.settings"] = ("Настройки", "Settings"),
+        ["btn.play"] = ("Играть", "Play"),
+        ["btn.playAdmin"] = ("Играть от админа", "Play as admin"),
+        ["btn.openFolder"] = ("Открыть папку", "Open folder"),
+        ["btn.changeCover"] = ("Обложка", "Artwork"),
+        ["btn.rename"] = ("Переименовать", "Rename"),
+        ["btn.remove"] = ("Убрать из библиотеки", "Remove from library"),
+        ["btn.favorite"] = ("В избранное", "Add to favorites"),
+        ["btn.unfavorite"] = ("Убрать из избранного", "Remove from favorites"),
+        ["btn.add"] = ("Добавить", "Add"),
+        ["btn.removeSel"] = ("Удалить", "Remove"),
+        ["btn.save"] = ("Сохранить", "Save"),
+        ["btn.cancel"] = ("Отмена", "Cancel"),
+        ["btn.close"] = ("Закрыть", "Close"),
+        ["btn.browseFile"] = ("Выбрать файл с диска…", "Pick a file…"),
+        ["btn.resetCover"] = ("Автоподбор обложки", "Fetch artwork automatically"),
+        ["btn.thisPc"] = ("Этот компьютер", "This PC"),
+        ["search.watermark"] = ("Поиск по библиотеке…", "Search library…"),
+        ["empty.title"] = ("Библиотека пуста", "Library is empty"),
+        ["empty.hint"] = ("Укажите папки с играми в настройках и нажмите «Сканировать».\nПрограмма сама найдёт папки с играми и .exe, определит названия и подтянет обложки.",
+            "Add your game folders in settings and press “Scan”.\nThe app finds game folders and .exe files, recognizes titles and downloads artwork."),
+        ["empty.btn"] = ("Открыть настройки", "Open settings"),
+        ["empty.favTitle"] = ("Нет избранных игр", "No favourites yet"),
+        ["empty.favHint"] = ("Наведите курсор на карточку и нажмите ★ в правом верхнем углу — игра появится здесь.",
+            "Hover a card and press ★ in its top-right corner to add it here."),
+        ["status.games"] = ("Игр: {0}", "Games: {0}"),
+        ["status.ready"] = ("Готово", "Ready"),
+        ["status.scanning"] = ("Сканирую: {0}", "Scanning: {0}"),
+        ["status.scanFolders"] = ("Сканирую папки…", "Scanning folders…"),
+        ["status.found"] = ("Найдено игр: {0}", "Found games: {0}"),
+        ["status.art"] = ("Подбираю обложки… ({0}/{1})", "Fetching artwork… ({0}/{1})"),
+        ["status.noFolders"] = ("Сначала добавьте хотя бы одну папку в настройках", "Add at least one folder in settings first"),
+        ["status.launched"] = ("Запущено: {0}", "Launched: {0}"),
+        ["status.launchError"] = ("Не удалось запустить игру", "Failed to launch the game"),
+        ["status.removed"] = ("Игра удалена из библиотеки", "Game removed from library"),
+        ["sort.title"] = ("По названию", "By title"),
+        ["sort.added"] = ("По дате добавления", "By date added"),
+        ["sort.played"] = ("По последнему запуску", "By last played"),
+        ["sort.favorite"] = ("Избранное сверху", "Favorites first"),
+        ["sort.label"] = ("Сортировка", "Sort"),
+        ["filter.all"] = ("Все игры", "All games"),
+        ["filter.fav"] = ("Избранное", "Favorites"),
+        ["lbl.path"] = ("Папка", "Folder"),
+        ["lbl.exe"] = ("Файл запуска", "Executable"),
+        ["lbl.size"] = ("Размер", "Size"),
+        ["lbl.added"] = ("Добавлена", "Added"),
+        ["lbl.lastplayed"] = ("Последний запуск", "Last played"),
+        ["lbl.plays"] = ("Запусков", "Launches"),
+        ["lbl.steam"] = ("Каталог", "Catalog"),
+        ["lbl.never"] = ("никогда", "never"),
+        ["lbl.unknown"] = ("не определён", "unknown"),
+        ["lbl.calculating"] = ("считается…", "calculating…"),
+        ["lbl.custom"] = ("обложка выбрана вручную", "custom artwork"),
+        ["settings.title"] = ("Настройки", "Settings"),
+        ["settings.folders"] = ("Папки с играми", "Game folders"),
+        ["settings.foldersHint"] = ("Программа просматривает эти папки (включая подпапки) и ищет игры. Можно указать диск целиком, например D:\\Games.",
+            "The app walks these folders recursively looking for games. You can point it at a whole drive, e.g. D:\\Games."),
+        ["settings.language"] = ("Язык интерфейса", "Interface language"),
+        ["settings.sgdb"] = ("Ключ SteamGridDB (необязательно)", "SteamGridDB API key (optional)"),
+        ["settings.sgdbHint"] = ("С ключом программа берёт красивые вертикальные обложки с SteamGridDB. Бесплатный ключ: steamgriddb.com → Preferences → API. Без ключа используются обложки каталога Steam.",
+            "With a key the app uses nice vertical covers from SteamGridDB (free key: steamgriddb.com → Preferences → API). Without a key it uses Steam catalog covers."),
+        ["settings.ignore"] = ("Игнорировать .exe с такими именами", "Ignore .exe files named like"),
+        ["settings.ignoreHint"] = ("Через запятую. Это дополнение к встроенному списку (unins000, vcredist, dxsetup и т. п.).",
+            "Comma separated. Added to the built-in list (unins000, vcredist, dxsetup, etc.)."),
+        ["settings.autoscan"] = ("Сканировать при запуске", "Scan on startup"),
+        ["settings.theme"] = ("Тема оформления", "Theme"),
+        ["theme.dark"] = ("Тёмная", "Dark"),
+        ["theme.light"] = ("Светлая", "Light"),
+        ["settings.autostart"] = ("Запускать вместе с Windows", "Start with Windows"),
+        ["settings.autostartHint"] = ("Программа будет автоматически открываться при входе в систему (ярлык добавляется в автозагрузку Windows).",
+            "The app will open automatically when you sign in (a startup entry is added to Windows)."),
+        ["settings.autostartUnsupported"] = ("Автозапуск доступен только в Windows", "Autostart is available on Windows only"),
+        ["status.autostartFailed"] = ("Не удалось изменить автозапуск", "Could not change the startup setting"),
+        ["settings.dataFolder"] = ("Данные программы", "App data"),
+        ["settings.openData"] = ("Открыть папку данных", "Open data folder"),
+        ["settings.addFolder"] = ("Добавить папку…", "Add folder…"),
+        ["settings.noFolders"] = ("Папки не добавлены", "No folders added"),
+        ["cover.title"] = ("Обложка игры", "Game artwork"),
+        ["cover.search"] = ("Название игры", "Game title"),
+        ["cover.searchBtn"] = ("Найти", "Search"),
+        ["cover.searching"] = ("Ищу…", "Searching…"),
+        ["cover.noresults"] = ("Ничего не найдено. Попробуйте другое название.", "Nothing found. Try another title."),
+        ["cover.tipPortrait"] = ("Вертикальные обложки", "Portrait covers"),
+        ["cover.tipWide"] = ("Горизонтальные", "Wide artwork"),
+        ["dlg.removeTitle"] = ("Убрать игру?", "Remove the game?"),
+        ["dlg.removeText"] = ("«{0}» будет удалена из библиотеки. Файлы игры на диске останутся на месте, обложка будет удалена из кэша.",
+            "“{0}” will be removed from the library. The game files stay on disk, the cached artwork is deleted."),
+        ["dlg.renameTitle"] = ("Название игры", "Game title"),
+        ["scan.nothingFound"] = ("Игры не найдены. Проверьте папки в настройках.", "No games found. Check folders in settings."),
+        ["scan.progress"] = ("Проверено папок: {0}", "Folders checked: {0}"),
+        ["ctx.play"] = ("Запустить", "Launch"),
+        ["ctx.folder"] = ("Открыть папку", "Open folder"),
+        ["ctx.cover"] = ("Сменить обложку…", "Change artwork…"),
+        ["ctx.rename"] = ("Переименовать…", "Rename…"),
+        ["ctx.remove"] = ("Убрать из библиотеки", "Remove from library"),
+        ["ctx.admin"] = ("Запустить от имени администратора", "Run as administrator"),
+        ["ctx.fav"] = ("Избранное", "Favorite"),
+        ["launch.title"] = ("Запуск игры…", "Launching game…"),
+        ["launch.hint"] = ("Приятной игры!", "Have fun!"),
+        ["win.minimize"] = ("Свернуть", "Minimize"),
+        ["win.maximize"] = ("Развернуть", "Maximize"),
+        ["win.close"] = ("Закрыть", "Close"),
+        ["settings.customize"] = ("Кастомизация", "Customization"),
+        ["settings.customizeHint"] = ("Тема, цветовая палитра, обои на фон и прозрачность интерфейса.",
+            "Theme, colour palette, wallpaper and interface transparency."),
+        ["settings.back"] = ("← Назад", "← Back"),
+        ["custom.title"] = ("Кастомизация", "Customization"),
+        ["custom.theme"] = ("Тема", "Theme"),
+        ["custom.palette"] = ("Цветовая палитра", "Colour palette"),
+        ["custom.transparent"] = ("Полупрозрачный интерфейс", "Translucent interface"),
+        ["custom.transparentHint"] = ("Мягкое матовое стекло: панели и карточки чуть просвечивают, но остаются плотными — обои и рабочий стол лишь слегка угадываются, текст остаётся читаемым.",
+            "Frosted glass: panels and cards are slightly see-through yet stay solid — wallpaper and desktop only faintly show through, text stays readable."),
+        ["custom.wallpaper"] = ("Обои на фон", "Wallpaper"),
+        ["custom.wallpaperHint"] = ("Вставьте ссылку на картинку или GIF (jpg, png, webp, gif) и нажмите «Применить». Файл скачается один раз и будет храниться на компьютере. GIF показывается в движении.",
+            "Paste a link to an image or GIF (jpg, png, webp, gif) and press “Apply”. The file is downloaded once and stored locally. GIFs are animated."),
+        ["custom.apply"] = ("Применить", "Apply"),
+        ["custom.clearWallpaper"] = ("Убрать обои", "Remove wallpaper"),
+        ["custom.downloading"] = ("Скачиваю обои…", "Downloading wallpaper…"),
+        ["custom.wallpaperSet"] = ("Обои установлены", "Wallpaper applied"),
+        ["custom.paletteHint"] = ("Выберите любой оттенок: тяните маркер по квадрату (насыщенность и яркость), полосой ниже — сам оттенок, либо впишите значения R, G, B.",
+            "Pick any colour: drag inside the square (saturation and brightness), use the strip below for the hue, or type R, G, B values."),
+        ["custom.wallpaperPageError"] = ("По ссылке открылась страница, а не картинка. Скопируйте прямую ссылку на изображение (на Pinterest это ссылка, начинающаяся с https://i.pinimg.com/…).",
+            "That link is a web page, not an image. Copy the direct image link (on Pinterest it starts with https://i.pinimg.com/…)."),
+        ["custom.wallpaperError"] = ("Не удалось скачать картинку по этой ссылке", "Could not download the image from this link"),
+        ["custom.favOnHover"] = ("Звезда в углу карточки", "Star in the card corner"),
+        ["card.favorite"] = ("В избранное", "Add to favorites"),
+    };
+}

@@ -1,0 +1,23 @@
+# сборка .NET
+bin/
+obj/
+release/app/
+*.user
+*.suo
+
+# готовые бинарники (они живут в Releases, а не в репозитории)
+release/*.exe
+release/*.zip
+*.pdb
+*.dll
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.swp
+
+# ОС
+Thumbs.db
+desktop.ini
+.DS_Store
