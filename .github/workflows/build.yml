@@ -1,0 +1,42 @@
+name: build
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        run: dotnet restore Ludex.sln
+
+      - name: Build (Release)
+        run: dotnet build Ludex.sln -c Release --no-restore
+
+      - name: Publish portable win-x64
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: >
+          dotnet publish src/Ludex -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:EnableCompressionInSingleFile=true -p:PublishReadyToRun=false
+          -p:DebugType=none -o out/portable
+
+      - name: Upload artifact
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ludex-win-x64
+          path: out/portable/Ludex.exe
+          if-no-files-found: error
