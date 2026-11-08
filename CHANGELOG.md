@@ -59,9 +59,3 @@
 
 Первый релиз: сканирование папок, обложки из Steam, запуск игр, избранное, поиск, сортировка,
 темы, установщик и портативная сборка.
-
-[1.4.0]: https://github.com/USER/Ludex/compare/v1.3.5...v1.4.0
-[1.3.5]: https://github.com/USER/Ludex/compare/v1.3.3...v1.3.5
-[1.3.3]: https://github.com/USER/Ludex/compare/v1.3.2...v1.3.3
-[1.3.2]: https://github.com/USER/Ludex/compare/v1.0.0...v1.3.2
-[1.0.0]: https://github.com/USER/Ludex/releases/tag/v1.0.0
