@@ -6,6 +6,7 @@
   // ======================= счётчик скачиваний =======================
   // Два источника:
   //   /api/downloads — download_count файлов из GitHub Releases (серверный кэш 10 мин);
+//                   именно он идёт на кнопки: цифра = сколько раз файл скачали;
   //   /api/clicks    — клики по кнопкам на самом сайте (Upstash Redis, кэш 30 с).
   // Всё декоративно: нет данных — счётчик просто не показывается.
 
@@ -156,7 +157,9 @@
       box.innerHTML = parts.join(' ');
     }
 
-    // Счётчики на кнопках: клики с сайта, а если трекера нет — скачивания файла с GitHub.
+    // Счётчики на кнопках: реальные скачивания файла с GitHub, а если Releases API
+    // недоступен — клики по кнопке с сайта. Клик ≠ скачивание, поэтому клики —
+    // только запасной вариант и отдельная строка в общей статистике.
     document.querySelectorAll('[data-count]').forEach(function (el) {
       var kind = el.getAttribute('data-kind') || el.getAttribute('data-count');
       var fromClicks = clicks && clicks.kinds && clicks.kinds[kind];
@@ -164,13 +167,13 @@
       var value = null;
       var caption = '';
 
-      if (fromClicks && typeof fromClicks.clicks === 'number') {
-        // ноли на кнопках не показываем — трекер ещё ничего не насчитал
+      if (fromGh && typeof fromGh.count === 'number') {
+        // ноли на кнопках не показываем — файл ещё никто не скачал
+        value = fromGh.count || null;
+        caption = wordDownloads(fromGh.count) + (isEn() ? ' on GitHub' : ' с GitHub');
+      } else if (fromClicks && typeof fromClicks.clicks === 'number') {
         value = fromClicks.clicks || null;
         caption = wordClicks(fromClicks.clicks) + (isEn() ? ' on this site' : ' с сайта');
-      } else if (fromGh && typeof fromGh.count === 'number') {
-        value = fromGh.count;
-        caption = wordDownloads(fromGh.count) + (isEn() ? ' on GitHub' : ' с GitHub');
       }
 
       if (value === null) {
