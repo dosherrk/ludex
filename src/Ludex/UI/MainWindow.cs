@@ -1033,6 +1033,7 @@ public sealed class MainWindow : Window
         menu.Item(Loc.T("ctx.fav"), () => ToggleFavorite(game));
         menu.Separator();
         menu.Item(Loc.T("ctx.remove"), () => RemoveGame(game), true);
+        menu.Item(Loc.T("ctx.uninstall"), () => DeleteFromDisk(game), true);
 
         return menu;
     }
@@ -1144,6 +1145,10 @@ public sealed class MainWindow : Window
         var removeBtn = Ui.GhostButton(Loc.T("btn.remove"), () => RemoveGame(game), Skin.Danger);
         removeBtn.Margin = new Thickness(0, 0, 10, 8);
         secondaryRow.Children.Add(removeBtn);
+
+        var deleteBtn = Ui.GhostButton(Loc.T("btn.deleteDisk"), () => DeleteFromDisk(game), Skin.Danger);
+        deleteBtn.Margin = new Thickness(0, 0, 10, 8);
+        secondaryRow.Children.Add(deleteBtn);
 
         right.Children.Add(secondaryRow);
 
@@ -1504,6 +1509,59 @@ public sealed class MainWindow : Window
             Loc.F("dlg.removeText", game.Title), Loc.T("btn.remove"), Loc.T("btn.cancel"));
         if (!ok) return;
 
+        RemoveFromLibraryOnly(game);
+        SetStatus(Loc.T("status.removed"));
+    }
+
+    /// <summary>Удаление игры с диска: сначала деинсталлятор, иначе — папка целиком.</summary>
+    private async void DeleteFromDisk(GameEntry game)
+    {
+        if (!Uninstaller.IsSafeToDelete(game.FolderPath, out var reason))
+        {
+            Dialogs.ShowError(this, reason switch
+            {
+                "folder-not-found" => "Папка игры не найдена — удалять нечего.",
+                "drive-root" or "too-shallow" => "Папка игры выглядит как корень диска — удаление отменено.",
+                "home" => "Папка игры указывает на домашний каталог — удаление отменено.",
+                "app-folder" => "Папка игры пересекается с данными Ludex — удаление отменено.",
+                _ => "Эту папку нельзя удалить.",
+            });
+            return;
+        }
+
+        var hasUninstaller = Uninstaller.Find(game.FolderPath) != null;
+        var text = Loc.F(hasUninstaller ? "dlg.deleteText" : "dlg.deleteTextNoUninstall",
+            game.Title, game.FolderPath);
+
+        var ok = await Dialogs.ConfirmAsync(this, Loc.T("dlg.deleteTitle"), text,
+            Loc.T("btn.deleteForever"), Loc.T("btn.cancel"));
+        if (!ok) return;
+
+        _detailLayer.IsVisible = false;
+        SetStatus(Loc.F("status.deleting", game.Title));
+
+        var (success, _, error) = await Task.Run(() => Uninstaller.RemoveAsync(game, phase =>
+        {
+            if (phase == "deleting-folder")
+                Dispatcher.UIThread.Post(() => SetStatus(Loc.F("status.deleting", game.Title)));
+        }));
+
+        if (!success)
+        {
+            SetStatus(Loc.T("status.deleteFailed"));
+            Dialogs.ShowError(this, string.IsNullOrEmpty(error)
+                ? Loc.T("status.deleteFailed")
+                : $"{Loc.T("status.deleteFailed")}: {error}");
+            return;
+        }
+
+        RemoveFromLibraryOnly(game);
+        SetStatus(Loc.T("status.deleted"));
+    }
+
+    /// <summary>Убрать запись из библиотеки (файлы на диске не трогаем).</summary>
+    private void RemoveFromLibraryOnly(GameEntry game)
+    {
         try
         {
             foreach (var file in Directory.EnumerateFiles(AppPaths.CoversDir, game.Id + "_*"))
@@ -1518,7 +1576,6 @@ public sealed class MainWindow : Window
         Storage.SaveGames(_games);
         _detailLayer.IsVisible = false;
         RenderGrid();
-        SetStatus(Loc.T("status.removed"));
     }
 
     private void ShowSettings()

@@ -363,7 +363,7 @@ public sealed class SettingsPanel : Border
             };
             row.PointerReleased += (_, e) =>
             {
-                if (!e.GetCurrentPoint(row).Properties.IsLeftButtonPressed) return;
+                if (e.InitialPressMouseButton != MouseButton.Left) return;
                 e.Handled = true;
                 _selectedFolder = index;
                 RefreshFolderRows();

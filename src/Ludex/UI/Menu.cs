@@ -100,7 +100,8 @@ public sealed class Menu
         row.PointerExited += (_, _) => row.Background = Brushes.Transparent;
         row.PointerReleased += (_, e) =>
         {
-            if (!e.GetCurrentPoint(row).Properties.IsLeftButtonPressed) return;
+            // в PointerReleased левая кнопка уже отпущена — смотрим, какой кнопкой нажали
+            if (e.InitialPressMouseButton != MouseButton.Left) return;
             e.Handled = true;
             Close();
             action();
