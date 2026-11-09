@@ -15,6 +15,8 @@ public sealed class StoreGame
 {
     public int AppId { get; init; }
     public string Name { get; init; } = "";
+    public string Developer { get; init; } = "";
+    public string Publisher { get; init; } = "";
     public string CoverUrl { get; init; } = "";
     public string HeaderUrl { get; init; } = "";
     public int DiscountPercent { get; init; }
@@ -27,7 +29,11 @@ public sealed class StoreGame
     public bool Mac { get; init; }
     public bool Linux { get; init; }
 
-    /// <summary>Разделы, в которые игра попала: today, new, discount, top, soon.</summary>
+    /// <summary>Оценка числа владельцев (нижняя граница) и текущий онлайн — из открытой статистики.</summary>
+    public long OwnersLow { get; init; }
+    public int Ccu { get; init; }
+
+    /// <summary>Разделы, в которые игра попала: today, new, discount, top, soon, all, hits, free.</summary>
     public HashSet<string> Sections { get; } = new();
 
     // ---- добирается из appdetails
