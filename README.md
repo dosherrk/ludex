@@ -127,8 +127,9 @@ libICE, libSM, libGL, libfontconfig, libfreetype, libxkbcommon; под Wayland �
 
 ### macOS 11+ (Apple Silicon и Intel) <a id="macos"></a>
 
-`Ludex-1.5.0-macos-arm64.zip` — для Apple Silicon (M1–M4), `Ludex-1.5.0-macos-x64.zip` — для Intel.
-Распакуйте, перетащите `Ludex.app` в «Программы».
+`Ludex-1.5.0-macos-arm64.dmg` — для Apple Silicon (M1–M4), `Ludex-1.5.0-macos-x64.dmg` — для Intel.
+Откройте `.dmg`, перетащите Ludex в `Applications`. Рядом в релизе лежат те же сборки в `.zip`
+(`Ludex-1.5.0-macos-arm64.zip` / `-x64.zip`) — если удобнее архив (его надо просто распаковать).
 
 Приложение не подписано сертификатом Apple, поэтому первый запуск — правый клик по `Ludex.app`
 → **«Открыть»** → **«Открыть»** (или в Терминале: `xattr -dr com.apple.quarantine /Applications/Ludex.app`).
@@ -207,6 +208,21 @@ cd installer && makensis Ludex.nsi
 ```
 
 Готовые скрипты: `./build.sh` (Linux/macOS) и `build_windows.bat` (Windows).
+
+### Как собирается macOS DMG
+
+`build.sh mac` делает `Ludex.app` и кладёт его в `.zip`. DMG-образ собирается
+отдельным скриптом — на Linux, без macOS и без подписи Apple:
+
+```bash
+./tools/make-dmg.sh release/macos-arm64/Ludex.app Ludex-1.5.0-macos-arm64.dmg "Ludex 1.5.0" 90
+```
+
+Скрипту нужны три утилиты, собранные из исходников (в репозиторий они не входят):
+`newfs_hfs` (mkfs.hfsplus из hfsprogs), `hfsplus` и `dmg` из libdmg-hfsplus —
+пути передаются через переменные `NEWFS_HFS`, `HFSPLUS`, `DMG`. Внутрь тома кладутся
+`Ludex.app`, `INSTALL.txt` и симлинк `Applications → /Applications`, исполняемым
+файлам возвращается бит `+x`, после чего HFS+ образ сжимается в UDIF (zlib).
 
 ### Структура проекта
 

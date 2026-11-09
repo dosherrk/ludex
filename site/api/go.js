@@ -1,5 +1,6 @@
 // Ludex — лендинг: переход по кнопке скачивания со счётчиком кликов.
-// GET /api/go?f=setup|portable|zip → 302 на файл самого свежего релиза.
+// GET /api/go?f=setup|portable|win-zip|linux-tar|linux-deb|macos-arm|macos-x64
+// → 302 на файл самого свежего релиза (у macOS это .dmg).
 // Клик пишется в Upstash Redis (если он подключён) и не задерживает переход.
 
 const { configured, incrMany, get } = require('./_lib/redis');
@@ -13,8 +14,8 @@ const FALLBACK = {
   'win-zip': 'Ludex-1.5.0-windows.zip',
   'linux-tar': 'Ludex-1.5.0-linux-x64.tar.gz',
   'linux-deb': 'Ludex-1.5.0-linux-x64.deb',
-  'macos-arm': 'Ludex-1.5.0-macos-arm64.zip',
-  'macos-x64': 'Ludex-1.5.0-macos-x64.zip',
+  'macos-arm': 'Ludex-1.5.0-macos-arm64.dmg',
+  'macos-x64': 'Ludex-1.5.0-macos-x64.dmg',
 };
 
 // Старые ссылки (кнопка «Архив» до 1.5.0) ведут на windows-архив.

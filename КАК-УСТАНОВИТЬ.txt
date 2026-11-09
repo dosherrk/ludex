@@ -22,8 +22,9 @@ Ludex 1.5.0 — локальная библиотека игр (Windows, Linux, 
   Ludex-1.5.0-windows.zip          — портативная версия в архиве
   Ludex-1.5.0-linux-x64.deb        — пакет для Debian/Ubuntu/Mint
   Ludex-1.5.0-linux-x64.tar.gz     — портативный архив для любого Linux x64
-  Ludex-1.5.0-macos-arm64.zip      — macOS для Apple Silicon (M1–M4)
-  Ludex-1.5.0-macos-x64.zip        — macOS для Intel
+  Ludex-1.5.0-macos-arm64.dmg      — macOS для Apple Silicon (M1–M4)
+  Ludex-1.5.0-macos-x64.dmg        — macOS для Intel
+  (те же сборки в .zip — Ludex-1.5.0-macos-arm64.zip / -x64.zip, если удобнее архив)
 
 WINDOWS 10/11
 -------------
@@ -54,8 +55,9 @@ libfontconfig, libfreetype, libxkbcommon.
 
 MACOS 11+
 ---------
-1. Распакуйте архив (arm64 для M1–M4, x64 для Intel) — получится Ludex.app.
-2. Перетащите в «Программы» (Applications).
+1. Откройте .dmg (arm64 для M1–M4, x64 для Intel) — появится окно с Ludex.app.
+   Если качали .zip — просто распакуйте его, получится тот же Ludex.app.
+2. Перетащите Ludex в «Программы» (Applications) — в окне DMG рядом есть ярлык.
 3. Первый запуск: правый клик по Ludex.app → «Открыть» → «Открыть».
    Либо в Терминале: xattr -dr com.apple.quarantine /Applications/Ludex.app
 Данные: ~/Library/Application Support/Ludex.

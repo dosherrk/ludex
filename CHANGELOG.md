@@ -11,8 +11,9 @@
 - **Linux**: `Ludex-1.5.0-linux-x64.tar.gz` (портативный архив с ярлыком и инструкцией)
   и `Ludex-1.5.0-linux-x64.deb` (`sudo apt install ./Ludex-1.5.0-linux-x64.deb` —
   кладёт `/opt/ludex`, ярлык в меню и иконку).
-- **macOS**: `Ludex-1.5.0-macos-arm64.zip` (Apple Silicon) и `Ludex-1.5.0-macos-x64.zip`
-  (Intel) — полноценный `Ludex.app` с иконкой `.icns` и `Info.plist`.
+- **macOS**: `Ludex-1.5.0-macos-arm64.dmg` (Apple Silicon) и `Ludex-1.5.0-macos-x64.dmg`
+  (Intel) — полноценный `Ludex.app` с иконкой `.icns` и `Info.plist` внутри DMG-образа:
+  открыл, перетащил в `Applications`, готово. Те же сборки лежат и в `.zip`.
 - Поиск игр под каждую систему: в Linux — AppImage, нативные бинарники и `.sh`-обёртки
   (библиотеки `.so` и ярлыки `.desktop` отбрасываются), в macOS — `.app`-бандлы;
   в Windows всё как раньше, `*.exe`.

@@ -14,9 +14,16 @@ function classify(name) {
 
   if (n.endsWith('.deb')) return 'linux-deb';
   if (n.includes('.tar.gz')) return 'linux-tar';
+  if (n.endsWith('.dmg')) {
+    // кнопки macOS ведут на .dmg — считаем именно их
+    if (n.includes('arm64') || n.includes('aarch64')) return 'macos-arm';
+    if (n.includes('x64') || n.includes('intel')) return 'macos-x64';
+    return null;
+  }
   if (n.endsWith('.zip')) {
-    if (n.includes('macos-arm64')) return 'macos-arm';
-    if (n.includes('macos-x64')) return 'macos-x64';
+    // macOS .zip остаётся в релизе как альтернатива, но кнопки ведут на .dmg,
+    // поэтому в счётчик кнопок он не попадает
+    if (n.includes('macos')) return null;
     if (n.includes('windows')) return 'win-zip';
     return null;
   }
