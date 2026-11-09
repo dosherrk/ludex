@@ -23,7 +23,4 @@ desktop.ini
 
 # артефакты сборки (build.sh) — в репозиторий не попадают
 build/
-release/*.tar.gz
-release/*.deb
-release/*.exe
-release/*.zip
+release/

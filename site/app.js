@@ -39,15 +39,25 @@
   function wordDownloads(n) { return isEn() ? (n === 1 ? 'download' : 'downloads') : plural(n, ['скачивание', 'скачивания', 'скачиваний']); }
   function wordClicks(n) { return isEn() ? (n === 1 ? 'click' : 'clicks') : plural(n, ['клик', 'клика', 'кликов']); }
 
-  // Ludex-Setup-1.4.0.exe → setup, Ludex-1.4.0-portable.exe → portable, *.zip → zip
+  // Имена файлов релиза → ключи кнопок.
+  // Ludex-Setup-1.5.0.exe → setup, Ludex-1.5.0-linux-x64.deb → linux-deb и т.д.
   function classify(name) {
     var n = String(name || '').toLowerCase();
+    if (n.indexOf('sources') !== -1) return null;
+
+    if (n.indexOf('.deb') === n.length - 4) return 'linux-deb';
+    if (n.indexOf('.tar.gz') !== -1) return 'linux-tar';
+    if (n.indexOf('.zip') === n.length - 4) {
+      if (n.indexOf('macos-arm64') !== -1) return 'macos-arm';
+      if (n.indexOf('macos-x64') !== -1) return 'macos-x64';
+      if (n.indexOf('windows') !== -1) return 'win-zip';
+      return null;
+    }
     if (n.indexOf('.exe') === n.length - 4) {
       if (n.indexOf('setup') !== -1 || n.indexOf('installer') !== -1) return 'setup';
       if (n.indexOf('portable') !== -1) return 'portable';
       return null;
     }
-    if (n.indexOf('.zip') === n.length - 4) return 'zip';
     return null;
   }
 
@@ -239,6 +249,46 @@
       })
       .catch(function () { /* трекер недоступен — показываем данные GitHub */ });
   }
+
+  // ======================= выбор системы =======================
+  // Определяем ОС браузера, подставляем её кнопки, но всегда можно переключить вручную.
+
+  var OS_KEY = 'ludex.os';
+
+  function detectOs() {
+    var ua = (navigator.userAgent || '').toLowerCase();
+    var platform = (navigator.platform || '').toLowerCase();
+
+    if (ua.indexOf('mac') !== -1 || platform.indexOf('mac') !== -1) return 'macos';
+    if (ua.indexOf('linux') !== -1 || platform.indexOf('linux') !== -1) return 'linux';
+    if (ua.indexOf('android') !== -1) return 'linux';
+    return 'windows';
+  }
+
+  function selectOs(os) {
+    if (['windows', 'macos', 'linux'].indexOf(os) === -1) os = 'windows';
+
+    document.querySelectorAll('.os-tab').forEach(function (tab) {
+      tab.setAttribute('aria-selected', tab.getAttribute('data-os') === os ? 'true' : 'false');
+    });
+
+    document.querySelectorAll('[data-os-panel]').forEach(function (panel) {
+      panel.hidden = panel.getAttribute('data-os-panel') !== os;
+    });
+
+    try { localStorage.setItem(OS_KEY, os); } catch (e) { /* приватный режим */ }
+  }
+
+  document.querySelectorAll('.os-tab').forEach(function (tab) {
+    tab.addEventListener('click', function () { selectOs(tab.getAttribute('data-os')); });
+  });
+
+  var savedOs = null;
+  try { savedOs = localStorage.getItem(OS_KEY); } catch (e) { /* ignore */ }
+
+  // ?os=macos — ссылка сразу на нужную систему (удобно кидать другу)
+  var fromUrlOs = new URLSearchParams(location.search).get('os');
+  selectOs(fromUrlOs || savedOs || detectOs());
 
   // ======================= язык =======================
 

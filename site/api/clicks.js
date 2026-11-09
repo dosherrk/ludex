@@ -3,7 +3,7 @@
 
 const { configured, mget } = require('./_lib/redis');
 
-const KINDS = ['setup', 'portable', 'zip'];
+const KINDS = ['setup', 'portable', 'win-zip', 'linux-tar', 'linux-deb', 'macos-arm', 'macos-x64'];
 
 function num(v) {
   const n = Number(v);

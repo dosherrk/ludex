@@ -6,15 +6,25 @@ const { configured, setMany } = require('./_lib/redis');
 
 const REPO = 'dosherrk/ludex';
 
-// Ludex-Setup-1.4.0.exe → setup, Ludex-1.4.0-portable.exe → portable, Ludex-1.4.0.zip → zip
+// Имена файлов релиза → ключи кнопок на сайте.
+// sources.zip и прочее, что не скачивают кнопками, не считаем.
 function classify(name) {
   const n = String(name || '').toLowerCase();
+  if (n.includes('sources')) return null;
+
+  if (n.endsWith('.deb')) return 'linux-deb';
+  if (n.includes('.tar.gz')) return 'linux-tar';
+  if (n.endsWith('.zip')) {
+    if (n.includes('macos-arm64')) return 'macos-arm';
+    if (n.includes('macos-x64')) return 'macos-x64';
+    if (n.includes('windows')) return 'win-zip';
+    return null;
+  }
   if (n.endsWith('.exe')) {
     if (n.includes('setup') || n.includes('installer')) return 'setup';
     if (n.includes('portable')) return 'portable';
     return null;
   }
-  if (n.endsWith('.zip')) return 'zip';
   return null;
 }
 

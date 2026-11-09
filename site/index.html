@@ -32,7 +32,7 @@
 
     <div class="topbar-actions">
       <button class="lang" id="lang-toggle" type="button" title="Русский / English">EN</button>
-      <a class="btn btn-primary btn-sm" href="https://github.com/dosherrk/ludex/releases/latest">
+      <a class="btn btn-primary btn-sm" href="#install">
         <span data-ru="Скачать" data-en="Download">Скачать</span>
       </a>
     </div>
@@ -48,7 +48,7 @@
       <div class="hero-text">
         <div class="pill">
           <span class="dot"></span>
-          <span data-ru="Версия 1.4.0 · Windows 10/11 · бесплатно" data-en="Version 1.4.0 · Windows 10/11 · free">Версия 1.4.0 · Windows 10/11 · бесплатно</span>
+          <span data-ru="Версия 1.5.0 · Windows, Linux, macOS · бесплатно" data-en="Version 1.5.0 · Windows, Linux, macOS · free">Версия 1.5.0 · Windows, Linux, macOS · бесплатно</span>
         </div>
 
         <h1>
@@ -62,7 +62,13 @@
           Ludex обходит указанные папки, сам находит игры, определяет названия и подтягивает обложки из Steam. Без аккаунтов, лаунчеров и облака — только ваши файлы и аккуратный интерфейс.
         </p>
 
-        <div class="cta">
+        <div class="os-tabs" role="tablist" aria-label="Ваша система">
+          <button class="os-tab" type="button" data-os="windows" role="tab">Windows</button>
+          <button class="os-tab" type="button" data-os="macos" role="tab">macOS</button>
+          <button class="os-tab" type="button" data-os="linux" role="tab">Linux</button>
+        </div>
+
+        <div class="cta" data-os-panel="windows">
           <a class="btn btn-primary" data-kind="setup" href="/api/go?f=setup">
             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3v11m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
             <span data-ru="Скачать установщик" data-en="Download installer">Скачать установщик</span>
@@ -70,8 +76,34 @@
           </a>
           <a class="btn btn-ghost" data-kind="portable" href="/api/go?f=portable">
             <span data-ru="Портативная версия" data-en="Portable version">Портативная версия</span>
-            <span class="muted small">46 МБ</span>
+            <span class="muted small">44 МБ</span>
             <span class="dl-count" data-count="portable" hidden></span>
+          </a>
+        </div>
+
+        <div class="cta" data-os-panel="macos" hidden>
+          <a class="btn btn-primary" data-kind="macos-arm" href="/api/go?f=macos-arm">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3v11m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span data-ru="Скачать для Apple Silicon" data-en="Download for Apple Silicon">Скачать для Apple Silicon</span>
+            <span class="dl-count" data-count="macos-arm" hidden></span>
+          </a>
+          <a class="btn btn-ghost" data-kind="macos-x64" href="/api/go?f=macos-x64">
+            <span data-ru="Версия для Intel" data-en="Intel version">Версия для Intel</span>
+            <span class="muted small">40 МБ</span>
+            <span class="dl-count" data-count="macos-x64" hidden></span>
+          </a>
+        </div>
+
+        <div class="cta" data-os-panel="linux" hidden>
+          <a class="btn btn-primary" data-kind="linux-tar" href="/api/go?f=linux-tar">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3v11m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span data-ru="Скачать архив" data-en="Download archive">Скачать архив</span>
+            <span class="dl-count" data-count="linux-tar" hidden></span>
+          </a>
+          <a class="btn btn-ghost" data-kind="linux-deb" href="/api/go?f=linux-deb">
+            <span data-ru="Пакет .deb" data-en=".deb package">Пакет .deb</span>
+            <span class="muted small">36 МБ</span>
+            <span class="dl-count" data-count="linux-deb" hidden></span>
           </a>
         </div>
 
@@ -179,8 +211,8 @@
         <div class="step">
           <span class="num">1</span>
           <h3 data-ru="Скачайте и запустите" data-en="Download and run">Скачайте и запустите</h3>
-          <p data-ru="Установщик поставит Ludex в %LOCALAPPDATA%\Programs\Ludex без запроса прав администратора. Или возьмите портативный .exe."
-             data-en="The installer puts Ludex into %LOCALAPPDATA%\Programs\Ludex without any admin prompt. Or grab the portable .exe.">Установщик поставит Ludex в %LOCALAPPDATA%\Programs\Ludex без запроса прав администратора. Или возьмите портативный .exe.</p>
+          <p data-ru="Windows: установщик поставит Ludex в %LOCALAPPDATA%\Programs\Ludex без запроса прав администратора. Linux: .deb или архив. macOS: распакуйте и перетащите Ludex.app в «Программы»."
+             data-en="Windows: the installer puts Ludex into %LOCALAPPDATA%\Programs\Ludex without an admin prompt. Linux: .deb or archive. macOS: unzip and drag Ludex.app into Applications.">Windows: установщик поставит Ludex в %LOCALAPPDATA%\Programs\Ludex без запроса прав администратора. Linux: .deb или архив. macOS: распакуйте и перетащите Ludex.app в «Программы».</p>
         </div>
         <div class="step">
           <span class="num">2</span>
@@ -198,14 +230,33 @@
 
       <div class="download-box">
         <div>
-          <h3 data-ru="Все файлы релиза" data-en="All release files">Все файлы релиза</h3>
-          <p class="muted" data-ru="Windows 10/11, 64-бит. Файлы не подписаны сертификатом: SmartScreen может попросить «Подробнее → Выполнить в любом случае»."
-             data-en="Windows 10/11, 64-bit. Files are not code-signed: SmartScreen may ask you to click “More info → Run anyway”.">Windows 10/11, 64-бит. Файлы не подписаны сертификатом: SmartScreen может попросить «Подробнее → Выполнить в любом случае».</p>
+          <h3 data-ru="Все файлы релиза 1.5.0" data-en="All 1.5.0 release files">Все файлы релиза 1.5.0</h3>
+          <p class="muted" data-ru="Файлы не подписаны сертификатом: SmartScreen в Windows и Gatekeeper в macOS попросят подтвердить первый запуск."
+             data-en="Files are not code-signed: SmartScreen on Windows and Gatekeeper on macOS will ask you to confirm the first launch.">Файлы не подписаны сертификатом: SmartScreen в Windows и Gatekeeper в macOS попросят подтвердить первый запуск.</p>
         </div>
-        <div class="download-links">
-          <a class="btn btn-primary" data-kind="setup" href="/api/go?f=setup"><span data-ru="Установщик" data-en="Installer">Установщик</span> <span class="muted small">38 МБ</span> <span class="dl-count" data-count="setup" hidden></span></a>
-          <a class="btn btn-ghost" data-kind="portable" href="/api/go?f=portable"><span data-ru="Портативный" data-en="Portable">Портативный</span> <span class="muted small">44 МБ</span> <span class="dl-count" data-count="portable" hidden></span></a>
-          <a class="btn btn-ghost" data-kind="zip" href="/api/go?f=zip"><span data-ru="Архив + инструкция" data-en="Archive + guide">Архив + инструкция</span> <span class="muted small">39 МБ</span> <span class="dl-count" data-count="zip" hidden></span></a>
+        <div class="download-groups">
+          <div class="download-group">
+            <span class="dl-group-title">Windows 10/11 x64</span>
+            <div class="download-links">
+              <a class="btn btn-primary" data-kind="setup" href="/api/go?f=setup"><span data-ru="Установщик" data-en="Installer">Установщик</span> <span class="muted small">38 МБ</span> <span class="dl-count" data-count="setup" hidden></span></a>
+              <a class="btn btn-ghost" data-kind="portable" href="/api/go?f=portable"><span data-ru="Портативный" data-en="Portable">Портативный</span> <span class="muted small">44 МБ</span> <span class="dl-count" data-count="portable" hidden></span></a>
+              <a class="btn btn-ghost" data-kind="win-zip" href="/api/go?f=win-zip"><span data-ru="Архив" data-en="Archive">Архив</span> <span class="muted small">39 МБ</span> <span class="dl-count" data-count="win-zip" hidden></span></a>
+            </div>
+          </div>
+          <div class="download-group">
+            <span class="dl-group-title">Linux x64</span>
+            <div class="download-links">
+              <a class="btn btn-ghost" data-kind="linux-tar" href="/api/go?f=linux-tar"><span data-ru="Архив tar.gz" data-en="tar.gz archive">Архив tar.gz</span> <span class="muted small">37 МБ</span> <span class="dl-count" data-count="linux-tar" hidden></span></a>
+              <a class="btn btn-ghost" data-kind="linux-deb" href="/api/go?f=linux-deb"><span data-ru="Пакет .deb" data-en=".deb package">Пакет .deb</span> <span class="muted small">36 МБ</span> <span class="dl-count" data-count="linux-deb" hidden></span></a>
+            </div>
+          </div>
+          <div class="download-group">
+            <span class="dl-group-title">macOS 11+</span>
+            <div class="download-links">
+              <a class="btn btn-ghost" data-kind="macos-arm" href="/api/go?f=macos-arm"><span data-ru="Apple Silicon" data-en="Apple Silicon">Apple Silicon</span> <span class="muted small">39 МБ</span> <span class="dl-count" data-count="macos-arm" hidden></span></a>
+              <a class="btn btn-ghost" data-kind="macos-x64" href="/api/go?f=macos-x64"><span data-ru="Intel" data-en="Intel">Intel</span> <span class="muted small">40 МБ</span> <span class="dl-count" data-count="macos-x64" hidden></span></a>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -241,7 +292,7 @@
     <div class="brand small-brand">
       <img src="/img/logo.png" alt="" width="22" height="22">
       <span>LUDEX</span>
-      <span class="muted">· 1.4.0</span>
+      <span class="muted">· 1.5.0</span>
     </div>
     <div class="footer-links">
       <a href="https://github.com/dosherrk/ludex" target="_blank" rel="noopener">GitHub</a>

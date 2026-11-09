@@ -4,21 +4,29 @@
 
 const { configured, incrMany, get } = require('./_lib/redis');
 
-const KINDS = ['setup', 'portable', 'zip'];
+const KINDS = ['setup', 'portable', 'win-zip', 'linux-tar', 'linux-deb', 'macos-arm', 'macos-x64'];
 
 // Запасные имена файлов — на случай, если Redis ещё пуст.
 const FALLBACK = {
-  setup: 'Ludex-Setup-1.4.0.exe',
-  portable: 'Ludex-1.4.0-portable.exe',
-  zip: 'Ludex-1.4.0.zip',
+  setup: 'Ludex-Setup-1.5.0.exe',
+  portable: 'Ludex-1.5.0-portable.exe',
+  'win-zip': 'Ludex-1.5.0-windows.zip',
+  'linux-tar': 'Ludex-1.5.0-linux-x64.tar.gz',
+  'linux-deb': 'Ludex-1.5.0-linux-x64.deb',
+  'macos-arm': 'Ludex-1.5.0-macos-arm64.zip',
+  'macos-x64': 'Ludex-1.5.0-macos-x64.zip',
 };
+
+// Старые ссылки (кнопка «Архив» до 1.5.0) ведут на windows-архив.
+const ALIASES = { zip: 'win-zip' };
 
 function fallbackUrl(kind) {
   return `https://github.com/dosherrk/ludex/releases/latest/download/${FALLBACK[kind]}`;
 }
 
 module.exports = async function handler(req, res) {
-  const kind = String((req.query && req.query.f) || '').toLowerCase();
+  let kind = String((req.query && req.query.f) || '').toLowerCase();
+  if (ALIASES[kind]) kind = ALIASES[kind];
   const at = KINDS.indexOf(kind);
 
   if (at === -1) {
