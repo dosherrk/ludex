@@ -2,6 +2,8 @@
 // Прокси к GitHub Releases API с кэшем на edge (s-maxage), чтобы не упираться
 // в лимит 60 запросов/час и не светить токен в браузере.
 
+const { configured, setMany } = require('./_lib/redis');
+
 const REPO = 'dosherrk/ludex';
 
 // Ludex-Setup-1.4.0.exe → setup, Ludex-1.4.0-portable.exe → portable, Ludex-1.4.0.zip → zip
@@ -69,7 +71,19 @@ module.exports = async function handler(req, res) {
     const data = await r.json();
     if (!Array.isArray(data)) throw new Error('unexpected payload');
 
-    res.status(200).send(JSON.stringify(build(data)));
+    const payload = build(data);
+
+    // Пригодится /api/go: ссылки на файлы свежего релиза, чтобы переход
+    // с кнопки не зависел от версии, вписанной в разметку. Ошибки не важны.
+    if (configured()) {
+      try {
+        await setMany(
+          Object.keys(payload.kinds).map((k) => [`url:${k}`, payload.kinds[k].url])
+        );
+      } catch (e) { /* без Redis страница работает как раньше */ }
+    }
+
+    res.status(200).send(JSON.stringify(payload));
   } catch (err) {
     // Счётчик — украшение, а не функциональность: при сбое просто просим
     // фронтенд его спрятать и не кэшируем ошибку надолго.

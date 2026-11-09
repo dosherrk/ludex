@@ -530,3 +530,5 @@ h1 {
 
 /* [hidden] должен побеждать display:inline-flex */
 .dl-stat[hidden], .dl-count[hidden] { display: none !important; }
+
+.dl-stat-sep { color: var(--dim); }

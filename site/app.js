@@ -4,34 +4,40 @@
   'use strict';
 
   // ======================= счётчик скачиваний =======================
-  // Данные берём из GitHub Releases: /api/downloads (кэш на edge) → при сбое
-  // напрямую из api.github.com → при полном отсутствии сети просто прячем счётчик.
+  // Два источника:
+  //   /api/downloads — download_count файлов из GitHub Releases (серверный кэш 10 мин);
+  //   /api/clicks    — клики по кнопкам на самом сайте (Upstash Redis, кэш 30 с).
+  // Всё декоративно: нет данных — счётчик просто не показывается.
 
-  var CACHE_KEY = 'ludex.dl.v1';
-  var CACHE_TTL = 10 * 60 * 1000; // 10 минут, как s-maxage у /api/downloads
+  var GH_KEY = 'ludex.gh.v2';
+  var CLICKS_KEY = 'ludex.clicks.v1';
+  var GH_TTL = 10 * 60 * 1000;
+  var CLICKS_TTL = 60 * 1000;
   var GITHUB_API = 'https://api.github.com/repos/dosherrk/ludex/releases?per_page=100';
 
-  var stats = null;        // { total, kinds: { setup: {count,url}, … } }
-  var animated = false;    // анимацию цифры проигрываем один раз
+  var gh = null;        // { total, kinds: { kind: { count } } }
+  var clicks = null;    // { total, kinds: { kind: { clicks } } }
+  var animated = false;
 
   function nf(n) {
     var loc = document.documentElement.lang === 'en' ? 'en-US' : 'ru-RU';
     try { return new Intl.NumberFormat(loc).format(n); } catch (e) { return String(n); }
   }
 
-  function pluralRu(n) {
+  function isEn() { return document.documentElement.lang === 'en'; }
+
+  // «1 скачивание / 2 скачивания / 5 скачиваний»
+  function plural(n, forms) { // forms: [one, few, many]
     var a = Math.abs(n) % 100;
     var b = a % 10;
-    if (a > 10 && a < 20) return 'скачиваний';
-    if (b === 1) return 'скачивание';
-    if (b >= 2 && b <= 4) return 'скачивания';
-    return 'скачиваний';
+    if (a > 10 && a < 20) return forms[2];
+    if (b === 1) return forms[0];
+    if (b >= 2 && b <= 4) return forms[1];
+    return forms[2];
   }
 
-  function wordFor(n) {
-    if (document.documentElement.lang === 'en') return n === 1 ? 'download' : 'downloads';
-    return pluralRu(n);
-  }
+  function wordDownloads(n) { return isEn() ? (n === 1 ? 'download' : 'downloads') : plural(n, ['скачивание', 'скачивания', 'скачиваний']); }
+  function wordClicks(n) { return isEn() ? (n === 1 ? 'click' : 'clicks') : plural(n, ['клик', 'клика', 'кликов']); }
 
   // Ludex-Setup-1.4.0.exe → setup, Ludex-1.4.0-portable.exe → portable, *.zip → zip
   function classify(name) {
@@ -45,7 +51,7 @@
     return null;
   }
 
-  // Запасной путь: если /api/downloads недоступен, считаем сами по ответу GitHub API.
+  // Запасной путь для статистики GitHub: считаем сами по ответу api.github.com.
   function fromGithub(releases) {
     var kinds = {};
     var total = 0;
@@ -69,18 +75,18 @@
     return { available: true, total: total, kinds: kinds };
   }
 
-  function readCache() {
+  function readCache(key) {
     try {
-      var raw = localStorage.getItem(CACHE_KEY);
+      var raw = localStorage.getItem(key);
       if (!raw) return null;
       var obj = JSON.parse(raw);
-      if (!obj || typeof obj.t !== 'number' || !obj.v || typeof obj.v.total !== 'number') return null;
+      if (!obj || typeof obj.t !== 'number' || !obj.v) return null;
       return obj;
     } catch (e) { return null; }
   }
 
-  function writeCache(v) {
-    try { localStorage.setItem(CACHE_KEY, JSON.stringify({ t: Date.now(), v: v })); } catch (e) { /* приватный режим */ }
+  function writeCache(key, v) {
+    try { localStorage.setItem(key, JSON.stringify({ t: Date.now(), v: v })); } catch (e) { /* приватный режим */ }
   }
 
   function animateNumber(el, target) {
@@ -101,77 +107,137 @@
     requestAnimationFrame(step);
   }
 
+  function htmlEscape(str) {
+    return String(str).replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    });
+  }
+
   // Отрисовка по уже полученным данным (paint(false) — без анимации, для смены языка).
   function paint(animate) {
-    if (!stats || typeof stats.total !== 'number') return;
+    if (!gh && !clicks) return;
 
-    var totalEl = document.getElementById('dl-total');
     var pill = document.getElementById('dl-stat');
-    var labelEl = document.getElementById('dl-label');
+    var box = document.getElementById('dl-stat-text');
 
-    if (totalEl) {
-      if (animate && !animated) animateNumber(totalEl, stats.total);
-      else totalEl.textContent = nf(stats.total);
+    if (box) {
+      var parts = [];
+
+      if (gh && typeof gh.total === 'number') {
+        parts.push(
+          '<b class="dl-stat-num' + (animate && !animated ? ' dl-anim' : '') + '">' +
+            htmlEscape(nf(gh.total)) + '</b> ' + wordDownloads(gh.total) +
+            (clicks ? (isEn() ? ' on GitHub' : ' на GitHub') : '')
+        );
+      }
+
+      if (clicks && typeof clicks.total === 'number' && (clicks.total > 0 || !gh)) {
+        if (parts.length) parts.push('<span class="dl-stat-sep">·</span>');
+        parts.push(
+          '<b class="dl-stat-num">' + htmlEscape(nf(clicks.total)) + '</b> ' +
+            wordClicks(clicks.total) + (isEn() ? ' on this site' : ' с сайта')
+        );
+      }
+
+      if (!clicks && parts.length) {
+        parts.push('<span class="dl-stat-note">' + (isEn() ? 'from GitHub Releases' : 'с GitHub Releases') + '</span>');
+      }
+
+      box.innerHTML = parts.join(' ');
     }
 
-    if (labelEl) labelEl.textContent = wordFor(stats.total);
-
+    // Счётчики на кнопках: клики с сайта, а если трекера нет — скачивания файла с GitHub.
     document.querySelectorAll('[data-count]').forEach(function (el) {
-      var item = stats.kinds && stats.kinds[el.getAttribute('data-count')];
-      if (item && typeof item.count === 'number') {
-        el.textContent = nf(item.count);
-        el.hidden = false;
-      } else {
-        el.hidden = true;
-      }
-    });
+      var kind = el.getAttribute('data-kind') || el.getAttribute('data-count');
+      var fromClicks = clicks && clicks.kinds && clicks.kinds[kind];
+      var fromGh = gh && gh.kinds && gh.kinds[kind];
+      var value = null;
+      var caption = '';
 
-    // Заодно чиним ссылки: они всегда указывают на файлы самого свежего релиза,
-    // даже если версия в разметке устарела.
-    document.querySelectorAll('a[data-kind]').forEach(function (a) {
-      var item = stats.kinds && stats.kinds[a.getAttribute('data-kind')];
-      if (item && item.url) a.href = item.url;
+      if (fromClicks && typeof fromClicks.clicks === 'number') {
+        // ноли на кнопках не показываем — трекер ещё ничего не насчитал
+        value = fromClicks.clicks || null;
+        caption = wordClicks(fromClicks.clicks) + (isEn() ? ' on this site' : ' с сайта');
+      } else if (fromGh && typeof fromGh.count === 'number') {
+        value = fromGh.count;
+        caption = wordDownloads(fromGh.count) + (isEn() ? ' on GitHub' : ' с GitHub');
+      }
+
+      if (value === null) {
+        el.hidden = true;
+        return;
+      }
+      el.textContent = nf(value);
+      el.title = nf(value) + ' ' + caption;
+      el.hidden = false;
     });
 
     if (pill) pill.hidden = false;
+
+    if (animate) {
+      var anim = box && box.querySelector('.dl-anim');
+      if (anim && gh) {
+        anim.classList.remove('dl-anim');
+        animateNumber(anim, gh.total);
+      }
+    }
+
     animated = true;
   }
 
-  function loadStats() {
-    var cached = readCache();
-
+  function loadGithub() {
+    var cached = readCache(GH_KEY);
     if (cached) {
-      stats = cached.v;
-      paint(true);
-      if (Date.now() - cached.t < CACHE_TTL) return; // свежий кэш — в сеть не идём
+      gh = cached.v;
+      paint(!animated);
+      if (Date.now() - cached.t < GH_TTL) return;
     }
 
     fetch('/api/downloads', { headers: { Accept: 'application/json' } })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (data) {
-        if (data && data.available) {
-          writeCache(data);
-          stats = data;
+        if (data && data.available && typeof data.total === 'number') {
+          gh = data;
+          writeCache(GH_KEY, data);
           paint(true);
-          return;
+        } else if (!gh) {
+          return githubFallback();
         }
-        return fallbackToGithub();
       })
-      .catch(function () { return fallbackToGithub(); });
+      .catch(function () { return githubFallback(); });
   }
 
-  function fallbackToGithub() {
-    if (stats) return; // кэш уже на экране — не дёргаем GitHub зря
+  function githubFallback() {
+    if (gh) return;
     fetch(GITHUB_API, { headers: { Accept: 'application/vnd.github+json' } })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (arr) {
         if (!Array.isArray(arr)) return;
-        var data = fromGithub(arr);
-        stats = data;
-        writeCache(data);
+        gh = fromGithub(arr);
+        writeCache(GH_KEY, gh);
         paint(true);
       })
-      .catch(function () { /* нет сети — счётчик остаётся скрытым */ });
+      .catch(function () { /* нет сети — остаёмся без этой цифры */ });
+  }
+
+  function loadClicks() {
+    var cached = readCache(CLICKS_KEY);
+    if (cached) {
+      clicks = cached.v;
+      paint(false);
+      if (Date.now() - cached.t < CLICKS_TTL) return;
+    }
+
+    fetch('/api/clicks', { headers: { Accept: 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        if (data && data.available) {
+          clicks = data;
+          writeCache(CLICKS_KEY, data);
+          paint(false);
+        }
+      })
+      .catch(function () { /* трекер недоступен — показываем данные GitHub */ });
   }
 
   // ======================= язык =======================
@@ -216,7 +282,8 @@
     });
   }
 
-  loadStats();
+  loadGithub();
+  loadClicks();
 
   // ======================= лайтбокс =======================
 
