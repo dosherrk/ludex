@@ -5,7 +5,6 @@ release/app/
 *.user
 *.suo
 
-# готовые бинарники (они живут в Releases, а не в репозитории)
 release/*.exe
 release/*.zip
 *.pdb
