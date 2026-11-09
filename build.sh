@@ -184,7 +184,8 @@ Ludex для macOS
 обложки из Steam, темы, обои, запуск игр. Автозапуск и «запуск от администратора» —
 функции Windows, в macOS их нет.
 TXT
-    ( cd "build/Ludex-${arch}" && zip -qry "../../release/Ludex-${VER}-macos-${arch}.zip" Ludex.app "КАК-ЗАПУСТИТЬ.txt" )
+    # -UN=UTF8: иначе кириллическое имя файла уезжает в zip как #U041a#U0410…
+    ( cd "build/Ludex-${arch}" && zip -qry -UN=UTF8 "../../release/Ludex-${VER}-macos-${arch}.zip" Ludex.app "КАК-ЗАПУСТИТЬ.txt" )
     echo "    $rid: $(file -b release/$rid/Ludex | cut -c1-40) → $(du -h "release/Ludex-${VER}-macos-${arch}.zip" | cut -f1)"
   done
 }
