@@ -55,6 +55,8 @@ public sealed class MainWindow : Window
     private TextBox? _searchBox;
     private Border? _favChip;
     private TextBlock? _favChipLabel;
+    private Border? _allChip;
+    private TextBlock? _allLabel;
     private TextBlock? _emptyTitle;
     private TextBlock? _emptyHint;
     private DispatcherTimer? _searchTimer;
@@ -154,58 +156,52 @@ public sealed class MainWindow : Window
         _starButtons.Clear();
         _starIcons.Clear();
 
-        var root = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto") };
+        // слева — боковая панель (поиск, фильтры, настройки), справа — библиотека
+        var root = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
 
         // ---- слой обоев: под всем содержимым окна
         _wallpaperLayer = new Grid { IsHitTestVisible = false };
-        Grid.SetRowSpan(_wallpaperLayer, 3);
+        Grid.SetColumnSpan(_wallpaperLayer, 2);
         root.Children.Add(_wallpaperLayer);
         RefreshWallpaper();
 
-        // стеклянный вид: мягкий акцентный ореол и блик у верхней кромки окна
+        // мягкое свечение сверху — подсветка витрины библиотеки
         if (Skin.Transparent)
         {
             var glass = new Grid { IsHitTestVisible = false };
-            Grid.SetRowSpan(glass, 3);
+            Grid.SetColumnSpan(glass, 2);
 
             glass.Children.Add(new Border
             {
                 Background = new RadialGradientBrush
                 {
-                    Center = new RelativePoint(0.5, -0.1, RelativeUnit.Relative),
-                    GradientOrigin = new RelativePoint(0.5, -0.35, RelativeUnit.Relative),
-                    RadiusX = new RelativeScalar(0.95, RelativeUnit.Relative),
-                    RadiusY = new RelativeScalar(1.1, RelativeUnit.Relative),
+                    Center = new RelativePoint(0.72, -0.25, RelativeUnit.Relative),
+                    GradientOrigin = new RelativePoint(0.72, -0.4, RelativeUnit.Relative),
+                    RadiusX = new RelativeScalar(0.8, RelativeUnit.Relative),
+                    RadiusY = new RelativeScalar(1.0, RelativeUnit.Relative),
                     GradientStops =
                     {
                         new GradientStop(Skin.AccentColor, 0),
                         new GradientStop(Color.FromArgb(0, Skin.AccentColor.R, Skin.AccentColor.G, Skin.AccentColor.B), 1),
                     },
                 },
-                Opacity = Skin.IsLight ? 0.10 : 0.16,
-            });
-
-            glass.Children.Add(new Border
-            {
-                Height = 190,
-                VerticalAlignment = VerticalAlignment.Top,
-                Background = new LinearGradientBrush
-                {
-                    StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
-                    EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
-                    GradientStops =
-                    {
-                        new GradientStop(Color.Parse(Skin.IsLight ? "#4CFFFFFF" : "#12FFFFFF"), 0),
-                        new GradientStop(Color.Parse("#00FFFFFF"), 1),
-                    },
-                },
+                Opacity = Skin.IsLight ? 0.08 : 0.07,
             });
 
             root.Children.Add(glass);
         }
 
-        root.Children.Add(BuildTopBar());
+        var sidebar = BuildSidebar();
+        Grid.SetColumn(sidebar, 0);
+        root.Children.Add(sidebar);
 
+        var content = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto") };
+        Grid.SetColumn(content, 1);
+        root.Children.Add(content);
+
+        content.Children.Add(BuildTitleStrip());
+
+        // ---- библиотека
         var contentGrid = new Grid();
 
         _grid = new WrapPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(2) };
@@ -213,7 +209,7 @@ public sealed class MainWindow : Window
         _libraryScroll = new ScrollViewer
         {
             Content = _grid,
-            Padding = new Thickness(16, 16, 10, 8),
+            Padding = new Thickness(20, 4, 14, 12),
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
         };
@@ -235,11 +231,13 @@ public sealed class MainWindow : Window
         contentGrid.Children.Add(_detailLayer);
 
         Grid.SetRow(contentGrid, 1);
-        root.Children.Add(contentGrid);
+        content.Children.Add(contentGrid);
 
-        root.Children.Add(BuildStatusBar());
+        var status = BuildStatusBar();
+        Grid.SetRow(status, 2);
+        content.Children.Add(status);
 
-        // модальные слои: настройки и «запуск игры» — внутри приложения, во весь размер окна
+        // модальные слои: настройки и «запуск игры» — во весь размер окна
         _settingsLayer = new Border
         {
             Background = Skin.Overlay,
@@ -258,7 +256,7 @@ public sealed class MainWindow : Window
         {
             if (ReferenceEquals(e.Source, _settingsLayer)) CloseSettings();
         };
-        Grid.SetRowSpan(_settingsLayer, 3);
+        Grid.SetColumnSpan(_settingsLayer, 2);
         root.Children.Add(_settingsLayer);
 
         _launchLayer = new Border
@@ -276,101 +274,71 @@ public sealed class MainWindow : Window
             },
         };
         _launchLayer.PointerPressed += (_, e) => e.Handled = true;
-        Grid.SetRowSpan(_launchLayer, 3);
+        Grid.SetColumnSpan(_launchLayer, 2);
         root.Children.Add(_launchLayer);
 
         Content = root;
         UpdateCount();
+        ApplyFavChipState();
     }
 
-    private Control BuildTopBar()
+    // ------------------------------------------------------------ боковая панель
+
+    private Control BuildSidebar()
     {
-        var bar = new Border
+        var side = new Border
         {
+            Width = 244,
             Background = Skin.BgDeep,
-            Padding = new Thickness(16, 8, 6, 8),
             BorderBrush = Skin.Border,
-            BorderThickness = new Thickness(0, 0, 0, 1),
+            BorderThickness = new Thickness(0, 0, 1, 0),
         };
 
-        // за пустые места шапки окно можно таскать мышью, двойной клик — развернуть
-        bar.PointerPressed += (_, e) =>
-        {
-            if (!e.GetCurrentPoint(bar).Properties.IsLeftButtonPressed) return;
-            if (IsInteractive(e.Source as Control)) return;
-            try { BeginMoveDrag(e); } catch { /* окно ещё не готово */ }
-        };
-        bar.DoubleTapped += (_, _) => ToggleMaximize();
+        var dock = new DockPanel { LastChildFill = true };
 
-        var dock = new DockPanel { VerticalAlignment = VerticalAlignment.Center };
-
-        // ---- кнопки окна: свернуть / развернуть / закрыть
-        var windowButtons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 2,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(8, 0, 0, 0),
-        };
-        DockPanel.SetDock(windowButtons, Dock.Right);
-
-        windowButtons.Children.Add(WindowButton(Ui.Icon(Ui.MinimizeGeometry, Skin.TextMuted, 13, 12),
-            Minimize, Loc.T("win.minimize")));
-
-        _maximizePath = Ui.Icon(Ui.MaximizeGeometry, Skin.TextMuted, 11, 11, true, 1.4);
-        windowButtons.Children.Add(WindowButton(_maximizePath, ToggleMaximize, Loc.T("win.maximize")));
-
-        windowButtons.Children.Add(WindowButton(Ui.Icon(Ui.CloseGeometry, Skin.TextMuted, 11, 11, true, 1.5),
-            Close, Loc.T("win.close"), danger: true));
-
-        dock.Children.Add(windowButtons);
-
-        // ---- сканировать + настройки
-        var rightPanel = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 10,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        DockPanel.SetDock(rightPanel, Dock.Right);
-
-        var scanLabel = Ui.T(Loc.T("btn.scan"), 13, Brushes.White, FontWeight.SemiBold);
-        _scanButton = Ui.Clickable(scanLabel, () => _ = StartScanAsync(), Skin.Accent,
-            Skin.AccentHover, new CornerRadius(6), new Thickness(16, 9));
-        rightPanel.Children.Add(_scanButton);
-
-        var settingsButton = Ui.Clickable(Ui.Icon(Ui.GearGeometry, Skin.TextMuted, 17, 17),
-            ShowSettings, Skin.PanelAlt, Skin.CardHover, new CornerRadius(6), new Thickness(10, 8));
-        Ui.Tip(settingsButton, Loc.T("btn.settings"));
-        rightPanel.Children.Add(settingsButton);
-
-        dock.Children.Add(rightPanel);
-
-        // ---- слева: логотип + поиск + сортировка
-        var leftPanel = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 14,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-
+        // ---- логотип
         var brand = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            VerticalAlignment = VerticalAlignment.Center,
+            Spacing = 10,
+            Margin = new Thickness(20, 22, 20, 16),
         };
 
-        var logoImage = LoadBrandImage(20);
+        var logoImage = LoadBrandImage(22);
         if (logoImage != null)
         {
             logoImage.VerticalAlignment = VerticalAlignment.Center;
             brand.Children.Add(logoImage);
         }
+        brand.Children.Add(Ui.T(Loc.T("app.name"), 15, Skin.Text, FontWeight.Bold));
 
-        var logo = Ui.T(Loc.T("app.name"), 16, Skin.Text, FontWeight.Bold);
-        brand.Children.Add(logo);
-        leftPanel.Children.Add(brand);
+        DockPanel.SetDock(brand, Dock.Top);
+        dock.Children.Add(brand);
+
+        // ---- низ: сканировать, настройки, версия
+        var bottom = new StackPanel { Spacing = 6, Margin = new Thickness(14, 10, 14, 14) };
+
+        var scanLabel = Ui.T(Loc.T("btn.scan"), 13, Skin.OnAccent, FontWeight.SemiBold);
+        scanLabel.HorizontalAlignment = HorizontalAlignment.Center;
+        _scanButton = Ui.Clickable(scanLabel, () => _ = StartScanAsync(), Skin.Accent,
+            Skin.AccentHover, new CornerRadius(4), new Thickness(16, 11));
+        _scanButton.HorizontalAlignment = HorizontalAlignment.Stretch;
+        _scanButton.MinHeight = 42;
+        bottom.Children.Add(_scanButton);
+
+        var (settingsItem, _) = SidebarItem(Loc.T("btn.settings"),
+            Ui.Icon(Ui.GearGeometry, Skin.TextMuted, 16, 16), ShowSettings);
+        bottom.Children.Add(settingsItem);
+
+        var version = Ui.T("v" + Updater.CurrentVersionText, 11, Skin.TextDim);
+        version.Margin = new Thickness(14, 6, 0, 0);
+        bottom.Children.Add(version);
+
+        DockPanel.SetDock(bottom, Dock.Bottom);
+        dock.Children.Add(bottom);
+
+        // ---- центр: поиск, фильтры, сортировка
+        var center = new StackPanel { Spacing = 2 };
 
         _searchBox = Ui.SearchBox(_search, Loc.T("search.watermark"), text =>
         {
@@ -386,9 +354,47 @@ public sealed class MainWindow : Window
             };
             _searchTimer.Start();
         });
-        _searchBox.Width = 280;
-        _searchBox.Margin = new Thickness(10, 0, 0, 0);
-        leftPanel.Children.Add(_searchBox);
+        _searchBox.Height = 40;
+        _searchBox.CornerRadius = new CornerRadius(4);
+        _searchBox.Margin = new Thickness(14, 0, 14, 12);
+        center.Children.Add(_searchBox);
+
+        center.Children.Add(Caption("nav.library"));
+
+        var (allItem, allLabel) = SidebarItem(Loc.T("nav.all"), Ui.Icon(Ui.GridGeometry, Skin.TextMuted, 16, 16),
+            () =>
+            {
+                _favoritesOnly = false;
+                ApplyFavChipState();
+                RenderGrid(true);
+            });
+        _allChip = allItem;
+        _allLabel = allLabel;
+        center.Children.Add(allItem);
+
+        _favChipLabel = Ui.T(Loc.T("filter.fav"), 13, Skin.TextMuted, FontWeight.Medium);
+        var favRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 12,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        favRow.Children.Add(Ui.Icon(Ui.StarGeometry, Skin.TextMuted, 15, 15));
+        favRow.Children.Add(_favChipLabel);
+
+        _favChip = Ui.Clickable(favRow,
+            () =>
+            {
+                _favoritesOnly = !_favoritesOnly;
+                ApplyFavChipState();
+                RenderGrid(true);
+            },
+            Brushes.Transparent, Skin.PanelAlt, new CornerRadius(4), new Thickness(12, 10));
+        _favChip.HorizontalAlignment = HorizontalAlignment.Stretch;
+        _favChip.Margin = new Thickness(8, 1, 8, 1);
+        center.Children.Add(_favChip);
+
+        center.Children.Add(Caption("nav.sort"));
 
         var sortDropdown = new Dropdown(
             new[]
@@ -405,7 +411,7 @@ public sealed class MainWindow : Window
                 "favorite" => 3,
                 _ => 0,
             },
-            190, 34, 12.5);
+            216, 38, 12.5);
 
         sortDropdown.SelectionChanged += index =>
         {
@@ -419,37 +425,106 @@ public sealed class MainWindow : Window
             Storage.SaveSettings(_settings);
             RenderGrid(true);
         };
-        leftPanel.Children.Add(sortDropdown);
+        sortDropdown.Margin = new Thickness(8, 0, 8, 0);
+        center.Children.Add(sortDropdown);
 
-        _favChipLabel = Ui.T("★  " + Loc.T("filter.fav"), 12,
-            _favoritesOnly ? Brushes.White : Skin.TextMuted, FontWeight.Medium);
-        _favChipLabel.Transitions = new Transitions
+        dock.Children.Add(center);
+
+        side.Child = dock;
+        return side;
+    }
+
+    /// <summary>Пункт бокового меню: иконка + подпись, подсветка при наведении.</summary>
+    private static (Border Frame, TextBlock Label) SidebarItem(string text, Control icon, Action onClick)
+    {
+        var label = Ui.T(text, 13, Skin.TextMuted, FontWeight.Medium);
+
+        var row = new StackPanel
         {
-            new Avalonia.Animation.BrushTransition
-            {
-                Property = TextBlock.ForegroundProperty,
-                Duration = TimeSpan.FromMilliseconds(180),
-            },
+            Orientation = Orientation.Horizontal,
+            Spacing = 12,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        row.Children.Add(icon);
+        row.Children.Add(label);
+
+        var frame = Ui.Clickable(row, onClick, Brushes.Transparent, Skin.PanelAlt,
+            new CornerRadius(4), new Thickness(12, 10));
+        frame.HorizontalAlignment = HorizontalAlignment.Stretch;
+        frame.Margin = new Thickness(8, 1, 8, 1);
+
+        return (frame, label);
+    }
+
+    /// <summary>Мелкий заголовок раздела в боковой панели.</summary>
+    private static TextBlock Caption(string key)
+    {
+        var caption = Ui.T(Loc.T(key).ToUpperInvariant(), 10.5, Skin.TextDim, FontWeight.SemiBold);
+        caption.Margin = new Thickness(20, 14, 20, 6);
+        return caption;
+    }
+
+    // ------------------------------------------------------------ верхняя полоса
+
+    private Control BuildTitleStrip()
+    {
+        var strip = new Border
+        {
+            Height = 48,
+            Background = Brushes.Transparent,
+            Padding = new Thickness(22, 0, 6, 0),
         };
 
-        _favChip = Ui.Clickable(_favChipLabel,
-            () =>
-            {
-                _favoritesOnly = !_favoritesOnly;
-                ApplyFavChipState();
-                RenderGrid(true);
-            },
-            _favoritesOnly ? Skin.Accent : Skin.PanelAlt,
-            _favoritesOnly ? Skin.AccentHover : Skin.CardHover,
-            new CornerRadius(6), new Thickness(12, 8));
-        leftPanel.Children.Add(_favChip);
+        // за полосу можно таскать окно, двойной клик — развернуть
+        strip.PointerPressed += (_, e) =>
+        {
+            if (!e.GetCurrentPoint(strip).Properties.IsLeftButtonPressed) return;
+            if (IsInteractive(e.Source as Control)) return;
+            try { BeginMoveDrag(e); } catch { /* окно ещё не готово */ }
+        };
+        strip.DoubleTapped += (_, _) => ToggleMaximize();
 
-        dock.Children.Add(leftPanel);
-        bar.Child = dock;
-        return bar;
+        var dock = new DockPanel { VerticalAlignment = VerticalAlignment.Center };
+
+        // ---- кнопки окна
+        var windowButtons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 2,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        DockPanel.SetDock(windowButtons, Dock.Right);
+
+        windowButtons.Children.Add(WindowButton(Ui.Icon(Ui.MinimizeGeometry, Skin.TextMuted, 13, 12),
+            Minimize, Loc.T("win.minimize")));
+
+        _maximizePath = Ui.Icon(Ui.MaximizeGeometry, Skin.TextMuted, 11, 11, true, 1.4);
+        windowButtons.Children.Add(WindowButton(_maximizePath, ToggleMaximize, Loc.T("win.maximize")));
+
+        windowButtons.Children.Add(WindowButton(Ui.Icon(Ui.CloseGeometry, Skin.TextMuted, 11, 11, true, 1.5),
+            Close, Loc.T("win.close"), danger: true));
+
+        dock.Children.Add(windowButtons);
+
+        // ---- заголовок раздела и счётчик
+        var title = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 12,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        title.Children.Add(Ui.T(Loc.T("nav.library"), 15, Skin.Text, FontWeight.SemiBold));
+
+        _countLabel = Ui.T("", 12, Skin.TextDim);
+        title.Children.Add(_countLabel);
+
+        dock.Children.Add(title);
+        strip.Child = dock;
+        return strip;
     }
 
     // ------------------------------------------------------------ окно
+
 
     private Border WindowButton(Control icon, Action onClick, string tip, bool danger = false)
     {
@@ -508,26 +583,22 @@ public sealed class MainWindow : Window
     {
         var border = new Border
         {
-            Background = Skin.BgDeep,
-            Padding = new Thickness(18, 8),
+            Background = Brushes.Transparent,
+            Padding = new Thickness(22, 7, 22, 9),
             BorderBrush = Skin.Border,
             BorderThickness = new Thickness(0, 1, 0, 0),
         };
 
-        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
+        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
 
-        _progress = new ProgressStrip(180, 4);
+        _progress = new ProgressStrip(180, 3);
         _progress.SetActive(false);
         grid.Children.Add(_progress);
 
-        _statusLabel = Ui.T(Loc.T("status.ready"), 12, Skin.TextDim);
+        _statusLabel = Ui.T(Loc.T("status.ready"), 11.5, Skin.TextDim);
         _statusLabel.Margin = new Thickness(14, 0, 0, 0);
         Grid.SetColumn(_statusLabel, 1);
         grid.Children.Add(_statusLabel);
-
-        _countLabel = Ui.T("", 12, Skin.TextMuted);
-        Grid.SetColumn(_countLabel, 2);
-        grid.Children.Add(_countLabel);
 
         border.Child = grid;
         Grid.SetRow(border, 2);
@@ -708,7 +779,8 @@ public sealed class MainWindow : Window
         placeholder.IsVisible = bitmap == null;
         coverGrid.Children.Add(placeholder);
 
-        var hover = BuildHoverOverlay(game);
+        Action? openMenu = null;
+        var hover = BuildHoverOverlay(game, () => openMenu?.Invoke());
         coverGrid.Children.Add(hover);
 
         // ---- звезда «в избранное»: появляется в углу карточки при наведении
@@ -732,26 +804,33 @@ public sealed class MainWindow : Window
         Ui.Tip(starButton, Loc.T("card.favorite"));
         coverGrid.Children.Add(starButton);
 
-        var textInner = new StackPanel { Margin = new Thickness(9, 7, 9, 9), Spacing = 2 };
+        var textInner = new StackPanel { Margin = new Thickness(2, 9, 2, 0), Spacing = 3 };
         var title = Ui.T(game.Title, 12.5, Skin.Text, FontWeight.SemiBold);
-        title.MaxWidth = _cardWidth - 18;
-        var subtitle = Ui.T(Subtitle(game), 10.5, Skin.TextDim);
-        subtitle.MaxWidth = _cardWidth - 18;
+        title.MaxWidth = _cardWidth - 4;
+        var subtitle = Ui.T(Subtitle(game), 11, Skin.TextDim);
+        subtitle.MaxWidth = _cardWidth - 4;
         textInner.Children.Add(title);
         textInner.Children.Add(subtitle);
 
         // в стеклянном режиме плашка снизу — полупрозрачное стекло поверх обоев
         var textPanel = new Border
         {
-            Background = Skin.CardFooter,
-            BorderBrush = Skin.CardFooterEdge,
-            BorderThickness = new Thickness(0, 1, 0, 0),
-            CornerRadius = new CornerRadius(0, 0, 9, 9),
+            Background = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
             Child = textInner,
         };
 
+        // обложка — скруглённый «постер», без подложки вокруг
+        var coverFrame = new Border
+        {
+            CornerRadius = new CornerRadius(6),
+            ClipToBounds = true,
+            BoxShadow = Skin.CardShadow,
+            Child = coverGrid,
+        };
+
         var stack = new StackPanel();
-        stack.Children.Add(coverGrid);
+        stack.Children.Add(coverFrame);
         stack.Children.Add(textPanel);
 
         // тонкая светлая грань поверх карточки — «стеклянный» край
@@ -770,19 +849,17 @@ public sealed class MainWindow : Window
         var card = new Border
         {
             Child = cardBody,
-            Background = Skin.Card,
-            CornerRadius = new CornerRadius(9),
+            Background = Brushes.Transparent,
+            CornerRadius = new CornerRadius(6),
             Margin = new Thickness(0, 0, CardGap, CardGap),
             Width = _cardWidth,
             Cursor = new Cursor(StandardCursorType.Hand),
-            ClipToBounds = true,
-            BoxShadow = Skin.CardShadow,
             RenderTransformOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative),
         };
 
         card.Transitions = new Transitions
         {
-            new BrushTransition { Property = Border.BackgroundProperty, Duration = TimeSpan.FromMilliseconds(140) },
+            new BoxShadowsTransition { Property = Border.BoxShadowProperty, Duration = TimeSpan.FromMilliseconds(160) },
         };
 
         void ShowStar(bool show)
@@ -793,14 +870,14 @@ public sealed class MainWindow : Window
 
         card.PointerEntered += (_, _) =>
         {
-            card.Background = Skin.CardHover;
+            coverFrame.BoxShadow = Ui.GlowShadow();
             hover.Opacity = 1;
             hover.IsHitTestVisible = true;
             ShowStar(true);
         };
         card.PointerExited += (_, _) =>
         {
-            card.Background = Skin.Card;
+            coverFrame.BoxShadow = Skin.CardShadow;
             hover.Opacity = 0;
             hover.IsHitTestVisible = false;
             ShowStar(false);
@@ -813,6 +890,7 @@ public sealed class MainWindow : Window
         };
 
         var cardMenu = BuildContextMenu(game);
+        openMenu = () => cardMenu.Show(card, new Point(_cardWidth - 46, 10));
         card.AddHandler(InputElement.PointerPressedEvent, (_, e) =>
         {
             if (!e.GetCurrentPoint(card).Properties.IsRightButtonPressed) return;
@@ -835,14 +913,14 @@ public sealed class MainWindow : Window
     private static Border BuildIconButton(string text, string iconData, double iconW, double iconH, Action onClick)
     {
         var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 9 };
-        content.Children.Add(Ui.Icon(iconData, Brushes.White, iconW, iconH));
-        content.Children.Add(Ui.T(text, 13, Brushes.White, FontWeight.SemiBold));
+        content.Children.Add(Ui.Icon(iconData, Skin.OnAccent, iconW, iconH));
+        content.Children.Add(Ui.T(text, 13, Skin.OnAccent, FontWeight.SemiBold));
 
         return Ui.Clickable(content, onClick, Skin.Accent,
-            new SolidColorBrush(Color.Parse("#57B0FF")), new CornerRadius(6), new Thickness(18, 9));
+            Skin.AccentHover, new CornerRadius(4), new Thickness(18, 9));
     }
 
-    private Control BuildHoverOverlay(GameEntry game)
+    private Control BuildHoverOverlay(GameEntry game, Action openMenu)
     {
         var playGlyph = Ui.Icon(Ui.PlayGeometry, Brushes.White, 30, 34);
 
@@ -858,13 +936,43 @@ public sealed class MainWindow : Window
         panel.Children.Add(playGlyph);
         panel.Children.Add(playLabel);
 
+        // «…» в углу обложки — меню игры прямо с карточки
+        var dots = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 3,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        for (var i = 0; i < 3; i++)
+        {
+            dots.Children.Add(new Border
+            {
+                Width = 3.5,
+                Height = 3.5,
+                CornerRadius = new CornerRadius(2),
+                Background = Brushes.White,
+            });
+        }
+
+        var menuButton = Ui.Clickable(dots, openMenu,
+            new SolidColorBrush(Color.Parse("#73000000")), new SolidColorBrush(Color.Parse("#B3000000")),
+            new CornerRadius(4), new Thickness(11, 8));
+        menuButton.HorizontalAlignment = HorizontalAlignment.Right;
+        menuButton.VerticalAlignment = VerticalAlignment.Bottom;
+        menuButton.Margin = new Thickness(0, 0, 8, 8);
+        menuButton.Cursor = new Cursor(StandardCursorType.Hand);
+
         var overlay = new Border
         {
             Background = new SolidColorBrush(Color.Parse("#C00B111A")),
             Opacity = 0,
             IsHitTestVisible = false,
             Cursor = new Cursor(StandardCursorType.Hand),
-            Child = panel,
+            Child = new Grid
+            {
+                Children = { panel, menuButton },
+            },
             Transitions = new Transitions
             {
                 new DoubleTransition { Property = Visual.OpacityProperty, Duration = TimeSpan.FromMilliseconds(150) },
@@ -1719,13 +1827,22 @@ public sealed class MainWindow : Window
 
     private void ApplyFavChipState()
     {
+        // выбранный пункт бокового меню подсвечивается
         if (_favChip != null)
             Ui.SetColors(_favChip,
-                _favoritesOnly ? Skin.Accent : Skin.PanelAlt,
-                _favoritesOnly ? Skin.AccentHover : Skin.CardHover);
+                _favoritesOnly ? Skin.PanelAlt : Brushes.Transparent,
+                _favoritesOnly ? Skin.CardHover : Skin.PanelAlt);
 
         if (_favChipLabel != null)
-            _favChipLabel.Foreground = _favoritesOnly ? Brushes.White : Skin.TextMuted;
+            _favChipLabel.Foreground = _favoritesOnly ? Skin.Text : Skin.TextMuted;
+
+        if (_allChip != null)
+            Ui.SetColors(_allChip,
+                _favoritesOnly ? Brushes.Transparent : Skin.PanelAlt,
+                _favoritesOnly ? Skin.PanelAlt : Skin.CardHover);
+
+        if (_allLabel != null)
+            _allLabel.Foreground = _favoritesOnly ? Skin.TextMuted : Skin.Text;
     }
 
     /// <summary>Строка состояния меняется с мягким проявлением, а не «прыжком» текста.</summary>

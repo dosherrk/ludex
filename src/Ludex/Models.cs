@@ -44,7 +44,7 @@ public sealed class AppSettings
     /// <summary>dark | light</summary>
     public string Theme { get; set; } = "dark";
     /// <summary>blue | violet | green | orange | pink | red | turquoise</summary>
-    public string Accent { get; set; } = "blue";
+    public string Accent { get; set; } = "white";
     /// <summary>полупрозрачный (glass) стиль интерфейса</summary>
     public bool Transparent { get; set; } = true;
     /// <summary>локальный путь к скачанным обоям</summary>

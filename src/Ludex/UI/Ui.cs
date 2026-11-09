@@ -117,16 +117,43 @@ public static class Ui
 
     public static Border PrimaryButton(string text, Action onClick, double extraWidth = 0)
     {
-        var label = T(text, 13, Brushes.White, FontWeight.SemiBold);
-        var b = Clickable(label, onClick, Skin.Accent, Skin.AccentHover, new CornerRadius(6), new Thickness(18, 9));
+        var label = T(text, 13, Skin.OnAccent, FontWeight.SemiBold);
+        label.HorizontalAlignment = HorizontalAlignment.Center;
+        var b = Clickable(label, onClick, Skin.Accent, Skin.AccentHover, new CornerRadius(4), new Thickness(20, 10));
+        b.BoxShadow = GlowShadow();
+        b.Transitions = new Transitions
+        {
+            new BoxShadowsTransition
+            {
+                Property = Border.BoxShadowProperty,
+                Duration = TimeSpan.FromMilliseconds(200),
+            },
+        };
+        b.PointerEntered += (_, _) => b.BoxShadow = GlowShadow(strong: true);
+        b.PointerExited += (_, _) => b.BoxShadow = GlowShadow();
         if (extraWidth > 0) b.MinWidth = extraWidth;
         return b;
+    }
+
+    /// <summary>Мягкое свечение вокруг кнопки.</summary>
+    public static BoxShadows GlowShadow(bool strong = false)
+    {
+        var a = (byte)(strong ? 0x4C : 0x2A);
+        return new BoxShadows(new BoxShadow
+        {
+            OffsetX = 0,
+            OffsetY = 0,
+            Blur = strong ? 26 : 18,
+            Spread = strong ? 2 : 0,
+            Color = Color.FromArgb(a, 0xFF, 0xFF, 0xFF),
+        });
     }
 
     public static Border GhostButton(string text, Action onClick, IBrush? fg = null)
     {
         var label = T(text, 13, fg ?? Skin.Text, FontWeight.Medium);
-        var b = Clickable(label, onClick, Skin.PanelAlt, Skin.CardHover, new CornerRadius(6), new Thickness(16, 9));
+        var b = Clickable(label, onClick, Brushes.Transparent, Skin.PanelAlt, new CornerRadius(4),
+            new Thickness(18, 9), Skin.Border, new Thickness(1));
         return b;
     }
 
@@ -141,10 +168,10 @@ public static class Ui
             VerticalContentAlignment = VerticalAlignment.Center,
             Background = Skin.PanelAlt,
             Foreground = Skin.Text,
-            BorderBrush = Skin.Border,
+            BorderBrush = Brushes.Transparent,
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(6),
-            Padding = new Thickness(10, 0, 10, 0),
+            CornerRadius = new CornerRadius(4),
+            Padding = new Thickness(12, 0, 12, 0),
         };
         tb.TextChanged += (_, _) => onChanged(tb.Text ?? "");
         AnimateTextBox(tb);
@@ -178,6 +205,9 @@ public static class Ui
         "S8,8.67,8,9.5S7.33,11,6.5,11z M9.5,7C8.67,7,8,6.33,8,5.5S8.67,4,9.5,4S11,4.67,11,5.5S10.33,7,9.5,7z " +
         "M14.5,7C13.67,7,13,6.33,13,5.5S13.67,4,14.5,4S16,4.67,16,5.5S15.33,7,14.5,7z M17.5,11" +
         "c-0.83,0-1.5-0.67-1.5-1.5S16.67,8,17.5,8S19,8.67,19,9.5S18.33,11,17.5,11z";
+
+    /// <summary>Сетка (Material «grid_view») — пункт «Все игры».</summary>
+    public const string GridGeometry = "M0,0 H8.4 V8.4 H0 Z M11.6,0 H20 V8.4 H11.6 Z M0,11.6 H8.4 V20 H0 Z M11.6,11.6 H20 V20 H11.6 Z";
 
     public const string StarGeometry = "M10,0 L12.6,6.6 L19.6,7.2 L14.3,11.9 L15.9,18.9 L10,15.3 L4.1,18.9 L5.7,11.9 L0.4,7.2 L7.4,6.6 Z";
 

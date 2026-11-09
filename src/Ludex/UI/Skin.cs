@@ -8,14 +8,14 @@ namespace Ludex.UI;
 public static class Skin
 {
     public static string ThemeName { get; private set; } = "dark";
-    public static string AccentName { get; private set; } = "blue";
+    public static string AccentName { get; private set; } = "white";
     public static bool Transparent { get; private set; } = true;
 
     public static bool IsLight => ThemeName == "light";
 
-    public static Color BgColor = Color.Parse("#08090C");
-    public static Color PanelColor = Color.Parse("#101319");
-    public static Color CardColor = Color.Parse("#12151B");
+    public static Color BgColor = Color.Parse("#121215");
+    public static Color PanelColor = Color.Parse("#1A1A1F");
+    public static Color CardColor = Color.Parse("#1A1A1F");
     public static Color AccentColor = Color.Parse("#3B9EFF");
 
     public static IBrush Bg = Brushes.Transparent;
@@ -43,6 +43,12 @@ public static class Skin
     /// <summary>Мягкий блик по верхней кромке стеклянной панели.</summary>
     public static IBrush GlassSheen = Brushes.Transparent;
     public static IBrush OnAccent = Brushes.White;
+    /// <summary>Цвет текста на акцентной кнопке (для белого акцента — тёмный).</summary>
+    private static void UpdateOnAccent()
+    {
+        var lum = (0.2126 * AccentColor.R + 0.7152 * AccentColor.G + 0.0722 * AccentColor.B) / 255.0;
+        OnAccent = new SolidColorBrush(lum > 0.6 ? Color.Parse("#0B0B0D") : Colors.White);
+    }
     public static IBrush PlaceholderText = Brushes.Transparent;
     public static IBrush PlaceholderTextDim = Brushes.Transparent;
     public static IBrush PlaceholderGradientA = Brushes.Transparent;
@@ -51,6 +57,7 @@ public static class Skin
     /// <summary>Доступные акцентные палитры: имя -> (тёмная тема, светлая тема).</summary>
     public static readonly (string Id, string Ru, string En, string Dark, string Light)[] Accents =
     {
+        ("white", "Белый", "White", "#FFFFFF", "#111114"),
         ("blue", "Синий", "Blue", "#3B9EFF", "#1F7FD6"),
         ("violet", "Фиолетовый", "Violet", "#9B6BFF", "#7C4DFF"),
         ("green", "Зелёный", "Green", "#35C48A", "#1FA472"),
@@ -62,7 +69,7 @@ public static class Skin
 
     static Skin()
     {
-        Apply("dark", "blue", true);
+        Apply("dark", "white", true);
     }
 
     private static Color Alpha(Color color, byte alpha) => Color.FromArgb(alpha, color.R, color.G, color.B);
@@ -70,7 +77,7 @@ public static class Skin
     public static void Apply(string? theme, string? accent = null, bool? transparent = null)
     {
         ThemeName = string.Equals(theme, "light", System.StringComparison.OrdinalIgnoreCase) ? "light" : "dark";
-        AccentName = string.IsNullOrWhiteSpace(accent) ? "blue" : accent!.Trim().ToLowerInvariant();
+        AccentName = string.IsNullOrWhiteSpace(accent) ? "white" : accent!.Trim().ToLowerInvariant();
         if (transparent.HasValue) Transparent = transparent.Value;
 
         if (Application.Current is { } app)
@@ -80,7 +87,9 @@ public static class Skin
         if (AccentName.StartsWith("#") && Color.TryParse(AccentName, out var custom))
         {
             var dark = EnsureReadable(custom);
-            var light = Darken(custom, 0.16);
+            // на светлой теме акцент-заливка должна быть достаточно тёмной,
+            // иначе белая кнопка сливается с панелями
+            var light = FitForLightTheme(custom);
             AccentColor = IsLight ? light : dark;
         }
         else
@@ -88,7 +97,7 @@ public static class Skin
             var accentPair = System.Array.Find(Accents, a => a.Id == AccentName);
             if (accentPair.Id == null)
             {
-                AccentName = "blue";
+                AccentName = "white";
                 accentPair = Accents[0];
             }
 
@@ -99,12 +108,12 @@ public static class Skin
         // сквозь них едва заметно проступает рабочий стол / обои
         byte bgA = Transparent ? (byte)0xEE : (byte)0xFF;
         byte barA = Transparent ? (byte)0xF2 : (byte)0xFF;
-        byte panelA = Transparent ? (byte)0xDC : (byte)0xFF;
-        byte altA = Transparent ? (byte)0xE2 : (byte)0xFF;
+        byte panelA = Transparent ? (byte)0xF4 : (byte)0xFF;
+        byte altA = Transparent ? (byte)0xEA : (byte)0xFF;
         // подложка под обложкой почти не видна (её закрывает картинка),
         // а плашка с названием снизу — полупрозрачное стекло
         byte cardA = Transparent ? (byte)0x1A : (byte)0xFF;
-        byte footerA = Transparent ? (byte)0xC8 : (byte)0xFF;
+        byte footerA = Transparent ? (byte)0xD8 : (byte)0xFF;
         byte hoverA = Transparent ? (byte)0x5C : (byte)0xFF;
 
         if (IsLight)
@@ -186,11 +195,11 @@ public static class Skin
             CardColor = Color.Parse("#12151B");
 
             Bg = new SolidColorBrush(Alpha(BgColor, bgA));
-            BgDeep = new SolidColorBrush(Alpha(Color.Parse("#030407"), barA));
+            BgDeep = new SolidColorBrush(Alpha(Color.Parse("#0C0C0F"), barA));
             Panel = new SolidColorBrush(Alpha(PanelColor, panelA));
-            PanelAlt = new SolidColorBrush(Alpha(Color.Parse("#171B23"), altA));
+            PanelAlt = new SolidColorBrush(Alpha(Color.Parse("#232329"), altA));
             Card = new SolidColorBrush(Alpha(CardColor, cardA));
-            CardHover = new SolidColorBrush(Alpha(Color.Parse("#1F242E"), Transparent ? (byte)0x70 : (byte)0xF5));
+            CardHover = new SolidColorBrush(Alpha(Color.Parse("#2C2C34"), Transparent ? (byte)0x70 : (byte)0xF5));
             CardFooter = Transparent
                 ? new LinearGradientBrush
                 {
@@ -198,8 +207,8 @@ public static class Skin
                     EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
                     GradientStops =
                     {
-                        new GradientStop(Alpha(Color.Parse("#15181F"), 0xC2), 0),
-                        new GradientStop(Alpha(Color.Parse("#08090C"), 0xA0), 1),
+                        new GradientStop(Alpha(Color.Parse("#1B1B21"), 0xC2), 0),
+                        new GradientStop(Alpha(Color.Parse("#0F0F12"), 0xA0), 1),
                     },
                 }
                 : new SolidColorBrush(Color.Parse("#0C0E13"));
@@ -220,24 +229,24 @@ public static class Skin
             Accent = new SolidColorBrush(AccentColor);
             AccentHover = new SolidColorBrush(Lighten(AccentColor, 0.16));
             AccentSoft = new SolidColorBrush(Alpha(AccentColor, 0x40));
-            Text = new SolidColorBrush(Color.Parse("#F4F6F9"));
-            TextMuted = new SolidColorBrush(Color.Parse("#98A2B0"));
-            TextDim = new SolidColorBrush(Color.Parse("#65707F"));
+            Text = new SolidColorBrush(Color.Parse("#F7F7F8"));
+            TextMuted = new SolidColorBrush(Color.Parse("#A9A9B2"));
+            TextDim = new SolidColorBrush(Color.Parse("#76767F"));
             Danger = new SolidColorBrush(Color.Parse("#E2574C"));
             DangerSoft = new SolidColorBrush(Color.Parse("#28E2574C"));
-            Border = new SolidColorBrush(Color.Parse("#1D222A"));
+            Border = new SolidColorBrush(Color.Parse("#26262C"));
             Overlay = new SolidColorBrush(Color.Parse("#D9030407"));
             Shadow = new SolidColorBrush(Color.Parse("#7A000000"));
-            PlaceholderText = new SolidColorBrush(Color.Parse("#39434F"));
-            PlaceholderTextDim = new SolidColorBrush(Color.Parse("#798390"));
+            PlaceholderText = new SolidColorBrush(Color.Parse("#3E3E46"));
+            PlaceholderTextDim = new SolidColorBrush(Color.Parse("#85858E"));
             PlaceholderGradientA = new LinearGradientBrush
             {
                 StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
                 EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative),
                 GradientStops =
                 {
-                    new GradientStop(Color.Parse("#1B2430"), 0),
-                    new GradientStop(Color.Parse("#0A0C11"), 1),
+                    new GradientStop(Color.Parse("#232329"), 0),
+                    new GradientStop(Color.Parse("#121215"), 1),
                 },
             };
             CardShadow = new BoxShadows(new BoxShadow
@@ -248,7 +257,26 @@ public static class Skin
                 Color = Color.Parse("#66000000"),
             });
         }
+
+        UpdateOnAccent();
     }
+
+    /// <summary>Притемняет акцент, пока он не станет читаемым на светлой теме.</summary>
+    private static Color FitForLightTheme(Color color)
+    {
+        var current = Darken(color, 0.16);
+        var k = 0.16;
+        while (Lum(current) > 0.30 && k < 1.2)
+        {
+            k += 0.04;
+            current = Darken(color, k);
+        }
+
+        return current;
+    }
+
+    private static double Lum(Color c) =>
+        (0.2126 * c.R + 0.7152 * c.G + 0.0722 * c.B) / 255.0;
 
     private static Color Darken(Color color, double amount)
     {

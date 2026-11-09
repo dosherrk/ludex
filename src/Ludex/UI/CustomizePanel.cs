@@ -161,7 +161,7 @@ public sealed class CustomizePanel : Border
             Margin = new Thickness(0, 2, 0, 0),
         };
 
-        _applyBtn = Ui.Clickable(Ui.T(Loc.T("custom.apply"), 13, Brushes.White, FontWeight.SemiBold),
+        _applyBtn = Ui.Clickable(Ui.T(Loc.T("custom.apply"), 13, Skin.OnAccent, FontWeight.SemiBold),
             ApplyWallpaper, Skin.Accent, Skin.AccentHover, new CornerRadius(6), new Thickness(18, 9));
         wallpaperRow.Children.Add(_applyBtn);
         wallpaperRow.Children.Add(Ui.GhostButton(Loc.T("custom.clearWallpaper"), RemoveWallpaper));
@@ -201,11 +201,11 @@ public sealed class CustomizePanel : Border
 
     private Border Chip(string text, bool active, Action onClick)
     {
-        return Ui.Clickable(Ui.T(text, 12.5, active ? Brushes.White : Skin.Text, FontWeight.Medium),
+        return Ui.Clickable(Ui.T(text, 12.5, active ? Skin.OnAccent : Skin.Text, FontWeight.Medium),
             onClick,
             active ? Skin.Accent : Skin.PanelAlt,
             active ? Skin.AccentHover : Skin.CardHover,
-            new CornerRadius(7), new Thickness(18, 8));
+            new CornerRadius(4), new Thickness(18, 8));
     }
 
     // -------------------------------------------------------------- actions

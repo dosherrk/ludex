@@ -41,7 +41,7 @@
   function wordClicks(n) { return isEn() ? (n === 1 ? 'click' : 'clicks') : plural(n, ['клик', 'клика', 'кликов']); }
 
   // Имена файлов релиза → ключи кнопок.
-  // Ludex-Setup-1.6.0.exe → setup, Ludex-1.6.0-linux-x64.deb → linux-deb и т.д.
+  // Ludex-Setup-1.7.0.exe → setup, Ludex-1.7.0-linux-x64.deb → linux-deb и т.д.
   function classify(name) {
     var n = String(name || '').toLowerCase();
     if (n.indexOf('sources') !== -1) return null;

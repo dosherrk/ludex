@@ -1,17 +1,18 @@
 /* Ludex — лендинг. Один файл, без внешних ресурсов. */
 
 :root {
-  --bg: #08090c;
-  --bg-alt: #0b0d11;
-  --panel: #101319;
-  --panel-2: #171b23;
-  --line: #1d222a;
-  --text: #f4f6f9;
-  --muted: #98a2b0;
-  --dim: #65707f;
-  --accent: #3b9eff;
-  --accent-2: #0c7ae8;
-  --radius: 16px;
+  --bg: #121215;
+  --bg-alt: #0c0c0f;
+  --panel: #1a1a1f;
+  --panel-2: #232329;
+  --line: #26262c;
+  --text: #f7f7f8;
+  --muted: #a6a6b1;
+  --dim: #7b7b87;
+  --accent: #ffffff;
+  --accent-2: #ececf1;
+  --accent-ink: #0b0b0d;
+  --radius: 10px;
   --wrap: 1140px;
 }
 
@@ -42,7 +43,7 @@ a { color: inherit; text-decoration: none; }
 .muted { color: var(--muted); }
 .small { font-size: 13px; }
 .tiny { font-size: 12.5px; }
-.accent { color: var(--accent); }
+.accent { color: var(--accent); text-shadow: 0 0 32px rgba(255, 255, 255, 0.35); }
 
 /* ---------------- topbar ---------------- */
 
@@ -50,7 +51,7 @@ a { color: inherit; text-decoration: none; }
   position: sticky;
   top: 0;
   z-index: 50;
-  background: rgba(8, 9, 12, 0.82);
+  background: rgba(12, 12, 15, 0.82);
   backdrop-filter: saturate(140%) blur(14px);
   border-bottom: 1px solid var(--line);
 }
@@ -101,7 +102,7 @@ a { color: inherit; text-decoration: none; }
   cursor: pointer;
 }
 
-.lang:hover { color: var(--text); border-color: #2a313c; }
+.lang:hover { color: var(--text); border-color: #35353d; }
 
 /* ---------------- buttons ---------------- */
 
@@ -109,7 +110,7 @@ a { color: inherit; text-decoration: none; }
   display: inline-flex;
   align-items: center;
   gap: 9px;
-  border-radius: 10px;
+  border-radius: 6px;
   padding: 13px 20px;
   font-weight: 600;
   font-size: 15px;
@@ -121,20 +122,23 @@ a { color: inherit; text-decoration: none; }
 .btn:active { transform: translateY(1px); }
 
 .btn-primary {
-  background: linear-gradient(180deg, var(--accent), var(--accent-2));
-  color: #fff;
-  box-shadow: 0 8px 24px rgba(59, 158, 255, 0.28);
+  background: linear-gradient(180deg, #ffffff, var(--accent-2));
+  color: var(--accent-ink);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.10), 0 6px 22px rgba(255, 255, 255, 0.16);
 }
 
-.btn-primary:hover { box-shadow: 0 10px 30px rgba(59, 158, 255, 0.42); }
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.22), 0 8px 32px rgba(255, 255, 255, 0.30);
+}
 
 .btn-ghost {
-  background: var(--panel);
+  background: transparent;
   border-color: var(--line);
   color: var(--text);
 }
 
-.btn-ghost:hover { background: var(--panel-2); border-color: #2a313c; }
+.btn-ghost:hover { background: var(--panel-2); border-color: #35353d; }
 
 .btn-sm { padding: 9px 15px; font-size: 14px; }
 
@@ -153,7 +157,7 @@ a { color: inherit; text-decoration: none; }
   width: 1100px;
   height: 620px;
   transform: translateX(-50%);
-  background: radial-gradient(closest-side, rgba(59, 158, 255, 0.16), transparent 72%);
+  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.09), transparent 72%);
   pointer-events: none;
 }
 
@@ -170,7 +174,7 @@ a { color: inherit; text-decoration: none; }
   align-items: center;
   gap: 9px;
   padding: 7px 13px;
-  border-radius: 999px;
+  border-radius: 6px;
   background: var(--panel);
   border: 1px solid var(--line);
   color: var(--muted);
@@ -186,6 +190,7 @@ a { color: inherit; text-decoration: none; }
 }
 
 h1 {
+  color: #9d9da8;
   font-size: clamp(30px, 3.6vw, 46px);
   line-height: 1.1;
   letter-spacing: -0.02em;
@@ -224,7 +229,7 @@ h1 {
   width: 9px;
   height: 9px;
   border-radius: 3px;
-  background: rgba(59, 158, 255, 0.35);
+  background: rgba(255, 255, 255, 0.24);
 }
 
 /* ---------------- выбор системы ---------------- */
@@ -235,7 +240,7 @@ h1 {
   padding: 4px;
   margin: 0 0 14px;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: 6px;
   background: var(--panel);
 }
 
@@ -244,7 +249,7 @@ h1 {
   border: 0;
   cursor: pointer;
   padding: 7px 16px;
-  border-radius: 999px;
+  border-radius: 4px;
   background: transparent;
   color: var(--muted);
   font: inherit;
@@ -257,8 +262,9 @@ h1 {
 
 .os-tab[aria-selected="true"] {
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-ink);
   font-weight: 600;
+  box-shadow: 0 0 18px rgba(255, 255, 255, 0.28);
 }
 
 .os-tabs-note {
@@ -310,9 +316,9 @@ h1 {
 
 .dl-count::before { content: "↓"; margin-right: 3px; color: var(--accent); opacity: .8; }
 
-/* на синей кнопке серый счётчик не читается */
-.btn-primary .dl-count { color: rgba(255, 255, 255, 0.72); }
-.btn-primary .dl-count::before { color: #fff; opacity: .85; }
+/* на белой кнопке серый счётчик не читается */
+.btn-primary .dl-count { color: rgba(11, 11, 13, 0.62); }
+.btn-primary .dl-count::before { color: var(--accent-ink); opacity: .75; }
 
 .hero-shot {
   margin: 0;
@@ -374,7 +380,7 @@ h1 {
   border-radius: 11px;
   display: grid;
   place-items: center;
-  background: rgba(59, 158, 255, 0.12);
+  background: rgba(255, 255, 255, 0.07);
   color: var(--accent);
   margin-bottom: 16px;
 }
@@ -439,7 +445,7 @@ h1 {
   width: 30px;
   height: 30px;
   border-radius: 50%;
-  background: rgba(59, 158, 255, 0.14);
+  background: rgba(255, 255, 255, 0.08);
   color: var(--accent);
   font-weight: 700;
   font-size: 14px;

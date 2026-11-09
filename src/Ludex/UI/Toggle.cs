@@ -29,7 +29,7 @@ public sealed class Toggle : Border
             Width = 16,
             Height = 16,
             CornerRadius = new CornerRadius(8),
-            Background = Brushes.White,
+            Background = value ? Skin.OnAccent : Brushes.White,
             HorizontalAlignment = HorizontalAlignment.Left,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(3, 0, 0, 0),
@@ -129,5 +129,6 @@ public sealed class Toggle : Border
         _knob.RenderTransform = new TranslateTransform(_value ? 18 : 0, 0);
         _track.Background = _value ? Skin.Accent : Skin.PanelAlt;
         _track.BorderBrush = _value ? Skin.Accent : Skin.Border;
+        _knob.Background = _value ? Skin.OnAccent : Brushes.White;
     }
 }
