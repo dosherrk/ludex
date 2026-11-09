@@ -63,15 +63,24 @@
         </p>
 
         <div class="cta">
-          <a class="btn btn-primary" href="https://github.com/dosherrk/ludex/releases/latest/download/Ludex-Setup-1.4.0.exe">
+          <a class="btn btn-primary" data-kind="setup" href="https://github.com/dosherrk/ludex/releases/latest/download/Ludex-Setup-1.4.0.exe">
             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3v11m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
             <span data-ru="Скачать установщик" data-en="Download installer">Скачать установщик</span>
+            <span class="dl-count" data-count="setup" hidden></span>
           </a>
-          <a class="btn btn-ghost" href="https://github.com/dosherrk/ludex/releases/latest/download/Ludex-1.4.0-portable.exe">
+          <a class="btn btn-ghost" data-kind="portable" href="https://github.com/dosherrk/ludex/releases/latest/download/Ludex-1.4.0-portable.exe">
             <span data-ru="Портативная версия" data-en="Portable version">Портативная версия</span>
             <span class="muted small">46 МБ</span>
+            <span class="dl-count" data-count="portable" hidden></span>
           </a>
         </div>
+
+        <p class="dl-stat" id="dl-stat" hidden>
+          <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M12 4v10m0 0 3.5-3.5M12 14 8.5 10.5M5 19h14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span class="dl-stat-num" id="dl-total">0</span>
+          <span id="dl-label" data-ru="скачиваний" data-en="downloads">скачиваний</span>
+          <span class="dl-stat-note" id="dl-note" data-ru="с GitHub Releases" data-en="from GitHub Releases">с GitHub Releases</span>
+        </p>
 
         <ul class="hero-facts">
           <li data-ru="Не нужны права администратора" data-en="No admin rights needed">Не нужны права администратора</li>
@@ -196,9 +205,9 @@
              data-en="Windows 10/11, 64-bit. Files are not code-signed: SmartScreen may ask you to click “More info → Run anyway”.">Windows 10/11, 64-бит. Файлы не подписаны сертификатом: SmartScreen может попросить «Подробнее → Выполнить в любом случае».</p>
         </div>
         <div class="download-links">
-          <a class="btn btn-primary" href="https://github.com/dosherrk/ludex/releases/latest/download/Ludex-Setup-1.4.0.exe"><span data-ru="Установщик" data-en="Installer">Установщик</span> <span class="muted small">38 МБ</span></a>
-          <a class="btn btn-ghost" href="https://github.com/dosherrk/ludex/releases/latest/download/Ludex-1.4.0-portable.exe"><span data-ru="Портативный" data-en="Portable">Портативный</span> <span class="muted small">44 МБ</span></a>
-          <a class="btn btn-ghost" href="https://github.com/dosherrk/ludex/releases/latest/download/Ludex-1.4.0.zip"><span data-ru="Архив + инструкция" data-en="Archive + guide">Архив + инструкция</span> <span class="muted small">39 МБ</span></a>
+          <a class="btn btn-primary" data-kind="setup" href="https://github.com/dosherrk/ludex/releases/latest/download/Ludex-Setup-1.4.0.exe"><span data-ru="Установщик" data-en="Installer">Установщик</span> <span class="muted small">38 МБ</span> <span class="dl-count" data-count="setup" hidden></span></a>
+          <a class="btn btn-ghost" data-kind="portable" href="https://github.com/dosherrk/ludex/releases/latest/download/Ludex-1.4.0-portable.exe"><span data-ru="Портативный" data-en="Portable">Портативный</span> <span class="muted small">44 МБ</span> <span class="dl-count" data-count="portable" hidden></span></a>
+          <a class="btn btn-ghost" data-kind="zip" href="https://github.com/dosherrk/ludex/releases/latest/download/Ludex-1.4.0.zip"><span data-ru="Архив + инструкция" data-en="Archive + guide">Архив + инструкция</span> <span class="muted small">39 МБ</span> <span class="dl-count" data-count="zip" hidden></span></a>
         </div>
       </div>
     </div>

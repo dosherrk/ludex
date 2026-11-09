@@ -227,6 +227,52 @@ h1 {
   background: rgba(59, 158, 255, 0.35);
 }
 
+/* ---------------- счётчик скачиваний ---------------- */
+
+.dl-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 20px 0 0;
+  padding: 7px 15px 7px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 1.2;
+}
+
+.dl-stat svg { color: var(--accent); flex: none; }
+
+.dl-stat-num {
+  color: var(--text);
+  font-weight: 650;
+  font-size: 14.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.dl-stat-note { color: var(--dim); }
+
+.dl-stat-note::before {
+  content: "·";
+  margin-right: 7px;
+  color: var(--dim);
+}
+
+.dl-count {
+  color: var(--dim);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.dl-count::before { content: "↓"; margin-right: 3px; color: var(--accent); opacity: .8; }
+
+/* на синей кнопке серый счётчик не читается */
+.btn-primary .dl-count { color: rgba(255, 255, 255, 0.72); }
+.btn-primary .dl-count::before { color: #fff; opacity: .85; }
+
 .hero-shot {
   margin: 0;
   border-radius: var(--radius);
@@ -481,3 +527,6 @@ h1 {
   .download-box { flex-direction: column; align-items: flex-start; }
   h1 { font-size: 32px; }
 }
+
+/* [hidden] должен побеждать display:inline-flex */
+.dl-stat[hidden], .dl-count[hidden] { display: none !important; }
