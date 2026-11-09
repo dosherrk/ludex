@@ -32,7 +32,7 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq nsis imagemagick icnsutils zip
-          ./build.sh all
+          bash ./build.sh all
 
       - name: Артефакты сборки
         if: startsWith(github.ref, 'refs/tags/v')
