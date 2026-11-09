@@ -1,0 +1,12 @@
+# Что показывать человеку, который нажал «New issue».
+blank_issues_enabled: true # для Windows и всего остального — свободная форма
+contact_links:
+  - name: Скачать последнюю версию Ludex
+    url: https://github.com/dosherrk/ludex/releases/latest
+    about: Windows, Linux и macOS. Перед созданием issue проверьте, что вы на последней версии.
+  - name: Как установить (README)
+    url: https://github.com/dosherrk/ludex#установка
+    about: Установка на Windows, Linux и macOS, требования и типичные проблемы первого запуска.
+  - name: Сайт проекта
+    url: https://ludex-one.vercel.app
+    about: Скачивание, скриншоты и описание возможностей.

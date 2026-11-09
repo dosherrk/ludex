@@ -271,6 +271,18 @@ assets/logo-ludex.png           — исходник логотипа (из не
   в исходном размере.
 - Обложки загружаются из публичных каталогов Steam / SteamGridDB и принадлежат их правообладателям.
 
+## Нашли баг?
+
+Откройте issue — для каждой платформы есть отдельная форма, она сама спросит нужное:
+
+- **[Ошибка в версии для macOS](https://github.com/dosherrk/ludex/issues/new?template=bug-macos.yml)** —
+  чип, версия macOS, способ установки, вывод из Терминала и `~/Library/Application Support/Ludex/log.txt`.
+- **[Ошибка в версии для Linux](https://github.com/dosherrk/ludex/issues/new?template=bug-linux.yml)** —
+  дистрибутив, `.deb` или `.tar.gz`, X11/Wayland, `ldd` и `~/.local/share/Ludex/log.txt`.
+
+Для Windows и всего остального — [пустая форма](https://github.com/dosherrk/ludex/issues/new).
+Перед отправкой убедитесь, что версия — последняя из [релиза](https://github.com/dosherrk/ludex/releases/latest).
+
 ## Лицензия
 
 [MIT](LICENSE). Сторонние библиотеки: [Avalonia UI](https://avaloniaui.net) (MIT),

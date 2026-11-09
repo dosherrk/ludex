@@ -1,0 +1,169 @@
+name: Ошибка в версии для Linux
+description: Что-то не работает в Ludex на Linux — не ставится, не запускается, пустая библиотека
+title: "[Linux] "
+labels: ["bug", "linux"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Спасибо за сообщение об ошибке. Для Linux важно знать дистрибутив, способ установки
+        и графическую сессию — без этого причину обычно не найти.
+
+        **Быстрая проверка перед созданием issue:**
+        - установлена версия из [последнего релиза](https://github.com/dosherrk/ludex/releases/latest) (1.5.0+);
+        - если `.deb` ставили через `dpkg -i` и он ругался на зависимости — поставьте через
+          `sudo apt install ./Ludex-1.5.0-linux-x64.deb`;
+        - для `.tar.gz` файл `Ludex` должен быть исполняемым (`chmod +x Ludex`).
+
+  - type: input
+    id: distro
+    attributes:
+      label: Дистрибутив и версия
+      placeholder: "Ubuntu 24.04 / Fedora 41 / Arch (rolling) / Debian 12"
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Версия Ludex
+      description: Настройки → «О программе» внизу, или имя скачанного файла
+      placeholder: "1.5.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: Как устанавливали
+      options:
+        - Пакет .deb — sudo apt install ./Ludex-1.5.0-linux-x64.deb
+        - Пакет .deb — sudo dpkg -i
+        - Архив .tar.gz — распаковал и запускаю Ludex оттуда
+        - Собрал сам из исходников
+    validations:
+      required: true
+
+  - type: dropdown
+    id: session
+    attributes:
+      label: Графическая сессия
+      description: echo $XDG_SESSION_TYPE
+      options:
+        - Wayland
+        - X11
+        - Не знаю
+    validations:
+      required: true
+
+  - type: input
+    id: desktop
+    attributes:
+      label: Рабочее окружение
+      placeholder: "GNOME 46 / KDE Plasma 6 / XFCE 4.18 / другое"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: problem
+    attributes:
+      label: Что не работает
+      options:
+        - Пакет не устанавливается (зависимости, конфликты)
+        - Приложение не запускается
+        - Запускается, но падает или зависает
+        - Не находит игры в указанной папке
+        - Не скачиваются обложки
+        - Неправильно запускается игра
+        - Другое (опишу ниже)
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Что вы делали
+      description: По шагам — так ошибку можно повторить
+      placeholder: |
+        1. Скачал Ludex-1.5.0-linux-x64.deb
+        2. sudo apt install ./Ludex-1.5.0-linux-x64.deb
+        3. Запустил из меню приложений
+        4. Добавил папку ~/Games и нажал «Сканировать»
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Что ожидали
+      placeholder: Окно с библиотекой и 12 найденными играми
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Что произошло на самом деле
+      description: Текст ошибки, что видно на экране, сколько игр нашлось
+    validations:
+      required: true
+
+  - type: textarea
+    id: terminal
+    attributes:
+      label: Вывод в Терминале
+      description: |
+        Запустите из терминала и вставьте вывод целиком:
+        ```
+        ludex
+        ```
+        Для `.deb`-версии бинарник лежит в `/opt/ludex/Ludex`.
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: libs
+    attributes:
+      label: Недостающие библиотеки
+      description: |
+        Скопируйте вывод этой команды — если что-то написано «not found», проблема в зависимостях:
+        ```
+        ldd /opt/ludex/Ludex | grep "not found"
+        ```
+        Для `.tar.gz` путь будет тем, куда вы распаковали архив.
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: log
+    attributes:
+      label: Лог приложения
+      description: |
+        Файл `~/.local/share/Ludex/log.txt` — вставьте последние строки.
+      render: text
+    validations:
+      required: false
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Скриншоты
+      description: Перетащите картинки сюда — они сильно помогают
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Проверено
+      options:
+        - label: Версия Ludex — 1.5.0 или новее
+          required: true
+        - label: Запускал из Терминала, а не только из меню приложений
+          required: true
+        - label: Проверил вывод `ldd` на недостающие библиотеки
+          required: false
+        - label: Токены и личные данные из лога убрал
+          required: false
