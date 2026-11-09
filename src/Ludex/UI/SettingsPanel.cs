@@ -143,6 +143,7 @@ public sealed class SettingsPanel : Border
         listButtons.Children.Add(_folderCount);
         body.Children.Add(listButtons);
 
+        body.Children.Add(Ui.Divider());
 
         // ---- вход в «Кастомизацию» + язык (слева)
         var lookRow = new WrapPanel { Orientation = Orientation.Horizontal };
@@ -208,6 +209,7 @@ public sealed class SettingsPanel : Border
         body.Children.Add(_ignoreBox);
         body.Children.Add(Ui.T(Loc.T("settings.ignoreHint"), 11, Skin.TextDim, wrap: TextWrapping.Wrap));
 
+        body.Children.Add(Ui.Divider());
 
         // ---- поведение
         _autoScan = new Toggle(Loc.T("settings.autoscan"), _scanOnStartup,
