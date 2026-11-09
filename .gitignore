@@ -20,3 +20,10 @@ release/*.zip
 Thumbs.db
 desktop.ini
 .DS_Store
+
+# артефакты сборки (build.sh) — в репозиторий не попадают
+build/
+release/*.tar.gz
+release/*.deb
+release/*.exe
+release/*.zip

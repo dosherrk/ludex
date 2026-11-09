@@ -25,18 +25,23 @@ jobs:
       - name: Build (Release)
         run: dotnet build Ludex.sln -c Release --no-restore
 
-      - name: Publish portable win-x64
+      # Скрипт сам собирает Windows (NSIS), Linux (tar.gz + deb) и macOS (.app в zip)
+      # для тега — но на каждый пуш достаточно проверки сборки выше.
+      - name: Упаковка для всех платформ
         if: startsWith(github.ref, 'refs/tags/v')
-        run: >
-          dotnet publish src/Ludex -c Release -r win-x64 --self-contained true
-          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
-          -p:EnableCompressionInSingleFile=true -p:PublishReadyToRun=false
-          -p:DebugType=none -o out/portable
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq nsis imagemagick icnsutils zip
+          ./build.sh all
 
-      - name: Upload artifact
+      - name: Артефакты сборки
         if: startsWith(github.ref, 'refs/tags/v')
         uses: actions/upload-artifact@v4
         with:
-          name: Ludex-win-x64
-          path: out/portable/Ludex.exe
+          name: Ludex-all-platforms
+          path: |
+            release/*.exe
+            release/*.zip
+            release/*.tar.gz
+            release/*.deb
           if-no-files-found: error

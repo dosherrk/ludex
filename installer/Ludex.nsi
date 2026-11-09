@@ -1,7 +1,7 @@
 ; ============================================================================
 ;  Ludex - installer script (NSIS 3)
 ;  Build:  makensis installer/Ludex.nsi      (run from the repo root)
-;  Result: release/Ludex-Setup-1.4.0.exe  (with built-in uninstaller)
+;  Result: release/Ludex-Setup-1.5.0.exe  (with built-in uninstaller)
 ; ============================================================================
 
 Unicode true
@@ -13,7 +13,7 @@ Unicode true
 
 !define APPNAME       "Ludex"
 !define APPEXE        "Ludex.exe"
-!define APPVERSION    "1.4.0"
+!define APPVERSION    "1.5.0"
 !define PUBLISHER     "Ludex"
 !define APPID         "Ludex"
 !define APPURL        "https://steamgriddb.com"

@@ -10,6 +10,8 @@
 Без аккаунтов, без лаунчера, без облака — только ваши файлы и красивый интерфейс.
 
 [![Windows](https://img.shields.io/badge/Windows-10%20%2F%2011%20x64-0078D6?logo=windows&logoColor=white)](#установка)
+[![Linux](https://img.shields.io/badge/Linux-x64-FCC624?logo=linux&logoColor=black)](#linux)
+[![macOS](https://img.shields.io/badge/macOS-Apple%20Silicon%20%2F%20Intel-000000?logo=apple&logoColor=white)](#macos)
 [![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet&logoColor=white)](#сборка-из-исходников)
 [![Avalonia](https://img.shields.io/badge/Avalonia-11-8B44AC)](https://avaloniaui.net)
 [![Version](https://img.shields.io/badge/version-1.4.0-3B9EFF)](CHANGELOG.md)
@@ -80,13 +82,18 @@
 
 ## Установка
 
-**Вариант 1 — установщик (рекомендуется).** Скачайте `Ludex-Setup-1.4.0.exe` со страницы
-[Releases](https://github.com/dosherrk/ludex/releases) → выберите язык → «Далее». Ставится в `%LOCALAPPDATA%\Programs\Ludex`
-(запрос администратора не появляется), создаёт ярлыки на рабочем столе и в меню «Пуск»,
-добавляет запись в «Установку и удаление программ» и деинсталлятор.
+Одно и то же приложение собирается под три системы. Все файлы — на странице
+[Releases](https://github.com/dosherrk/ludex/releases), на сайте проекта кнопки подставляются
+под вашу систему автоматически.
 
-**Вариант 2 — портативно.** Скачайте `Ludex.exe` и запускайте откуда угодно — с флешки, из папки,
-без установки. Настройки и библиотека хранятся в `%LOCALAPPDATA%\Ludex`.
+### Windows 10/11 (x64)
+
+**Вариант 1 — установщик (рекомендуется).** `Ludex-Setup-1.5.0.exe` → выберите язык → «Далее».
+Ставится в `%LOCALAPPDATA%\Programs\Ludex` (запрос администратора не появляется), создаёт ярлыки
+на рабочем столе и в меню «Пуск», добавляет запись в «Установку и удаление программ» и деинсталлятор.
+
+**Вариант 2 — портативно.** `Ludex-1.5.0-portable.exe` — запускайте откуда угодно, с флешки или из папки.
+Настройки и библиотека хранятся в `%LOCALAPPDATA%\Ludex`.
 
 > Файл не подписан сертификатом: SmartScreen при первом запуске может сказать
 > «Windows защитила ваш компьютер» → «Подробнее» → «Выполнить в любом случае».
@@ -94,6 +101,47 @@
 
 **Удаление.** «Параметры → Приложения → Установленные приложения → Ludex → Удалить».
 Программа спросит, стирать ли настройки и кэш обложек. **Файлы самих игр не удаляются никогда.**
+
+### Linux (x64) <a id="linux"></a>
+
+**Пакет `.deb`** (Debian, Ubuntu, Mint, Pop!_OS и производные):
+
+```bash
+sudo apt install ./Ludex-1.5.0-linux-x64.deb
+```
+
+Появится ярлык в меню приложений, `ludex` — в `PATH`; файлы ставятся в `/opt/ludex`.
+Удаление — `sudo apt remove ludex` (данные в `~/.local/share/Ludex` остаются).
+
+**Портативный архив** `Ludex-1.5.0-linux-x64.tar.gz` — для любой системы с glibc 2.31+
+(Fedora, Arch, openSUSE и т.д.):
+
+```bash
+mkdir -p ~/Applications/Ludex && tar -xzf Ludex-1.5.0-linux-x64.tar.gz -C ~/Applications/Ludex
+~/Applications/Ludex/Ludex
+```
+
+Внутри архива: сам бинарник, `ludex.desktop` для меню и `КАК-ЗАПУСТИТЬ.txt`.
+Нужны библиотеки интерфейса: libX11, libXrandr, libXi, libXcursor, libXext, libXrender,
+libICE, libSM, libGL, libfontconfig, libfreetype, libxkbcommon; под Wayland работает через XWayland.
+
+### macOS 11+ (Apple Silicon и Intel) <a id="macos"></a>
+
+`Ludex-1.5.0-macos-arm64.zip` — для Apple Silicon (M1–M4), `Ludex-1.5.0-macos-x64.zip` — для Intel.
+Распакуйте, перетащите `Ludex.app` в «Программы».
+
+Приложение не подписано сертификатом Apple, поэтому первый запуск — правый клик по `Ludex.app`
+→ **«Открыть»** → **«Открыть»** (или в Терминале: `xattr -dr com.apple.quarantine /Applications/Ludex.app`).
+
+Данные хранятся в `~/Library/Application Support/Ludex`.
+
+| Что | Windows | Linux | macOS |
+|---|---|---|---|
+| Поиск игр | `*.exe` | AppImage, нативные бинарники, `.sh` | `.app`-бандлы |
+| Запуск в один клик | да | да | да |
+| Обложки, темы, обои, поиск | да | да | да |
+| Автозапуск с системой | да (реестр) | нет | нет |
+| «Запуск от администратора» | да (UAC) | нет | нет |
 
 ## Первый запуск
 
@@ -105,7 +153,10 @@
 
 ## Что считается игрой
 
-Сканер считает папку игрой, если внутри (или в подпапке) есть «правдоподобный» `.exe`.
+Сканер считает папку игрой, если внутри (или в подпапке) есть «правдоподобный» исполняемый файл:
+в Windows — `*.exe`, в Linux — AppImage, нативный бинарник или `.sh`-обёртка с битом выполнения
+(библиотеки `.so` и ярлыки `.desktop` отбрасываются), в macOS — `.app`-бандл (он берётся целиком,
+внутрь не заходим).
 
 - **Игнорируются:** `unins*`, `setup`, `install*`, `vcredist`, `dxsetup`, `dotnetfx`,
   `UnityCrashHandler`, `crashreport`, `7za`, `ffmpeg`, `python*`, `update*` и подобные.
@@ -172,6 +223,7 @@ src/Ludex/
     Shell.cs                    — запуск игр, открытие папок
     Backgrounds.cs              — загрузка обоев, в т.ч. анимированных GIF
     Autostart.cs                — автозапуск вместе с Windows
+    Platform.cs                 — различия платформ: поиск и запуск игр, права
   UI/
     MainWindow.cs               — сетка библиотеки, панель игры, окно запуска, обои, сканирование
     SettingsPanel.cs            — настройки (встроенная панель внутри главного окна)
@@ -194,8 +246,10 @@ assets/logo-ludex.png           — исходник логотипа (из не
 - Программа не поддерживает ярлыки `.url` / `.lnk`, эмуляторы и игры из других лаунчеров
   (Steam/Epic/GOG) — только реальные папки с `.exe`.
 - Некоторым играм нужны права администратора (античит/DRM) — используйте «Играть от админа».
-- Автозапуск и полупрозрачность (акриловое размытие) работают только в Windows;
-  в Linux-сборке автозапуск неактивен.
+- Автозапуск с системой, «запуск от администратора» и акриловое размытие панелей —
+  только Windows; в Linux и macOS этих пунктов в интерфейсе нет.
+- Сборки для macOS и Linux не подписаны (Apple Developer ID / ключи для deb нет),
+  поэтому Gatekeeper и SmartScreen могут предупреждать при первом запуске.
 - Обои скачиваются по прямой ссылке на файл; ссылки Pinterest (`pinterest.com/pin/…`,
   `pin.it/…`, `i.pinimg.com/…`) тоже поддерживаются — программа сама достаёт адрес картинки
   в исходном размере.

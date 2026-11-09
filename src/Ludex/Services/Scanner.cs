@@ -46,6 +46,7 @@ public static class Scanner
         "support", "docs", "documentation", "manuals", "manual", "soundtrack", "ost", "artbook", "bonus",
         "system volume information", "$recycle.bin", "recycler", "windows", "temp", "tmp", "cache",
         "$windows.~bt", "$windows.~ws", "node_modules", ".git", "saves", "savegame", "savegames", "profiles",
+        "lib", "lib32", "lib64", "plugins", "redist", "redistributable", "locales", "steamapps", "compatdata", "pkg",
     };
 
     /// <summary>Folder names that do not describe a game, so we take the name from a parent folder.</summary>
@@ -100,6 +101,7 @@ public static class Scanner
                 subdirs = dir.GetDirectories()
                     .Where(d => (d.Attributes & (FileAttributes.Hidden | FileAttributes.System)) == 0)
                     .Where(d => !SkipFolders.Contains(d.Name))
+                    .Where(d => !(Platform.IsMac && d.Name.EndsWith(".app", StringComparison.OrdinalIgnoreCase)))
                     .OrderBy(d => d.Name, StringComparer.OrdinalIgnoreCase)
                     .ToArray();
             }
@@ -110,16 +112,24 @@ public static class Scanner
 
             if (!isRoot)
             {
-                FileInfo[] exes;
-                try
+                if (Platform.IsMac)
                 {
-                    exes = dir.GetFiles("*.exe", SearchOption.TopDirectoryOnly);
-                }
-                catch
-                {
-                    exes = Array.Empty<FileInfo>();
+                    var bundle = Platform.MacBundles(dir)
+                        .FirstOrDefault(d => !IsIgnored(d.Name, ignore));
+
+                    if (bundle != null && seenExe.Add(bundle.FullName))
+                    {
+                        hits.Add(new ScanHit
+                        {
+                            FolderPath = dir.FullName,
+                            ExePath = bundle.FullName,
+                            Title = CleanTitle(Path.GetFileNameWithoutExtension(bundle.Name)),
+                        });
+                        return;
+                    }
                 }
 
+                FileInfo[] exes = Platform.GameFiles(dir).ToArray();
                 var candidates = exes.Where(f => !IsIgnored(f.Name, ignore)).ToList();
                 if (candidates.Count > 0)
                 {
@@ -142,7 +152,7 @@ public static class Scanner
                 // The library root itself may hold a single game.
                 try
                 {
-                    var rootExes = dir.GetFiles("*.exe", SearchOption.TopDirectoryOnly)
+                    var rootExes = Platform.GameFiles(dir)
                         .Where(f => !IsIgnored(f.Name, ignore)).ToList();
 
                     if (rootExes.Count > 0 && subdirs.Length == 0)

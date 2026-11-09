@@ -929,7 +929,7 @@ public sealed class MainWindow : Window
         var menu = new Menu();
 
         menu.Item(Loc.T("ctx.play"), () => Launch(game));
-        menu.Item(Loc.T("ctx.admin"), () => Launch(game, true));
+        if (Platform.SupportsElevation) menu.Item(Loc.T("ctx.admin"), () => Launch(game, true));
         menu.Separator();
         menu.Item(Loc.T("ctx.folder"), () => Shell.OpenFolder(game.FolderPath));
         menu.Item(Loc.T("ctx.cover"), () => ChangeCover(game));
@@ -1018,9 +1018,13 @@ public sealed class MainWindow : Window
         playBtn.Margin = new Thickness(0, 4, 10, 8);
         primaryRow.Children.Add(playBtn);
 
-        var adminBtn = Ui.GhostButton(Loc.T("btn.playAdmin"), () => Launch(game, true));
-        adminBtn.Margin = new Thickness(0, 4, 10, 8);
-        primaryRow.Children.Add(adminBtn);
+        // «от админа» — только Windows, в Linux/macOS такого понятия нет
+        if (Platform.SupportsElevation)
+        {
+            var adminBtn = Ui.GhostButton(Loc.T("btn.playAdmin"), () => Launch(game, true));
+            adminBtn.Margin = new Thickness(0, 4, 10, 8);
+            primaryRow.Children.Add(adminBtn);
+        }
 
         var folderBtn = Ui.GhostButton(Loc.T("btn.openFolder"), () => Shell.OpenFolder(game.FolderPath));
         folderBtn.Margin = new Thickness(0, 4, 10, 8);
@@ -1136,7 +1140,7 @@ public sealed class MainWindow : Window
         // небольшая пауза, чтобы окно запуска успело красиво проявиться
         DispatcherTimer.RunOnce(() =>
         {
-            if (Shell.LaunchExe(game.ExePath, out var error, asAdmin))
+            if (Shell.LaunchGame(game.ExePath, out var error, asAdmin))
             {
                 game.LastPlayedUtc = DateTime.UtcNow;
                 game.PlayCount++;

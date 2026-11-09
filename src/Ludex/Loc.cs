@@ -54,7 +54,7 @@ public static class Loc
         ["btn.thisPc"] = ("Этот компьютер", "This PC"),
         ["search.watermark"] = ("Поиск по библиотеке…", "Search library…"),
         ["empty.title"] = ("Библиотека пуста", "Library is empty"),
-        ["empty.hint"] = ("Укажите папки с играми в настройках и нажмите «Сканировать».\nПрограмма сама найдёт папки с играми и .exe, определит названия и подтянет обложки.",
+        ["empty.hint"] = ("Укажите папки с играми в настройках и нажмите «Сканировать».\nПрограмма сама найдёт папки с играми, определит названия и подтянет обложки.",
             "Add your game folders in settings and press “Scan”.\nThe app finds game folders and .exe files, recognizes titles and downloads artwork."),
         ["empty.btn"] = ("Открыть настройки", "Open settings"),
         ["empty.favTitle"] = ("Нет избранных игр", "No favourites yet"),

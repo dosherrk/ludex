@@ -6,25 +6,50 @@ namespace Ludex.Services;
 
 public static class Shell
 {
-    public static bool LaunchExe(string exePath, out string error, bool asAdmin = false)
+    /// <summary>
+    /// Запуск игры: .exe в Windows, бинарник/AppImage в Linux, .app-бандл в macOS.
+    /// Повышение прав (UAC) существует только в Windows — на других системах флаг игнорируется.
+    /// </summary>
+    public static bool LaunchGame(string path, out string error, bool asAdmin = false)
     {
         error = "";
         try
         {
-            if (!File.Exists(exePath))
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                error = "empty path";
+                return false;
+            }
+
+            if (Platform.IsBundle(path))
+            {
+                if (!Directory.Exists(path))
+                {
+                    error = "bundle not found";
+                    return false;
+                }
+
+                Process.Start(new ProcessStartInfo("open", $"\"{path}\"") { UseShellExecute = false });
+                return true;
+            }
+
+            if (!File.Exists(path))
             {
                 error = "exe not found";
                 return false;
             }
 
+            // распакованный из архива бинарник может быть без бита выполнения
+            if (!Platform.IsWindows) Platform.MakeExecutable(path);
+
             var psi = new ProcessStartInfo
             {
-                FileName = exePath,
-                WorkingDirectory = Path.GetDirectoryName(exePath) ?? "",
+                FileName = path,
+                WorkingDirectory = Path.GetDirectoryName(path) ?? "",
                 UseShellExecute = true,
             };
 
-            if (asAdmin) psi.Verb = "runas";
+            if (asAdmin && Platform.SupportsElevation) psi.Verb = "runas";
 
             Process.Start(psi);
             return true;
@@ -32,7 +57,7 @@ public static class Shell
         catch (Exception ex)
         {
             error = ex.Message;
-            AppPaths.Log("LaunchExe failed: " + ex);
+            AppPaths.Log("LaunchGame failed: " + ex);
             return false;
         }
     }
@@ -43,10 +68,12 @@ public static class Shell
         {
             if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path)) return;
 
-            if (OperatingSystem.IsWindows())
+            if (Platform.IsWindows)
                 Process.Start(new ProcessStartInfo("explorer.exe", $"\"{path}\"") { UseShellExecute = true });
+            else if (Platform.IsMac)
+                Process.Start(new ProcessStartInfo("open", $"\"{path}\"") { UseShellExecute = false });
             else
-                Process.Start(new ProcessStartInfo("xdg-open", $"\"{path}\"") { UseShellExecute = true });
+                Process.Start(new ProcessStartInfo("xdg-open", $"\"{path}\"") { UseShellExecute = false });
         }
         catch (Exception ex)
         {
