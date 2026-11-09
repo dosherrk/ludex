@@ -232,15 +232,10 @@ public sealed class SettingsPanel : Border
             v => _checkUpdates = v);
         body.Children.Add(_autoUpdate);
 
-        var updateRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 10,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        updateRow.Children.Add(Ui.GhostButton(Loc.T("settings.checkNow"), () => UpdateCheckRequested?.Invoke()));
-        updateRow.Children.Add(Ui.T(Loc.T("settings.autoupdateHint"), 11.5, Skin.TextDim, wrap: TextWrapping.Wrap));
-        body.Children.Add(updateRow);
+        var checkNow = Ui.GhostButton(Loc.T("settings.checkNow"), () => UpdateCheckRequested?.Invoke());
+        checkNow.HorizontalAlignment = HorizontalAlignment.Left;
+        body.Children.Add(checkNow);
+        body.Children.Add(Ui.T(Loc.T("settings.autoupdateHint"), 11.5, Skin.TextDim, wrap: TextWrapping.Wrap));
 
         var dataBtn = Ui.GhostButton(Loc.T("settings.openData"), () => Shell.OpenFolder(AppPaths.Root));
         dataBtn.HorizontalAlignment = HorizontalAlignment.Left;

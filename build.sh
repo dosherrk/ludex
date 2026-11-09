@@ -33,7 +33,7 @@ build_windows() {
   echo "==> Windows $VER"
   rm -rf release/app
   $PUB -r win-x64 -o release/app
-  ( cd installer && makensis Ludex.nsi )
+  ( cd installer && makensis -DAPPVERSION="$VER" Ludex.nsi )
   cp release/app/Ludex.exe "release/Ludex-${VER}-portable.exe"
   ( cd release && zip -q "Ludex-${VER}-windows.zip" "Ludex-${VER}-portable.exe" )
   ls -lh release/Ludex-Setup-${VER}.exe "release/Ludex-${VER}-portable.exe" "release/Ludex-${VER}-windows.zip"

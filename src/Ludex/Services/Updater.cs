@@ -184,8 +184,12 @@ public static class Updater
 
         if (OperatingSystem.IsWindows())
         {
-            // установщик предпочтительнее: он умеет обновлять копию в Program Files
-            return new[] { $"Ludex-Setup-{v}.exe", $"Ludex-{v}-portable.exe" };
+            var setup = $"Ludex-Setup-{v}.exe";
+            var portable = $"Ludex-{v}-portable.exe";
+
+            // у портативной копии подменяем сам .exe, у установленной — гоняем установщик:
+            // иначе «тихая» установка обновит копию в AppData, а перезапустится старая
+            return IsInstalledCopy() ? new[] { setup, portable } : new[] { portable, setup };
         }
 
         if (OperatingSystem.IsMacOS())
@@ -291,13 +295,15 @@ public static class Updater
 
         AppPaths.Log($"Update: applying {info.Tag} from {packagePath}");
 
-        if (OperatingSystem.IsWindows()) ApplyWindows(packagePath, info, work, pid);
-        else ApplyUnix(packagePath, info, work, pid);
+        var exe = Environment.ProcessPath
+                  ?? throw new UpdateException("Не удалось определить путь к приложению.");
+
+        if (OperatingSystem.IsWindows()) ApplyWindows(packagePath, info, work, pid, exe);
+        else ApplyUnix(packagePath, info, work, pid, exe, OperatingSystem.IsMacOS());
     }
 
-    private static void ApplyWindows(string packagePath, UpdateInfo info, string work, int pid)
+    private static void ApplyWindows(string packagePath, UpdateInfo info, string work, int pid, string exe)
     {
-        var exe = Environment.ProcessPath ?? throw new UpdateException("Не удалось определить путь к приложению.");
         var dir = Path.GetDirectoryName(exe) ?? work;
         var isInstaller = info.AssetName.Contains("Setup", StringComparison.OrdinalIgnoreCase);
         var writable = IsWritable(dir);
@@ -312,16 +318,25 @@ public static class Updater
         {
             // NSIS-установщик умеет тихую установку и сам обновит Program Files
             sb.AppendLine($"Start-Process -FilePath '{Escape(packagePath)}' -ArgumentList '/S' -Wait");
-            sb.AppendLine($"Start-Process -FilePath '{Escape(exe)}'");
+            sb.AppendLine("$inst = (Get-ItemProperty -Path 'HKCU:\\Software\\Ludex' -Name InstallDir -ErrorAction SilentlyContinue).InstallDir");
+            sb.AppendLine("if ($inst -and (Test-Path -LiteralPath (Join-Path $inst 'Ludex.exe'))) { Start-Process -FilePath (Join-Path $inst 'Ludex.exe') }");
+            sb.AppendLine($"else {{ Start-Process -FilePath '{Escape(exe)}' }}");
         }
         else if (writable)
         {
             // портативная версия: подменяем exe рядом с собой
             sb.AppendLine("$target = '" + Escape(exe) + "'");
+            sb.AppendLine("$fresh = $target + '.new'");
             sb.AppendLine("$backup = $target + '.old'");
+            sb.AppendLine($"Copy-Item -LiteralPath '{Escape(packagePath)}' -Destination $fresh -Force");
             sb.AppendLine("if (Test-Path -LiteralPath $backup) { Remove-Item -LiteralPath $backup -Force -ErrorAction SilentlyContinue }");
             sb.AppendLine("Move-Item -LiteralPath $target -Destination $backup -Force");
-            sb.AppendLine($"Copy-Item -LiteralPath '{Escape(packagePath)}' -Destination $target -Force");
+            sb.AppendLine("try {");
+            sb.AppendLine("  Move-Item -LiteralPath $fresh -Destination $target -Force");
+            sb.AppendLine("} catch {");
+            // если подмена не удалась — возвращаем рабочий файл на место
+            sb.AppendLine("  Move-Item -LiteralPath $backup -Destination $target -Force; throw");
+            sb.AppendLine("}");
             sb.AppendLine("Remove-Item -LiteralPath $backup -Force -ErrorAction SilentlyContinue");
             sb.AppendLine("Start-Process -FilePath $target");
         }
@@ -332,7 +347,8 @@ public static class Updater
             var inner = new StringBuilder();
             inner.AppendLine("$ErrorActionPreference = 'Stop'");
             inner.AppendLine($"while (Get-Process -Id {pid} -ErrorAction SilentlyContinue) {{ Start-Sleep -Milliseconds 300 }}");
-            inner.AppendLine($"Copy-Item -LiteralPath '{Escape(packagePath)}' -Destination '{Escape(exe)}' -Force");
+            inner.AppendLine($"Copy-Item -LiteralPath '{Escape(packagePath)}' -Destination '{Escape(exe)}.new' -Force");
+            inner.AppendLine($"Move-Item -LiteralPath '{Escape(exe)}.new' -Destination '{Escape(exe)}' -Force");
             inner.AppendLine($"Start-Process -FilePath '{Escape(exe)}'");
             File.WriteAllText(elevated, inner.ToString(), new UTF8Encoding(true));
 
@@ -343,22 +359,22 @@ public static class Updater
         LaunchDetached("powershell", $"-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"{script}\"");
     }
 
-    private static void ApplyUnix(string packagePath, UpdateInfo info, string work, int pid)
+    private static void ApplyUnix(string packagePath, UpdateInfo info, string work, int pid, string exe, bool macos)
     {
-        var exe = Environment.ProcessPath ?? throw new UpdateException("Не удалось определить путь к приложению.");
         var script = Path.Combine(work, "apply.sh");
         var sb = new StringBuilder();
         sb.AppendLine("#!/bin/sh");
         sb.AppendLine($"while kill -0 {pid} 2>/dev/null; do sleep 0.3; done");
         sb.AppendLine("sleep 0.4");
 
-        if (OperatingSystem.IsMacOS())
+        if (macos)
         {
             var bundle = MacBundleRoot(exe) ?? throw new UpdateException(
                 "Не удалось найти Ludex.app вокруг приложения — обновите вручную из релиза.");
 
             sb.AppendLine("set -e");
-            sb.AppendLine($"cd '{work}'");
+            sb.AppendLine($"WORK='{work}'");
+            sb.AppendLine("cd \"$WORK\"");
             sb.AppendLine("rm -rf unpack && mkdir -p unpack");
             sb.AppendLine($"ditto -x -k '{Escape(packagePath)}' unpack");
             sb.AppendLine("NEW=\"\"");
@@ -370,7 +386,7 @@ public static class Updater
             sb.AppendLine("  rm -rf \"$TARGET\"");
             sb.AppendLine("  cp -R \"$NEW\" \"$TARGET\"");
             sb.AppendLine("else");
-            sb.AppendLine("  osascript -e \"do shell script \\\"rm -rf '$TARGET' && cp -R '$work/$NEW' '$TARGET'\\\" with administrator privileges\"");
+            sb.AppendLine("  osascript -e \"do shell script \\\"rm -rf '$TARGET' && cp -R '$WORK/$NEW' '$TARGET'\\\" with administrator privileges\"");
             sb.AppendLine("fi");
             sb.AppendLine("open \"$TARGET\"");
         }
@@ -403,6 +419,32 @@ public static class Updater
 
         File.WriteAllText(script, sb.ToString().Replace("\r\n", "\n"), new UTF8Encoding(false));
         LaunchDetached("/bin/sh", $"\"{script}\"");
+    }
+
+    /// <summary>
+    /// Это копия, поставленная установщиком (лежит в его InstallDir), — тогда обновляем через Setup.
+    /// Портативная копия обновляется подменой файла рядом с собой.
+    /// </summary>
+    private static bool IsInstalledCopy()
+    {
+        if (!OperatingSystem.IsWindows()) return false;
+
+        var exe = Environment.ProcessPath;
+        if (string.IsNullOrWhiteSpace(exe)) return false;
+
+        try
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Ludex");
+            if (key?.GetValue("InstallDir") is not string dir || string.IsNullOrWhiteSpace(dir)) return false;
+
+            var full = Path.GetFullPath(exe);
+            var root = Path.GetFullPath(dir).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            return full.StartsWith(root, StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     /// <summary>Путь до .app, внутри которого лежит исполняемый файл (macOS).</summary>
