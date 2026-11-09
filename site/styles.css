@@ -1,0 +1,483 @@
+/* Ludex — лендинг. Один файл, без внешних ресурсов. */
+
+:root {
+  --bg: #08090c;
+  --bg-alt: #0b0d11;
+  --panel: #101319;
+  --panel-2: #171b23;
+  --line: #1d222a;
+  --text: #f4f6f9;
+  --muted: #98a2b0;
+  --dim: #65707f;
+  --accent: #3b9eff;
+  --accent-2: #0c7ae8;
+  --radius: 16px;
+  --wrap: 1140px;
+}
+
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+img { max-width: 100%; display: block; }
+
+a { color: inherit; text-decoration: none; }
+
+.wrap {
+  width: 100%;
+  max-width: var(--wrap);
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+.tiny { font-size: 12.5px; }
+.accent { color: var(--accent); }
+
+/* ---------------- topbar ---------------- */
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: rgba(8, 9, 12, 0.82);
+  backdrop-filter: saturate(140%) blur(14px);
+  border-bottom: 1px solid var(--line);
+}
+
+.topbar-inner {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  height: 64px;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  font-size: 14px;
+}
+
+.brand img { border-radius: 7px; }
+
+.nav {
+  display: flex;
+  gap: 22px;
+  margin-left: 14px;
+  font-size: 14.5px;
+  color: var(--muted);
+}
+
+.nav a:hover { color: var(--text); }
+
+.topbar-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.lang {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  border-radius: 8px;
+  padding: 7px 11px;
+  font: 600 12.5px/1 inherit;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+
+.lang:hover { color: var(--text); border-color: #2a313c; }
+
+/* ---------------- buttons ---------------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  border-radius: 10px;
+  padding: 13px 20px;
+  font-weight: 600;
+  font-size: 15px;
+  border: 1px solid transparent;
+  transition: transform .12s ease, background .18s ease, border-color .18s ease, box-shadow .18s ease;
+  cursor: pointer;
+}
+
+.btn:active { transform: translateY(1px); }
+
+.btn-primary {
+  background: linear-gradient(180deg, var(--accent), var(--accent-2));
+  color: #fff;
+  box-shadow: 0 8px 24px rgba(59, 158, 255, 0.28);
+}
+
+.btn-primary:hover { box-shadow: 0 10px 30px rgba(59, 158, 255, 0.42); }
+
+.btn-ghost {
+  background: var(--panel);
+  border-color: var(--line);
+  color: var(--text);
+}
+
+.btn-ghost:hover { background: var(--panel-2); border-color: #2a313c; }
+
+.btn-sm { padding: 9px 15px; font-size: 14px; }
+
+/* ---------------- hero ---------------- */
+
+.hero {
+  position: relative;
+  padding: 76px 0 40px;
+  overflow: hidden;
+}
+
+.hero-glow {
+  position: absolute;
+  top: -260px;
+  left: 50%;
+  width: 1100px;
+  height: 620px;
+  transform: translateX(-50%);
+  background: radial-gradient(closest-side, rgba(59, 158, 255, 0.16), transparent 72%);
+  pointer-events: none;
+}
+
+.hero-inner {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1.02fr 1.05fr;
+  gap: 52px;
+  align-items: center;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 13px;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #35c48a;
+  box-shadow: 0 0 0 4px rgba(53, 196, 138, 0.16);
+}
+
+h1 {
+  font-size: clamp(30px, 3.6vw, 46px);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  margin: 20px 0 18px;
+  text-wrap: balance;
+}
+
+.lead {
+  text-wrap: pretty;
+  color: var(--muted);
+  font-size: 17px;
+  max-width: 52ch;
+  margin: 0 0 26px;
+}
+
+.cta { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+
+.hero-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 22px;
+  margin: 26px 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--dim);
+  font-size: 13.5px;
+}
+
+.hero-facts li { position: relative; padding-left: 18px; }
+
+.hero-facts li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  background: rgba(59, 158, 255, 0.35);
+}
+
+.hero-shot {
+  margin: 0;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--panel);
+  padding: 8px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+}
+
+.hero-shot img { border-radius: 10px; width: 100%; height: auto; }
+
+/* ---------------- sections ---------------- */
+
+.section { padding: 84px 0; }
+.section-alt { background: var(--bg-alt); border-block: 1px solid var(--line); }
+
+.section-title {
+  font-size: clamp(26px, 2.6vw, 34px);
+  letter-spacing: -0.015em;
+  margin: 0 0 10px;
+  text-align: center;
+}
+
+.section-sub {
+  color: var(--muted);
+  text-align: center;
+  margin: 0 auto 40px;
+  max-width: 62ch;
+}
+
+.section-title.left, .section-sub.left { text-align: left; margin-left: 0; }
+
+/* ---------------- cards ---------------- */
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+}
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 24px 22px 22px;
+  transition: border-color .18s ease, transform .18s ease, background .18s ease;
+}
+
+.card:hover {
+  border-color: #2b3340;
+  background: #12151c;
+  transform: translateY(-2px);
+}
+
+.ico {
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+  display: grid;
+  place-items: center;
+  background: rgba(59, 158, 255, 0.12);
+  color: var(--accent);
+  margin-bottom: 16px;
+}
+
+.ico svg { width: 21px; height: 21px; }
+
+.card h3 { margin: 0 0 8px; font-size: 17px; }
+
+.card p { margin: 0; color: var(--muted); font-size: 14.5px; }
+
+/* ---------------- gallery ---------------- */
+
+.gallery {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+
+.shot {
+  position: relative;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--panel);
+  cursor: zoom-in;
+  aspect-ratio: 16 / 9;
+  transition: border-color .18s ease, transform .18s ease;
+}
+
+.shot img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+  transition: transform .35s ease;
+}
+
+.shot:hover { border-color: #2b3340; }
+.shot:hover img { transform: scale(1.03); }
+
+/* ---------------- steps ---------------- */
+
+.steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+  margin-bottom: 34px;
+}
+
+.step {
+  position: relative;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 26px 22px 22px;
+}
+
+.num {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(59, 158, 255, 0.14);
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 14px;
+  margin-bottom: 14px;
+}
+
+.step h3 { margin: 0 0 8px; font-size: 16.5px; }
+.step p { margin: 0; color: var(--muted); font-size: 14.5px; }
+
+.download-box {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 22px;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(180deg, #101319, #0c0e13);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 26px 24px;
+}
+
+.download-box h3 { margin: 0 0 6px; font-size: 17px; }
+.download-box p { margin: 0; max-width: 52ch; font-size: 14px; }
+
+.download-links { display: flex; flex-wrap: wrap; gap: 10px; }
+
+/* ---------------- open source ---------------- */
+
+.opensource {
+  display: grid;
+  grid-template-columns: 1.25fr .75fr;
+  gap: 44px;
+  align-items: center;
+}
+
+.stack {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.stack li {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  padding: 13px 16px;
+  font-size: 14.5px;
+}
+
+.stack b { font-weight: 600; }
+.stack span { color: var(--muted); }
+
+/* ---------------- footer ---------------- */
+
+.footer { border-top: 1px solid var(--line); padding: 34px 0 44px; }
+
+.footer-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px 28px;
+}
+
+.small-brand { letter-spacing: 0.12em; font-size: 13px; gap: 8px; }
+
+.footer-links { display: flex; gap: 18px; color: var(--muted); font-size: 14px; }
+.footer-links a:hover { color: var(--text); }
+
+.footer .tiny { flex-basis: 100%; margin: 6px 0 0; max-width: 90ch; }
+
+/* ---------------- lightbox ---------------- */
+
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(3, 4, 7, 0.92);
+  display: grid;
+  place-items: center;
+  padding: 32px;
+}
+
+.lightbox[hidden] { display: none; }
+
+.lightbox img {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.7);
+}
+
+.lightbox-close {
+  position: absolute;
+  top: 20px;
+  right: 22px;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line);
+  font-size: 15px;
+  cursor: pointer;
+}
+
+/* ---------------- адаптив ---------------- */
+
+@media (max-width: 980px) {
+  .hero-inner { grid-template-columns: 1fr; gap: 34px; }
+  .hero { padding: 52px 0 30px; }
+  .cards, .steps, .gallery { grid-template-columns: repeat(2, 1fr); }
+  .opensource { grid-template-columns: 1fr; gap: 26px; }
+  .nav { display: none; }
+}
+
+@media (max-width: 640px) {
+  .section { padding: 60px 0; }
+  .cards, .steps, .gallery { grid-template-columns: 1fr; }
+  .cta .btn, .download-links .btn { flex: 1 1 100%; justify-content: center; }
+  .download-box { flex-direction: column; align-items: flex-start; }
+  h1 { font-size: 32px; }
+}

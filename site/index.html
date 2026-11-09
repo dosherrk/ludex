@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ludex — локальная библиотека игр для Windows</title>
+<meta name="description" content="Ludex — библиотека игр как в Steam, но для игр, которые уже лежат на диске: авто-поиск в папках, обложки из Steam, свои темы и анимации. Windows 10/11, бесплатно, .NET ставить не нужно.">
+<meta name="theme-color" content="#08090C">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Ludex — локальная библиотека игр">
+<meta property="og:description" content="Автопоиск игр в папках, обложки из Steam, запуск в один клик, свои анимации и темы. Windows 10/11.">
+<meta property="og:image" content="/img/library.webp">
+<link rel="icon" type="image/png" href="/img/favicon.png">
+<link rel="apple-touch-icon" href="/img/favicon.png">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="wrap topbar-inner">
+    <a class="brand" href="#top">
+      <img src="/img/logo.png" alt="" width="28" height="28">
+      <span>LUDEX</span>
+    </a>
+
+    <nav class="nav">
+      <a href="#features" data-ru="Возможности" data-en="Features">Возможности</a>
+      <a href="#shots" data-ru="Скриншоты" data-en="Screenshots">Скриншоты</a>
+      <a href="#install" data-ru="Установка" data-en="Install">Установка</a>
+      <a href="https://github.com/dosherrk/ludex" target="_blank" rel="noopener">GitHub</a>
+    </nav>
+
+    <div class="topbar-actions">
+      <button class="lang" id="lang-toggle" type="button" title="Русский / English">EN</button>
+      <a class="btn btn-primary btn-sm" href="https://github.com/dosherrk/ludex/releases/latest">
+        <span data-ru="Скачать" data-en="Download">Скачать</span>
+      </a>
+    </div>
+  </div>
+</header>
+
+<main id="top">
+
+  <!-- ================= hero ================= -->
+  <section class="hero">
+    <div class="hero-glow" aria-hidden="true"></div>
+    <div class="wrap hero-inner">
+      <div class="hero-text">
+        <div class="pill">
+          <span class="dot"></span>
+          <span data-ru="Версия 1.4.0 · Windows 10/11 · бесплатно" data-en="Version 1.4.0 · Windows 10/11 · free">Версия 1.4.0 · Windows 10/11 · бесплатно</span>
+        </div>
+
+        <h1>
+          <span data-ru="Ваши игры на диске" data-en="Your games on disk">Ваши игры на диске</span><br>
+          <span class="accent" data-ru="как красивая библиотека" data-en="as a beautiful library">как красивая библиотека</span>
+        </h1>
+
+        <p class="lead"
+           data-ru="Ludex обходит указанные папки, сам находит игры, определяет названия и подтягивает обложки из Steam. Без аккаунтов, лаунчеров и облака — только ваши файлы и аккуратный интерфейс."
+           data-en="Ludex scans the folders you point it at, recognises the games, cleans up their names and fetches artwork from Steam. No accounts, no launcher, no cloud — just your files and a tidy interface.">
+          Ludex обходит указанные папки, сам находит игры, определяет названия и подтягивает обложки из Steam. Без аккаунтов, лаунчеров и облака — только ваши файлы и аккуратный интерфейс.
+        </p>
+
+        <div class="cta">
+          <a class="btn btn-primary" href="https://github.com/dosherrk/ludex/releases/latest/download/Ludex-Setup-1.4.0.exe">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3v11m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span data-ru="Скачать установщик" data-en="Download installer">Скачать установщик</span>
+          </a>
+          <a class="btn btn-ghost" href="https://github.com/dosherrk/ludex/releases/latest/download/Ludex-1.4.0-portable.exe">
+            <span data-ru="Портативная версия" data-en="Portable version">Портативная версия</span>
+            <span class="muted small">46 МБ</span>
+          </a>
+        </div>
+
+        <ul class="hero-facts">
+          <li data-ru="Не нужны права администратора" data-en="No admin rights needed">Не нужны права администратора</li>
+          <li data-ru=".NET ставить не нужно" data-en="No .NET runtime to install">.NET ставить не нужно</li>
+          <li data-ru="Открытый код, MIT" data-en="Open source, MIT">Открытый код, MIT</li>
+        </ul>
+      </div>
+
+      <figure class="hero-shot">
+        <img src="/img/library.webp" width="1280" height="820" alt="Библиотека игр в Ludex">
+      </figure>
+    </div>
+  </section>
+
+  <!-- ================= features ================= -->
+  <section id="features" class="section">
+    <div class="wrap">
+      <h2 class="section-title" data-ru="Что умеет" data-en="What it does">Что умеет</h2>
+      <p class="section-sub"
+         data-ru="Минимум настроек — максимум автоматики. Один раз указали папку и забыли."
+         data-en="Minimal setup, maximum automation. Point it at a folder once and forget about it.">
+        Минимум настроек — максимум автоматики. Один раз указали папку и забыли.
+      </p>
+
+      <div class="cards">
+        <article class="card">
+          <div class="ico"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="m16.5 16.5 4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+          <h3 data-ru="Автопоиск игр" data-en="Automatic discovery">Автопоиск игр</h3>
+          <p data-ru="Находит .exe в папках, отбрасывает установщики и vcredist, выбирает настоящий файл запуска и чистит названия от [FitGirl Repack], _RUNE, MULTi12."
+             data-en="Finds .exe files, skips installers and vcredist, picks the real game executable and strips [FitGirl Repack], _RUNE, MULTi12 from titles.">Находит .exe в папках, отбрасывает установщики и vcredist, выбирает настоящий файл запуска и чистит названия от [FitGirl Repack], _RUNE, MULTi12.</p>
+        </article>
+
+        <article class="card">
+          <div class="ico"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="12" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M18 8v12M18 8l3 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+          <h3 data-ru="Обложки сами" data-en="Artwork for free">Обложки сами</h3>
+          <p data-ru="Каталог Steam — без ключей и регистрации. Нужны портретные обложки и арты сообщества? Подключите необязательный ключ SteamGridDB."
+             data-en="Artwork straight from the Steam catalogue — no keys, no sign-up. Want portrait covers and community art? Add an optional SteamGridDB key.">Каталог Steam — без ключей и регистрации. Нужны портретные обложки и арты сообщества? Подключите необязательный ключ SteamGridDB.</p>
+        </article>
+
+        <article class="card">
+          <div class="ico"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5-11-6.5Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></div>
+          <h3 data-ru="Запуск в один клик" data-en="One-click launch">Запуск в один клик</h3>
+          <p data-ru="Клик по обложке — игра запускается, при желании от имени администратора. Автозапуск вместе с Windows, статистика запусков."
+             data-en="Click a cover and the game starts — optionally as administrator. Start with Windows, keep launch stats.">Клик по обложке — игра запускается, при желании от имени администратора. Автозапуск вместе с Windows, статистика запусков.</p>
+        </article>
+
+        <article class="card">
+          <div class="ico"><svg viewBox="0 0 24 24"><path d="M4 7h16M7 12h10M10 17h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+          <h3 data-ru="Поиск и избранное" data-en="Search and favourites">Поиск и избранное</h3>
+          <p data-ru="Поиск по названию, папке и имени из Steam. Сортировка по названию, дате добавления или последнему запуску, фильтр «★ Избранное»."
+             data-en="Search by title, folder or Steam name. Sort by title, date added or last played, plus a “★ Favourites” filter.">Поиск по названию, папке и имени из Steam. Сортировка по названию, дате добавления или последнему запуску, фильтр «★ Избранное».</p>
+        </article>
+
+        <article class="card">
+          <div class="ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17Z" fill="currentColor"/></svg></div>
+          <h3 data-ru="Своя тема" data-en="Your own theme">Своя тема</h3>
+          <p data-ru="Тёмная (почти чёрная) и светлая темы, любой акцентный цвет — квадрат «насыщенность/яркость», полоса оттенков и значения R/G/B."
+             data-en="Dark (near-black) and light themes, any accent colour — saturation/brightness square, hue strip and R/G/B values.">Тёмная (почти чёрная) и светлая темы, любой акцентный цвет — квадрат «насыщенность/яркость», полоса оттенков и значения R/G/B.</p>
+        </article>
+
+        <article class="card">
+          <div class="ico"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></div>
+          <h3 data-ru="Стекло и обои" data-en="Glass and wallpapers">Стекло и обои</h3>
+          <p data-ru="Полупрозрачные панели, обои на фон по ссылке — обычная картинка или анимированный GIF. Всё применяется сразу."
+             data-en="Translucent panels, wallpapers by link — a still image or an animated GIF. Everything applies instantly.">Полупрозрачные панели, обои на фон по ссылке — обычная картинка или анимированный GIF. Всё применяется сразу.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= screenshots ================= -->
+  <section id="shots" class="section section-alt">
+    <div class="wrap">
+      <h2 class="section-title" data-ru="Как это выглядит" data-en="How it looks">Как это выглядит</h2>
+      <p class="section-sub" data-ru="Нажмите на картинку, чтобы открыть её целиком." data-en="Click an image to open it full size.">Нажмите на картинку, чтобы открыть её целиком.</p>
+
+      <div class="gallery">
+        <button class="shot" data-full="/img/game-panel.webp"><img src="/img/game-panel.webp" alt="Панель игры" loading="lazy"></button>
+        <button class="shot" data-full="/img/card-favorite.webp"><img src="/img/card-favorite.webp" alt="Наведение на карточку" loading="lazy"></button>
+        <button class="shot" data-full="/img/dropdown.webp"><img src="/img/dropdown.webp" alt="Сортировка" loading="lazy"></button>
+        <button class="shot" data-full="/img/launch.webp"><img src="/img/launch.webp" alt="Окно запуска" loading="lazy"></button>
+        <button class="shot" data-full="/img/customize.webp"><img src="/img/customize.webp" alt="Кастомизация" loading="lazy"></button>
+        <button class="shot" data-full="/img/settings.webp"><img src="/img/settings.webp" alt="Настройки" loading="lazy"></button>
+        <button class="shot" data-full="/img/library-light.webp"><img src="/img/library-light.webp" alt="Светлая тема" loading="lazy"></button>
+        <button class="shot" data-full="/img/library-wallpaper.webp"><img src="/img/library-wallpaper.webp" alt="Обои на фоне" loading="lazy"></button>
+        <button class="shot" data-full="/img/library.webp"><img src="/img/library.webp" alt="Библиотека" loading="lazy"></button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= install ================= -->
+  <section id="install" class="section">
+    <div class="wrap">
+      <h2 class="section-title" data-ru="Установка" data-en="Install">Установка</h2>
+      <p class="section-sub" data-ru="Две минуты — и библиотека готова." data-en="Two minutes and your library is ready.">Две минуты — и библиотека готова.</p>
+
+      <div class="steps">
+        <div class="step">
+          <span class="num">1</span>
+          <h3 data-ru="Скачайте и запустите" data-en="Download and run">Скачайте и запустите</h3>
+          <p data-ru="Установщик поставит Ludex в %LOCALAPPDATA%\Programs\Ludex без запроса прав администратора. Или возьмите портативный .exe."
+             data-en="The installer puts Ludex into %LOCALAPPDATA%\Programs\Ludex without any admin prompt. Or grab the portable .exe.">Установщик поставит Ludex в %LOCALAPPDATA%\Programs\Ludex без запроса прав администратора. Или возьмите портативный .exe.</p>
+        </div>
+        <div class="step">
+          <span class="num">2</span>
+          <h3 data-ru="Укажите папки с играми" data-en="Pick your game folders">Укажите папки с играми</h3>
+          <p data-ru="Шестерёнка → «Папки с играми» → «+ Добавить папку…». Можно несколько папок или целый диск."
+             data-en="Gear icon → “Game folders” → “+ Add folder…”. Add several folders or a whole drive.">Шестерёнка → «Папки с играми» → «+ Добавить папку…». Можно несколько папок или целый диск.</p>
+        </div>
+        <div class="step">
+          <span class="num">3</span>
+          <h3 data-ru="Нажмите «Сканировать»" data-en="Press “Scan”">Нажмите «Сканировать»</h3>
+          <p data-ru="Ludex найдёт игры, определит названия и скачает обложки. Дальше — кастомизация по вкусу."
+             data-en="Ludex finds the games, recognises titles and downloads artwork. Then customise it to taste.">Ludex найдёт игры, определит названия и скачает обложки. Дальше — кастомизация по вкусу.</p>
+        </div>
+      </div>
+
+      <div class="download-box">
+        <div>
+          <h3 data-ru="Все файлы релиза" data-en="All release files">Все файлы релиза</h3>
+          <p class="muted" data-ru="Windows 10/11, 64-бит. Файлы не подписаны сертификатом: SmartScreen может попросить «Подробнее → Выполнить в любом случае»."
+             data-en="Windows 10/11, 64-bit. Files are not code-signed: SmartScreen may ask you to click “More info → Run anyway”.">Windows 10/11, 64-бит. Файлы не подписаны сертификатом: SmartScreen может попросить «Подробнее → Выполнить в любом случае».</p>
+        </div>
+        <div class="download-links">
+          <a class="btn btn-primary" href="https://github.com/dosherrk/ludex/releases/latest/download/Ludex-Setup-1.4.0.exe"><span data-ru="Установщик" data-en="Installer">Установщик</span> <span class="muted small">38 МБ</span></a>
+          <a class="btn btn-ghost" href="https://github.com/dosherrk/ludex/releases/latest/download/Ludex-1.4.0-portable.exe"><span data-ru="Портативный" data-en="Portable">Портативный</span> <span class="muted small">44 МБ</span></a>
+          <a class="btn btn-ghost" href="https://github.com/dosherrk/ludex/releases/latest/download/Ludex-1.4.0.zip"><span data-ru="Архив + инструкция" data-en="Archive + guide">Архив + инструкция</span> <span class="muted small">39 МБ</span></a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= open source ================= -->
+  <section class="section section-alt">
+    <div class="wrap opensource">
+      <div>
+        <h2 class="section-title left" data-ru="Открытый код" data-en="Open source">Открытый код</h2>
+        <p class="section-sub left"
+           data-ru="Ludex написан на C# (.NET 8) и Avalonia 11 — весь интерфейс собран вручную, без нативных контролов Windows. Исходники, установщик и история версий — на GitHub."
+           data-en="Ludex is written in C# (.NET 8) with Avalonia 11 — the whole UI is hand-built, with no native Windows controls. Sources, installer and changelog live on GitHub.">
+          Ludex написан на C# (.NET 8) и Avalonia 11 — весь интерфейс собран вручную, без нативных контролов Windows. Исходники, установщик и история версий — на GitHub.
+        </p>
+        <div class="cta">
+          <a class="btn btn-primary" href="https://github.com/dosherrk/ludex" target="_blank" rel="noopener">GitHub</a>
+          <a class="btn btn-ghost" href="https://github.com/dosherrk/ludex/blob/main/CHANGELOG.md" target="_blank" rel="noopener" data-ru="Что нового" data-en="Changelog">Что нового</a>
+        </div>
+      </div>
+      <ul class="stack">
+        <li><b>.NET 8</b><span data-ru="кросс-платформенная основа" data-en="cross-platform runtime">кросс-платформенная основа</span></li>
+        <li><b>Avalonia 11</b><span data-ru="интерфейс и анимации" data-en="UI and animations">интерфейс и анимации</span></li>
+        <li><b>NSIS</b><span data-ru="установщик без прав админа" data-en="per-user installer">установщик без прав админа</span></li>
+        <li><b>MIT</b><span data-ru="свободная лицензия" data-en="free licence">свободная лицензия</span></li>
+      </ul>
+    </div>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="wrap footer-inner">
+    <div class="brand small-brand">
+      <img src="/img/logo.png" alt="" width="22" height="22">
+      <span>LUDEX</span>
+      <span class="muted">· 1.4.0</span>
+    </div>
+    <div class="footer-links">
+      <a href="https://github.com/dosherrk/ludex" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/dosherrk/ludex/releases" target="_blank" rel="noopener" data-ru="Релизы" data-en="Releases">Релизы</a>
+      <a href="https://github.com/dosherrk/ludex/blob/main/LICENSE" target="_blank" rel="noopener">MIT</a>
+    </div>
+    <p class="muted tiny"
+       data-ru="Локальная библиотека игр. Не связан со Steam/Valve; обложки загружаются из публичных каталогов и принадлежат их правообладателям."
+       data-en="A local game library. Not affiliated with Steam/Valve; artwork is fetched from public catalogues and belongs to its owners.">
+      Локальная библиотека игр. Не связан со Steam/Valve; обложки загружаются из публичных каталогов и принадлежат их правообладателям.
+    </p>
+  </div>
+</footer>
+
+<div class="lightbox" id="lightbox" hidden>
+  <button class="lightbox-close" id="lightbox-close" aria-label="Закрыть">✕</button>
+  <img id="lightbox-img" alt="">
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>
