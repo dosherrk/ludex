@@ -14,6 +14,7 @@
 [![Avalonia](https://img.shields.io/badge/Avalonia-11-8B44AC)](https://avaloniaui.net)
 [![Version](https://img.shields.io/badge/version-1.4.0-3B9EFF)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-35C48A)](LICENSE)
+[![Website](https://img.shields.io/badge/сайт-ludex--one.vercel.app-3B9EFF)](https://ludex-one.vercel.app)
 
 <img src="screenshots/library.png" width="900" alt="Библиотека Ludex">
 
@@ -56,6 +57,12 @@
 | Настройки | Обои на фоне |
 |---|---|
 | ![Настройки](screenshots/settings.png) | ![Обои](screenshots/library-wallpaper.png) |
+
+## Сайт
+
+Лендинг проекта (тот же текст, скриншоты и кнопки скачивания) — **[ludex-one.vercel.app](https://ludex-one.vercel.app)**
+(EN: [ludex-one.vercel.app/?lang=en](https://ludex-one.vercel.app/?lang=en)). Исходники сайта — папка [`site/`](site),
+деплой автоматический на Vercel при каждом пуше в `main`.
 
 ## Установка
 
@@ -163,6 +170,7 @@ src/Ludex/
     CoverWindow.cs              — ручной выбор обложки
     Dialogs.cs, Ui.cs           — диалоги, контролы, иконки, анимации
 installer/Ludex.nsi             — установщик + деинсталлятор (NSIS)
+site/                           — лендинг для Vercel (index.html, styles.css, app.js, img/)
 assets/logo-ludex.png           — исходник логотипа (из него собраны app.ico и Assets/icon.png)
 ```
 
