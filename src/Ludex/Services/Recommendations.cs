@@ -22,12 +22,15 @@ public sealed class RecGame
     public string Description => Loc.IsRu ? Ru : En;
 
     /// <summary>Детерминированная пара цветов постера — от названия, поэтому не «скачет».</summary>
-    public (string A, string B) Poster()
+    public (string A, string B) Poster() => PosterColors(Title);
+
+    /// <summary>Пара цветов для заливки-заглушки по названию игры.</summary>
+    public static (string A, string B) PosterColors(string title)
     {
         unchecked
         {
             uint h = 2166136261;
-            foreach (var ch in Title) h = (h ^ ch) * 16777619;
+            foreach (var ch in title) h = (h ^ ch) * 16777619;
 
             var hue = (h % 360) / 360.0;
             var hue2 = ((h / 360) % 80 + 20) / 360.0 + hue;   // сдвиг соседнего оттенка
