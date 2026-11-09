@@ -41,16 +41,21 @@
   function wordClicks(n) { return isEn() ? (n === 1 ? 'click' : 'clicks') : plural(n, ['клик', 'клика', 'кликов']); }
 
   // Имена файлов релиза → ключи кнопок.
-  // Ludex-Setup-1.5.0.exe → setup, Ludex-1.5.0-linux-x64.deb → linux-deb и т.д.
+  // Ludex-Setup-1.6.0.exe → setup, Ludex-1.6.0-linux-x64.deb → linux-deb и т.д.
   function classify(name) {
     var n = String(name || '').toLowerCase();
     if (n.indexOf('sources') !== -1) return null;
 
     if (n.indexOf('.deb') === n.length - 4) return 'linux-deb';
     if (n.indexOf('.tar.gz') !== -1) return 'linux-tar';
+    if (n.indexOf('.dmg') === n.length - 4) {
+      // кнопки macOS ведут на .dmg; .zip остаётся в релизе как альтернатива
+      if (n.indexOf('arm64') !== -1) return 'macos-arm';
+      if (n.indexOf('x64') !== -1 || n.indexOf('intel') !== -1) return 'macos-x64';
+      return null;
+    }
     if (n.indexOf('.zip') === n.length - 4) {
-      if (n.indexOf('macos-arm64') !== -1) return 'macos-arm';
-      if (n.indexOf('macos-x64') !== -1) return 'macos-x64';
+      if (n.indexOf('macos') !== -1) return null;
       if (n.indexOf('windows') !== -1) return 'win-zip';
       return null;
     }
