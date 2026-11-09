@@ -1434,6 +1434,11 @@ public sealed class MainWindow : Window
         _settingsPanel.Closed += CloseSettings;
         _settingsPanel.AppearanceChanged += OnAppearanceChanged;
         _settingsPanel.WallpaperChanged += OnWallpaperChanged;
+        _settingsPanel.UpdateCheckRequested += () =>
+        {
+            CloseSettings();
+            _ = CheckUpdatesAsync(silent: false);
+        };
 
         _settingsPanel.HorizontalAlignment = HorizontalAlignment.Center;
         _settingsPanel.VerticalAlignment = VerticalAlignment.Center;
@@ -1615,6 +1620,9 @@ public sealed class MainWindow : Window
     {
         _ = ComputeSizesAsync();
 
+        // фоновая проверка обновлений: не тормозит запуск и не мешает сканированию
+        if (_settings.CheckUpdatesOnStartup) _ = CheckUpdatesAsync(silent: true);
+
         if (_settings.Folders.Count == 0 && _games.Count == 0)
         {
             SetStatus(Loc.T("status.noFolders"));
@@ -1623,6 +1631,79 @@ public sealed class MainWindow : Window
 
         if (_settings.AutoScanOnStartup || _games.Count == 0)
             await StartScanAsync();
+    }
+
+    // ------------------------------------------------------- автообновление
+
+    /// <summary>
+    /// Проверяет последний релиз на GitHub. silent = true — при запуске (ошибки
+    /// и «у вас последняя версия» молча пишем в лог), false — по кнопке в настройках.
+    /// </summary>
+    private async Task CheckUpdatesAsync(bool silent)
+    {
+        if (silent) await Task.Delay(2500);
+
+        UpdateInfo? info;
+        try
+        {
+            info = await Updater.CheckAsync();
+        }
+        catch (Exception ex)
+        {
+            AppPaths.Log("Update check failed: " + ex.Message);
+            if (!silent) await Dialogs.ShowMessageAsync(this, Loc.T("update.title"), Loc.F("update.checkFailed", ex.Message));
+            return;
+        }
+
+        if (info == null)
+        {
+            AppPaths.Log("Update check: уже последняя версия " + Updater.CurrentVersionText);
+            if (!silent) await Dialogs.ShowMessageAsync(this, Loc.T("update.title"), Loc.F("update.latest", Updater.CurrentVersionText));
+            return;
+        }
+
+        if (!Updater.CanSelfUpdate(out var why))
+        {
+            AppPaths.Log("Update: self-update not possible — " + why);
+            await Dialogs.ShowMessageAsync(this, Loc.T("update.title"),
+                Loc.F("update.manual", (info.PageUrl.Length > 0 ? info.PageUrl + "\n\n" : "") + why));
+            return;
+        }
+
+        SetStatus(Loc.F("update.available", info.Version.ToString(3), Updater.CurrentVersionText));
+        if (!await Dialogs.UpdateAvailableAsync(this, info)) return;
+
+        string? package = null;
+        try
+        {
+            await Dialogs.ShowProgressAsync(this, Loc.T("update.downloading"),
+                info.AssetName + (info.SizeText.Length > 0 ? " · " + info.SizeText : ""),
+                async progress => package = await Updater.DownloadAsync(info, progress));
+        }
+        catch (Exception ex)
+        {
+            AppPaths.Log("Update download failed: " + ex.Message);
+            await Dialogs.ShowMessageAsync(this, Loc.T("update.title"), ex.Message);
+            return;
+        }
+
+        if (package == null) return;
+
+        try
+        {
+            // помощник дождётся закрытия окна и подменит файлы
+            Updater.ApplyAndRestart(package, info);
+        }
+        catch (Exception ex)
+        {
+            AppPaths.Log("Update apply failed: " + ex.Message);
+            await Dialogs.ShowMessageAsync(this, Loc.T("update.title"),
+                Loc.F("update.manual", info.PageUrl.Length > 0 ? info.PageUrl : ex.Message));
+            return;
+        }
+
+        AppPaths.Log("Update: restarting into " + info.Tag);
+        Close();
     }
 
     private void OnClosing(object? sender, WindowClosingEventArgs e)

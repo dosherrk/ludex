@@ -39,6 +39,8 @@ public sealed class AppSettings
     /// <summary>title | added | played | favorite</summary>
     public string SortMode { get; set; } = "title";
     public bool AutoScanOnStartup { get; set; }
+    /// <summary>проверять обновления на GitHub при запуске</summary>
+    public bool CheckUpdatesOnStartup { get; set; } = true;
     /// <summary>dark | light</summary>
     public string Theme { get; set; } = "dark";
     /// <summary>blue | violet | green | orange | pink | red | turquoise</summary>

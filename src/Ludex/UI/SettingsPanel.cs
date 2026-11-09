@@ -26,6 +26,7 @@ public sealed class SettingsPanel : Border
     private Dropdown _langCombo = null!;
     private Toggle _autoScan = null!;
     private Toggle _autoStart = null!;
+    private Toggle _autoUpdate = null!;
     private TextBlock _folderCount = null!;
 
     private string _language;
@@ -34,6 +35,7 @@ public sealed class SettingsPanel : Border
     private string _ignoreText;
     private bool _scanOnStartup;
     private bool _runAtStartup;
+    private bool _checkUpdates;
 
     public bool ScanRequested { get; private set; }
 
@@ -46,6 +48,9 @@ public sealed class SettingsPanel : Border
     /// <summary>Обои установлены или убраны.</summary>
     public event Action? WallpaperChanged;
 
+    /// <summary>Пользователь попросил проверить обновления прямо сейчас.</summary>
+    public event Action? UpdateCheckRequested;
+
     public SettingsPanel(AppSettings settings)
     {
         _original = settings;
@@ -56,6 +61,7 @@ public sealed class SettingsPanel : Border
         _ignoreText = string.Join(", ", settings.ExtraIgnoreExe);
         _scanOnStartup = settings.AutoScanOnStartup;
         _runAtStartup = Autostart.IsEnabled();
+        _checkUpdates = settings.CheckUpdatesOnStartup;
 
         MaxWidth = 860;
         MaxHeight = 720;
@@ -220,6 +226,21 @@ public sealed class SettingsPanel : Border
                 ? Loc.T("settings.autostartHint")
                 : Loc.T("settings.autostartUnsupported"),
             11, Skin.TextDim, wrap: TextWrapping.Wrap));
+
+        // ---- обновления
+        _autoUpdate = new Toggle(Loc.T("settings.autoupdate"), _checkUpdates,
+            v => _checkUpdates = v);
+        body.Children.Add(_autoUpdate);
+
+        var updateRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 10,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        updateRow.Children.Add(Ui.GhostButton(Loc.T("settings.checkNow"), () => UpdateCheckRequested?.Invoke()));
+        updateRow.Children.Add(Ui.T(Loc.T("settings.autoupdateHint"), 11.5, Skin.TextDim, wrap: TextWrapping.Wrap));
+        body.Children.Add(updateRow);
 
         var dataBtn = Ui.GhostButton(Loc.T("settings.openData"), () => Shell.OpenFolder(AppPaths.Root));
         dataBtn.HorizontalAlignment = HorizontalAlignment.Left;
@@ -398,6 +419,7 @@ public sealed class SettingsPanel : Border
         _original.Theme = _theme;
         _original.SteamGridDbKey = string.IsNullOrWhiteSpace(_keyBox.Text) ? null : _keyBox.Text.Trim();
         _original.AutoScanOnStartup = _autoScan.Value;
+        _original.CheckUpdatesOnStartup = _autoUpdate.Value;
         _original.ExtraIgnoreExe = (_ignoreBox.Text ?? "")
             .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
             .Select(x => x.Trim())
