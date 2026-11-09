@@ -85,11 +85,28 @@ public static class Shell
     {
         try
         {
-            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+            if (Platform.IsWindows)
+            {
+                Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+                return;
+            }
+
+            // macOS и Linux: свой открыватель, как и для папок
+            var opener = Platform.IsMac ? "open" : "xdg-open";
+            Process.Start(new ProcessStartInfo(opener, $"\"{url}\"") { UseShellExecute = false });
         }
         catch (Exception ex)
         {
             AppPaths.Log("OpenUrl failed: " + ex.Message);
+
+            try
+            {
+                Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+            }
+            catch (Exception inner)
+            {
+                AppPaths.Log("OpenUrl fallback failed: " + inner.Message);
+            }
         }
     }
 }

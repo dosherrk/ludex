@@ -14,7 +14,7 @@
 [![macOS](https://img.shields.io/badge/macOS-Apple%20Silicon%20%2F%20Intel-000000?logo=apple&logoColor=white)](#macos)
 [![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet&logoColor=white)](#сборка-из-исходников)
 [![Avalonia](https://img.shields.io/badge/Avalonia-11-8B44AC)](https://avaloniaui.net)
-[![Version](https://img.shields.io/badge/version-1.8.0-3B9EFF)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.9.0-3B9EFF)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-35C48A)](LICENSE)
 [![Website](https://img.shields.io/badge/сайт-ludex--one.vercel.app-3B9EFF)](https://ludex-one.vercel.app)
 
@@ -38,6 +38,9 @@
 - **Кастомизация.** Тёмная и светлая темы, любой акцентный цвет (квадрат
   «насыщенность/яркость» + полоса оттенков + R/G/B), полупрозрачные стеклянные панели
   и обои на фон по ссылке — обычная картинка или GIF (анимированный).
+- **Рекомендации.** Отдельная вкладка над поиском: каталог из 56 игр с постерами, поиском,
+  фильтрами по жанру и годам, сортировкой и пометкой «Новинка». У игры — описание, разработчик,
+  год и кнопка «Найти в браузере». Каталог встроенный: без сети и без ссылок на сторонние сайты.
 - **Удаление с компьютера.** Из меню карточки: сначала запускается найденный деинсталлятор,
   если его нет — папка игры удаляется целиком (с подтверждением и защитой от опасных путей).
 - **Русский и английский** интерфейс.
@@ -45,6 +48,10 @@
   администратора (per-user install).
 
 ## Скриншоты
+
+| Рекомендации | Карточка игры из каталога |
+|---|---|
+| ![Рекомендации](screenshots/recommendations.png) | ![Карточка игры](screenshots/recommendation-card.png) |
 
 | Панель игры | Наведение на карточку |
 |---|---|

@@ -60,6 +60,14 @@ public sealed class MainWindow : Window
     private TextBlock? _emptyTitle;
     private TextBlock? _emptyHint;
     private DispatcherTimer? _searchTimer;
+    private Grid _libraryHost = null!;
+    private Grid _recsHost = null!;
+    private Control _recsView = null!;
+    private Border? _recChip;
+    private TextBlock? _recLabel;
+    private TextBlock? _sectionLabel;
+    private bool _recsVisible;
+    private int _recsFound;
     private Border _settingsLayer = null!;
     private Border _launchLayer = null!;
     private SettingsPanel? _settingsPanel;
@@ -203,6 +211,7 @@ public sealed class MainWindow : Window
 
         // ---- библиотека
         var contentGrid = new Grid();
+        _libraryHost = contentGrid;
 
         _grid = new WrapPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(2) };
 
@@ -232,6 +241,20 @@ public sealed class MainWindow : Window
 
         Grid.SetRow(contentGrid, 1);
         content.Children.Add(contentGrid);
+
+        // ---- рекомендации: отдельный слой поверх той же строки контента
+        _recsHost = new Grid { IsVisible = false };
+        _recsView = new RecommendationsView(
+            TitleInLibrary,
+            text => SetStatus(text),
+            count =>
+            {
+                _recsFound = count;
+                if (_recsVisible) ShowRecsCount();
+            });
+        _recsHost.Children.Add(_recsView);
+        Grid.SetRow(_recsHost, 1);
+        content.Children.Add(_recsHost);
 
         var status = BuildStatusBar();
         Grid.SetRow(status, 2);
@@ -280,6 +303,18 @@ public sealed class MainWindow : Window
         Content = root;
         UpdateCount();
         ApplyFavChipState();
+
+        if (_recsVisible)
+        {
+            _libraryHost.IsVisible = false;
+            _recsHost.IsVisible = true;
+            if (_sectionLabel != null) _sectionLabel.Text = Loc.T("nav.recs");
+            ShowRecsCount();
+        }
+        else
+        {
+            if (_sectionLabel != null) _sectionLabel.Text = Loc.T("nav.library");
+        }
     }
 
     // ------------------------------------------------------------ боковая панель
@@ -335,8 +370,15 @@ public sealed class MainWindow : Window
         DockPanel.SetDock(bottom, Dock.Bottom);
         dock.Children.Add(bottom);
 
-        // ---- центр: поиск, фильтры, сортировка
+        // ---- центр: рекомендации, поиск, фильтры, сортировка
         var center = new StackPanel { Spacing = 2 };
+
+        var (recItem, recLabel) = SidebarItem(Loc.T("nav.recs"),
+            Ui.Icon(Ui.SparkleGeometry, Skin.TextMuted, 15, 15), ShowRecommendations);
+        _recChip = recItem;
+        _recLabel = recLabel;
+        _recChip.Margin = new Thickness(8, 12, 8, 10);
+        center.Children.Add(_recChip);
 
         _searchBox = Ui.SearchBox(_search, Loc.T("search.watermark"), text =>
         {
@@ -362,6 +404,7 @@ public sealed class MainWindow : Window
         var (allItem, allLabel) = SidebarItem(Loc.T("nav.all"), Ui.Icon(Ui.GridGeometry, Skin.TextMuted, 16, 16),
             () =>
             {
+                ShowLibrary();
                 _favoritesOnly = false;
                 ApplyFavChipState();
                 RenderGrid(true);
@@ -383,6 +426,7 @@ public sealed class MainWindow : Window
         _favChip = Ui.Clickable(favRow,
             () =>
             {
+                ShowLibrary();
                 _favoritesOnly = !_favoritesOnly;
                 ApplyFavChipState();
                 RenderGrid(true);
@@ -511,7 +555,8 @@ public sealed class MainWindow : Window
             Spacing = 12,
             VerticalAlignment = VerticalAlignment.Center,
         };
-        title.Children.Add(Ui.T(Loc.T("nav.library"), 15, Skin.Text, FontWeight.SemiBold));
+        _sectionLabel = Ui.T(Loc.T("nav.library"), 15, Skin.Text, FontWeight.SemiBold);
+        title.Children.Add(_sectionLabel);
 
         _countLabel = Ui.T("", 12, Skin.TextDim);
         title.Children.Add(_countLabel);
@@ -1868,8 +1913,78 @@ public sealed class MainWindow : Window
         Storage.SaveGames(_games);
     }
 
+    /// <summary>Открыть вкладку «Рекомендации».</summary>
+    private void ShowRecommendations()
+    {
+        _recsVisible = true;
+        _libraryHost.IsVisible = false;
+        _recsHost.IsVisible = true;
+        if (_sectionLabel != null) _sectionLabel.Text = Loc.T("nav.recs");
+        ShowRecsCount();
+        ApplyFavChipState();
+    }
+
+    /// <summary>Вернуться к библиотеке.</summary>
+    private void ShowLibrary()
+    {
+        if (!_recsVisible) return;
+        _recsVisible = false;
+        _recsHost.IsVisible = false;
+        _libraryHost.IsVisible = true;
+        if (_sectionLabel != null) _sectionLabel.Text = Loc.T("nav.library");
+        UpdateCount();
+        ApplyFavChipState();
+    }
+
+    private void ShowRecsCount()
+    {
+        if (_countLabel != null) _countLabel.Text = Loc.F("recs.found", _recsFound);
+    }
+
+    /// <summary>Есть ли такая игра в локальной библиотеке (по нормализованному названию).</summary>
+    private bool TitleInLibrary(string title)
+    {
+        var needle = NormalizeTitle(title);
+        if (needle.Length < 3) return false;
+
+        foreach (var game in _games)
+        {
+            var have = NormalizeTitle(game.Title);
+            if (have.Length >= 3 && (have.Contains(needle) || needle.Contains(have))) return true;
+
+            if (!string.IsNullOrEmpty(game.SteamName))
+            {
+                var steam = NormalizeTitle(game.SteamName);
+                if (steam.Length >= 3 && (steam.Contains(needle) || needle.Contains(steam))) return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static string NormalizeTitle(string s) =>
+        new string(s.ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
+
     private void ApplyFavChipState()
     {
+        // ---- вкладка «Рекомендации»
+        if (_recChip != null)
+            Ui.SetColors(_recChip,
+                _recsVisible ? Skin.PanelAlt : Brushes.Transparent,
+                _recsVisible ? Skin.CardHover : Skin.PanelAlt);
+
+        if (_recLabel != null)
+            _recLabel.Foreground = _recsVisible ? Skin.Text : Skin.TextMuted;
+
+        if (_recsVisible)
+        {
+            if (_favChip != null) Ui.SetColors(_favChip, Brushes.Transparent, Skin.PanelAlt);
+            if (_favChipLabel != null) _favChipLabel.Foreground = Skin.TextMuted;
+            if (_allChip != null) Ui.SetColors(_allChip, Brushes.Transparent, Skin.PanelAlt);
+            if (_allLabel != null) _allLabel.Foreground = Skin.TextMuted;
+            return;
+        }
+
         // выбранный пункт бокового меню подсвечивается
         if (_favChip != null)
             Ui.SetColors(_favChip,

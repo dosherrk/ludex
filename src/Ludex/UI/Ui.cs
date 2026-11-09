@@ -209,6 +209,10 @@ public static class Ui
     /// <summary>Сетка (Material «grid_view») — пункт «Все игры».</summary>
     public const string GridGeometry = "M0,0 H8.4 V8.4 H0 Z M11.6,0 H20 V8.4 H11.6 Z M0,11.6 H8.4 V20 H0 Z M11.6,11.6 H20 V20 H11.6 Z";
 
+    /// <summary>Искра (4-луч) — пункт «Рекомендации».</summary>
+    public const string SparkleGeometry =
+        "M10,0 L12.1,7.9 L20,10 L12.1,12.1 L10,20 L7.9,12.1 L0,10 L7.9,7.9 Z";
+
     public const string StarGeometry = "M10,0 L12.6,6.6 L19.6,7.2 L14.3,11.9 L15.9,18.9 L10,15.3 L4.1,18.9 L5.7,11.9 L0.4,7.2 L7.4,6.6 Z";
 
     /// <summary>Scalable vector icon (no font glyphs -> renders identically everywhere).</summary>
