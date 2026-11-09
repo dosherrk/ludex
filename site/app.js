@@ -12,7 +12,7 @@
   var GH_KEY = 'ludex.gh.v2';
   var CLICKS_KEY = 'ludex.clicks.v1';
   var GH_TTL = 10 * 60 * 1000;
-  var CLICKS_TTL = 60 * 1000;
+  var CLICKS_TTL = 30 * 1000;
   var GITHUB_API = 'https://api.github.com/repos/dosherrk/ludex/releases?per_page=100';
 
   var gh = null;        // { total, kinds: { kind: { count } } }

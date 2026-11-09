@@ -15,12 +15,13 @@ module.exports = async function handler(req, res) {
 
   if (!configured()) {
     // Upstash ещё не подключён — фронтенд покажет только статистику GitHub.
-    res.setHeader('Cache-Control', 'public, s-maxage=30');
+    res.setHeader('Cache-Control', 'public, s-maxage=15');
     return res.status(200).send(JSON.stringify({ available: false }));
   }
 
-  // Клики меняются часто — держим кэш коротким.
-  res.setHeader('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=300');
+  // Клики меняются часто: короткий кэш и без stale-while-revalidate,
+  // иначе после клика страница ещё несколько минут показывала бы старое число.
+  res.setHeader('Cache-Control', 'public, s-maxage=15');
 
   try {
     const values = await mget(['clicks:total'].concat(KINDS.map((k) => `clicks:${k}`)));
@@ -37,7 +38,7 @@ module.exports = async function handler(req, res) {
     // На случай, если счётчик total потерялся, но по файлам цифры есть.
     res.status(200).send(JSON.stringify({ available: true, total: total || sum, kinds }));
   } catch (err) {
-    res.setHeader('Cache-Control', 'public, s-maxage=30');
+    res.setHeader('Cache-Control', 'public, s-maxage=15');
     res.status(200).send(JSON.stringify({ available: false, error: String((err && err.message) || err) }));
   }
 };
