@@ -290,8 +290,6 @@ public sealed class MainWindow : Window
         {
             Width = 244,
             Background = Skin.BgDeep,
-            BorderBrush = Skin.Border,
-            BorderThickness = new Thickness(0, 0, 1, 0),
         };
 
         var dock = new DockPanel { LastChildFill = true };
@@ -585,8 +583,6 @@ public sealed class MainWindow : Window
         {
             Background = Brushes.Transparent,
             Padding = new Thickness(22, 7, 22, 9),
-            BorderBrush = Skin.Border,
-            BorderThickness = new Thickness(0, 1, 0, 0),
         };
 
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
@@ -816,21 +812,20 @@ public sealed class MainWindow : Window
         textInner.Children.Add(title);
         textInner.Children.Add(subtitle);
 
+        // плашка примыкает к обложке вплотную — карточка читается одним блоком
         var textPanel = new Border
         {
             Background = Skin.CardPlate,
-            CornerRadius = new CornerRadius(6),
+            CornerRadius = new CornerRadius(0, 0, 6, 6),
             BorderThickness = new Thickness(0),
-            Margin = new Thickness(0, 7, 0, 0),
             Child = textInner,
         };
 
-        // обложка — скруглённый «постер», без подложки вокруг
+        // обложка — верхняя половина карточки, скругляются только верхние углы
         var coverFrame = new Border
         {
-            CornerRadius = new CornerRadius(6),
+            CornerRadius = new CornerRadius(6, 6, 0, 0),
             ClipToBounds = true,
-            BoxShadow = Skin.CardShadow,
             Child = coverGrid,
         };
 
@@ -838,24 +833,12 @@ public sealed class MainWindow : Window
         stack.Children.Add(coverFrame);
         stack.Children.Add(textPanel);
 
-        // тонкая светлая грань поверх карточки — «стеклянный» край
-        var glassFrame = new Border
-        {
-            BorderBrush = Skin.GlassEdge,
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(9),
-            IsHitTestVisible = false,
-        };
-
-        var cardBody = new Grid();
-        cardBody.Children.Add(stack);
-        cardBody.Children.Add(glassFrame);
-
         var card = new Border
         {
-            Child = cardBody,
+            Child = stack,
             Background = Brushes.Transparent,
             CornerRadius = new CornerRadius(6),
+            BoxShadow = Skin.CardShadow,
             Margin = new Thickness(0, 0, CardGap, CardGap),
             Width = _cardWidth,
             Cursor = new Cursor(StandardCursorType.Hand),
@@ -875,14 +858,14 @@ public sealed class MainWindow : Window
 
         card.PointerEntered += (_, _) =>
         {
-            coverFrame.BoxShadow = Ui.GlowShadow();
+            card.BoxShadow = Ui.GlowShadow();
             hover.Opacity = 1;
             hover.IsHitTestVisible = true;
             ShowStar(true);
         };
         card.PointerExited += (_, _) =>
         {
-            coverFrame.BoxShadow = Skin.CardShadow;
+            card.BoxShadow = Skin.CardShadow;
             hover.Opacity = 0;
             hover.IsHitTestVisible = false;
             ShowStar(false);
@@ -1387,8 +1370,6 @@ public sealed class MainWindow : Window
         {
             Width = 320,
             Background = Skin.Panel,
-            BorderBrush = Skin.GlassEdge,
-            BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(14),
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,

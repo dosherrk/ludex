@@ -39,8 +39,6 @@ public sealed class CustomizePanel : Border
         MaxWidth = 640;
         MaxHeight = 730;
         Background = Skin.Panel;
-        BorderBrush = Skin.GlassEdge;
-        BorderThickness = new Thickness(1);
         CornerRadius = new CornerRadius(14);
         RenderTransformOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative);
         Transitions = new Transitions
@@ -119,7 +117,6 @@ public sealed class CustomizePanel : Border
 
         body.Children.Add(picker);
 
-        body.Children.Add(Ui.Divider());
 
         // ---- прозрачность
         var transparency = new Toggle(Loc.T("custom.transparent"), _settings.Transparent, v =>

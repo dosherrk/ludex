@@ -88,8 +88,6 @@ public sealed class Dropdown : Border
         _panel = new Border
         {
             Background = new SolidColorBrush(Skin.PanelColor),
-            BorderBrush = Skin.GlassEdge,
-            BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(10),
             Padding = new Thickness(6),
             MinWidth = width,
