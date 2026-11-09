@@ -238,6 +238,29 @@ cd installer && makensis Ludex.nsi
 ./tools/make-dmg.sh release/macos-arm64/Ludex.app Ludex-1.5.0-macos-arm64.dmg "Ludex 1.5.0" 90
 ```
 
+Как собрать эти утилиты на Ubuntu/Debian (проверено на 24.04, gcc 13, OpenSSL 3):
+
+```bash
+# 1. mkfs.hfsplus (hfsprogs): Ubuntu его больше не пакетирует, берём исходник из архива
+curl -LO http://archive.ubuntu.com/ubuntu/pool/universe/h/hfsprogs/hfsprogs_332.25.orig.tar.gz
+git clone --depth 1 https://github.com/rbrito/pkg-hfsprogs.git hfsprogs && cd hfsprogs
+for p in debian/patches/*.patch; do patch -p1 -s < "$p"; done      # патчи Debian = сборка на Linux
+mkdir -p /tmp/stub/sys && : > /tmp/stub/sys/sysctl.h                 # на Linux этого заголовка нет
+gcc -DDEBUG_BUILD=0 -D_FILE_OFFSET_BITS=64 -D LINUX=1 -D BSD=1 \
+    -I/tmp/stub -Iinclude -I/usr/include/x86_64-linux-gnu -O2 -w \
+    newfs_hfs.tproj/newfs_hfs.c newfs_hfs.tproj/makehfs.c newfs_hfs.tproj/hfs_endian.c \
+    -lbsd -lcrypto -o /tmp/newfs_hfs                                     # нужен libbsd-dev
+
+# 2. hfsplus и dmg из libdmg-hfsplus — под OpenSSL 3 правится тип HMAC_CTX
+git clone --depth 1 https://github.com/planetbeing/libdmg-hfsplus.git && cd libdmg-hfsplus
+#   includes/dmg/filevault.h:  HMAC_CTX hmacCTX      →  HMAC_CTX *hmacCTX
+#   dmg/filevault.c:          HMAC_CTX_init(&x)     →  x = HMAC_CTX_new()
+#                             HMAC_CTX_cleanup(&x)  →  HMAC_CTX_free(x); x = NULL
+#                             HMAC_*(&(info->hmacCTX), ...) → HMAC_*(info->hmacCTX, ...)
+cmake -DCMAKE_BUILD_TYPE=Release . && make -j4
+export NEWFS_HFS=/tmp/newfs_hfs HFSPLUS=$PWD/hfs/hfsplus DMG=$PWD/dmg/dmg
+```
+
 Скрипту нужны три утилиты, собранные из исходников (в репозиторий они не входят):
 `newfs_hfs` (mkfs.hfsplus из hfsprogs), `hfsplus` и `dmg` из libdmg-hfsplus —
 пути передаются через переменные `NEWFS_HFS`, `HFSPLUS`, `DMG`. Внутрь тома кладутся
