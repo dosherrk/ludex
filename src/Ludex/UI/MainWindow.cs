@@ -804,19 +804,24 @@ public sealed class MainWindow : Window
         Ui.Tip(starButton, Loc.T("card.favorite"));
         coverGrid.Children.Add(starButton);
 
-        var textInner = new StackPanel { Margin = new Thickness(2, 9, 2, 0), Spacing = 3 };
+        // подпись живёт на плотной плашке цвета приложения — обои сквозь неё не просвечивают
+        const double platePad = 12;
+        var textInner = new StackPanel { Margin = new Thickness(platePad, 9, platePad, 11), Spacing = 3 };
         var title = Ui.T(game.Title, 12.5, Skin.Text, FontWeight.SemiBold);
-        title.MaxWidth = _cardWidth - 4;
+        title.MaxWidth = _cardWidth - platePad * 2;
+        title.TextTrimming = TextTrimming.CharacterEllipsis;
         var subtitle = Ui.T(Subtitle(game), 11, Skin.TextDim);
-        subtitle.MaxWidth = _cardWidth - 4;
+        subtitle.MaxWidth = _cardWidth - platePad * 2;
+        subtitle.TextTrimming = TextTrimming.CharacterEllipsis;
         textInner.Children.Add(title);
         textInner.Children.Add(subtitle);
 
-        // в стеклянном режиме плашка снизу — полупрозрачное стекло поверх обоев
         var textPanel = new Border
         {
-            Background = Brushes.Transparent,
+            Background = Skin.CardPlate,
+            CornerRadius = new CornerRadius(6),
             BorderThickness = new Thickness(0),
+            Margin = new Thickness(0, 7, 0, 0),
             Child = textInner,
         };
 

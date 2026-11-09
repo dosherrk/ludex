@@ -26,6 +26,9 @@ public static class Skin
     public static IBrush CardHover = Brushes.Transparent;
     /// <summary>Плашка с названием под обложкой — в стеклянном режиме полупрозрачная.</summary>
     public static IBrush CardFooter = Brushes.Transparent;
+
+    /// <summary>Плашка под названием игры — непрозрачная, в цвет фона приложения.</summary>
+    public static IBrush CardPlate = Brushes.Transparent;
     public static IBrush CardFooterEdge = Brushes.Transparent;
     public static IBrush Accent = Brushes.Transparent;
     public static IBrush AccentHover = Brushes.Transparent;
@@ -144,6 +147,7 @@ public static class Skin
             CardFooterEdge = new SolidColorBrush(Transparent
                 ? Color.Parse("#B3FFFFFF")
                 : Color.Parse("#E7EDF4"));
+            CardPlate = new SolidColorBrush(Color.Parse("#FFFFFF"));
             GlassEdge = new SolidColorBrush(Color.Parse("#8CFFFFFF"));
             GlassSheen = new LinearGradientBrush
             {
@@ -215,6 +219,7 @@ public static class Skin
             CardFooterEdge = new SolidColorBrush(Transparent
                 ? Color.Parse("#26FFFFFF")
                 : Color.Parse("#1C2029"));
+            CardPlate = new SolidColorBrush(Color.Parse("#121215"));
             GlassSheen = new LinearGradientBrush
             {
                 StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
