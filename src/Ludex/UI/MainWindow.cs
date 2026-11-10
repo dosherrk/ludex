@@ -306,7 +306,10 @@ public sealed class MainWindow : Window
         Grid.SetColumnSpan(_launchLayer, 2);
         root.Children.Add(_launchLayer);
 
-        root.Children.Add(BuildSplash());
+        // заставка нужна только при первом построении окна: перестройка интерфейса
+        // после настроек не должна возвращать экран загрузки
+        if (!_splashClosed) root.Children.Add(BuildSplash());
+        else _splash = null;
 
         Content = root;
         UpdateCount();
@@ -1902,9 +1905,11 @@ public sealed class MainWindow : Window
         _splashClosed = true;
 
         _splashTimer?.Stop();
+        _splashTimer = null;
         _splash.Opacity = 0;
         await Task.Delay(280);
         _splash.IsVisible = false;
+        _splashFill = null;
     }
 
     /// <summary>Грузит каталог и библиотеку, пока висит заставка.</summary>
