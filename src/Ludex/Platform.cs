@@ -94,7 +94,7 @@ public static class Platform
 
     private static bool IsExecutable(FileInfo file)
     {
-        if (IsWindows) return true;
+        if (OperatingSystem.IsWindows()) return true;
 
         try
         {
@@ -110,7 +110,7 @@ public static class Platform
     /// <summary>Ставит бит выполнения — нужен для распакованных из архива файлов.</summary>
     public static void MakeExecutable(string path)
     {
-        if (IsWindows) return;
+        if (OperatingSystem.IsWindows()) return;
 
         try
         {

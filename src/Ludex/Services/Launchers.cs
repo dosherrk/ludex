@@ -166,7 +166,7 @@ public static class Launchers
                 if (ext is ".exe" or ".sh" or ".appimage" or ".x86_64" or ".x86" or ".run") return true;
                 if (info.Length >= 20L * 1024 * 1024) return true;
 
-                if (ext.Length == 0 && info.Length >= 1L * 1024 * 1024)
+                if (ext.Length == 0 && info.Length >= 1L * 1024 * 1024 && !OperatingSystem.IsWindows())
                 {
                     try
                     {
