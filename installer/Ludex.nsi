@@ -95,7 +95,8 @@ Section "$(SecMain)" SecMain
 
   SetOutPath "$INSTDIR"
   SetOverwrite on
-  File "../release/app/Ludex.exe"
+  ; публикация идёт набором файлов (быстрее старт) — ставим всё содержимое папки
+  File /r "../release/app\*.*"
   WriteUninstaller "$INSTDIR\uninstall.exe"
 
   ; start menu

@@ -1,25 +1,25 @@
 // Ludex — лендинг: переход по кнопке скачивания со счётчиком кликов.
-// GET /api/go?f=setup|portable|win-zip|linux-tar|linux-deb|macos-arm|macos-x64
+// GET /api/go?f=setup|win-zip|linux-tar|linux-deb|macos-arm|macos-x64
 // → 302 на файл самого свежего релиза (у macOS это .dmg).
 // Клик пишется в Upstash Redis (если он подключён) и не задерживает переход.
 
 const { configured, incrMany, get } = require('./_lib/redis');
 
-const KINDS = ['setup', 'portable', 'win-zip', 'linux-tar', 'linux-deb', 'macos-arm', 'macos-x64'];
+const KINDS = ['setup', 'win-zip', 'linux-tar', 'linux-deb', 'macos-arm', 'macos-x64'];
 
 // Запасные имена файлов — на случай, если Redis ещё пуст.
 const FALLBACK = {
-  setup: 'Ludex-Setup-1.16.1.exe',
-  portable: 'Ludex-1.16.1-portable.exe',
-  'win-zip': 'Ludex-1.16.1-windows.zip',
-  'linux-tar': 'Ludex-1.16.1-linux-x64.tar.gz',
-  'linux-deb': 'Ludex-1.16.1-linux-x64.deb',
-  'macos-arm': 'Ludex-1.16.1-macos-arm64.dmg',
-  'macos-x64': 'Ludex-1.16.1-macos-x64.dmg',
+  setup: 'Ludex-Setup-1.17.0.exe',
+  'win-zip': 'Ludex-1.17.0-windows.zip',
+  'linux-tar': 'Ludex-1.17.0-linux-x64.tar.gz',
+  'linux-deb': 'Ludex-1.17.0-linux-x64.deb',
+  'macos-arm': 'Ludex-1.17.0-macos-arm64.dmg',
+  'macos-x64': 'Ludex-1.17.0-macos-x64.dmg',
 };
 
-// Старые ссылки (кнопка «Архив» до 1.5.0) ведут на windows-архив.
-const ALIASES = { zip: 'win-zip' };
+// Старые ссылки: «Архив» до 1.5.0 и кнопка «Портативный» до 1.17.0
+// (раньше это был один exe, теперь — архив с файлами рядом с Ludex.exe).
+const ALIASES = { zip: 'win-zip', portable: 'win-zip' };
 
 function fallbackUrl(kind) {
   return `https://github.com/dosherrk/ludex/releases/latest/download/${FALLBACK[kind]}`;

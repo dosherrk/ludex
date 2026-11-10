@@ -14,7 +14,7 @@
 [![macOS](https://img.shields.io/badge/macOS-Apple%20Silicon%20%2F%20Intel-000000?logo=apple&logoColor=white)](#macos)
 [![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet&logoColor=white)](#сборка-из-исходников)
 [![Avalonia](https://img.shields.io/badge/Avalonia-11-8B44AC)](https://avaloniaui.net)
-[![Version](https://img.shields.io/badge/version-1.16.1-3B9EFF)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.17.0-3B9EFF)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-35C48A)](LICENSE)
 [![Website](https://img.shields.io/badge/сайт-ludex--one.vercel.app-3B9EFF)](https://ludex-one.vercel.app)
 
@@ -102,12 +102,17 @@
 
 ### Windows 10/11 (x64)
 
-**Вариант 1 — установщик (рекомендуется).** `Ludex-Setup-1.5.0.exe` → выберите язык → «Далее».
+**Вариант 1 — установщик (рекомендуется).** `Ludex-Setup-1.17.0.exe` → выберите язык → «Далее».
 Ставится в `%LOCALAPPDATA%\Programs\Ludex` (запрос администратора не появляется), создаёт ярлыки
 на рабочем столе и в меню «Пуск», добавляет запись в «Установку и удаление программ» и деинсталлятор.
 
-**Вариант 2 — портативно.** `Ludex-1.5.0-portable.exe` — запускайте откуда угодно, с флешки или из папки.
-Настройки и библиотека хранятся в `%LOCALAPPDATA%\Ludex`.
+**Вариант 2 — портативно.** `Ludex-1.17.0-windows.zip` — распакуйте папку целиком куда угодно
+(флешка, `D:\Ludex`) и запускайте `Ludex.exe`. Настройки и библиотека хранятся в `%LOCALAPPDATA%\Ludex`.
+
+> Файлы должны лежать вместе: `Ludex.exe` не работает без `Ludex.dll` и папки `runtimes` рядом.
+> Поэтому один exe не перетаскивают на рабочий стол — делают ярлык на него. С 1.17.0 приложение
+> поставляется набором файлов, а не одним большим exe: так запуск заметно быстрее, потому что
+> не нужно распаковывать встроенный рантайм во временную папку при каждом старте.
 
 > Файл не подписан сертификатом: SmartScreen при первом запуске может сказать
 > «Windows защитила ваш компьютер» → «Подробнее» → «Выполнить в любом случае».
@@ -121,29 +126,30 @@
 **Пакет `.deb`** (Debian, Ubuntu, Mint, Pop!_OS и производные):
 
 ```bash
-sudo apt install ./Ludex-1.5.0-linux-x64.deb
+sudo apt install ./Ludex-1.17.0-linux-x64.deb
 ```
 
 Появится ярлык в меню приложений, `ludex` — в `PATH`; файлы ставятся в `/opt/ludex`.
 Удаление — `sudo apt remove ludex` (данные в `~/.local/share/Ludex` остаются).
 
-**Портативный архив** `Ludex-1.5.0-linux-x64.tar.gz` — для любой системы с glibc 2.31+
+**Портативный архив** `Ludex-1.17.0-linux-x64.tar.gz` — для любой системы с glibc 2.31+
 (Fedora, Arch, openSUSE и т.д.):
 
 ```bash
-mkdir -p ~/Applications/Ludex && tar -xzf Ludex-1.5.0-linux-x64.tar.gz -C ~/Applications/Ludex
+mkdir -p ~/Applications && tar -xzf Ludex-1.17.0-linux-x64.tar.gz -C ~/Applications
 ~/Applications/Ludex/Ludex
 ```
 
-Внутри архива: сам бинарник, `ludex.desktop` для меню и `КАК-ЗАПУСТИТЬ.txt`.
+Внутри архива папка `Ludex` со всеми файлами приложения (бинарник, библиотеки рантайма),
+`ludex.desktop` для меню и `КАК-ЗАПУСТИТЬ.txt`. Файлы должны оставаться вместе.
 Нужны библиотеки интерфейса: libX11, libXrandr, libXi, libXcursor, libXext, libXrender,
 libICE, libSM, libGL, libfontconfig, libfreetype, libxkbcommon; под Wayland работает через XWayland.
 
 ### macOS 11+ (Apple Silicon и Intel) <a id="macos"></a>
 
-`Ludex-1.5.0-macos-arm64.dmg` — для Apple Silicon (M1–M4), `Ludex-1.5.0-macos-x64.dmg` — для Intel.
+`Ludex-1.17.0-macos-arm64.dmg` — для Apple Silicon (M1–M4), `Ludex-1.17.0-macos-x64.dmg` — для Intel.
 Откройте `.dmg`, перетащите Ludex в `Applications`. Рядом в релизе лежат те же сборки в `.zip`
-(`Ludex-1.5.0-macos-arm64.zip` / `-x64.zip`) — если удобнее архив (его надо просто распаковать).
+(`Ludex-1.17.0-macos-arm64.zip` / `-x64.zip`) — если удобнее архив (его надо просто распаковать).
 
 Приложение не подписано сертификатом Apple, поэтому первый запуск — правый клик по `Ludex.app`
 → **«Открыть»** → **«Открыть»** (или в Терминале: `xattr -dr com.apple.quarantine /Applications/Ludex.app`).
@@ -173,13 +179,14 @@ Ludex сам проверяет, не вышла ли новая версия, �
 - Проверка идёт при запуске (Настройки → **Проверять обновления при запуске**) и по кнопке
   **Проверить обновления сейчас** там же.
 - Источник — последний релиз [GitHub](https://github.com/dosherrk/ludex/releases); файл
-  выбирается под систему и архитектуру: `Ludex-Setup-*.exe`, `Ludex-*-portable.exe`,
+  выбирается под систему и архитектуру: `Ludex-Setup-*.exe`, `Ludex-*-windows.zip`,
   `Ludex-*-macos-arm64.zip|dmg`, `Ludex-*-macos-x64.zip|dmg`, `Ludex-*-linux-x64.tar.gz`.
 - Скачанное сверяется с `sha256` из метаданных релиза, прогресс виден в окне. Затем
   приложение закрывается, подменяет свои файлы и запускается заново — уже новой версией.
-- Windows ставит установщик в тихом режиме (`/S`) или заменяет портативный `.exe`
-  (из `Program Files` — с запросом UAC). macOS заменяет `Ludex.app` (при необходимости
-  через пароль администратора). Linux распаковывает архив и подменяет бинарник
+- Windows ставит установщик в тихом режиме (`/S`) или распаковывает портативный архив
+  и накрывает папку приложения новыми файлами (из `Program Files` — с запросом UAC).
+  macOS заменяет `Ludex.app` (при необходимости через пароль администратора).
+  Linux распаковывает архив и заменяет файлы приложения
   (`pkexec`, если папка принадлежит root; при установке из `.deb` без `pkexec`
   предложит обновиться вручную).
 - Проверить руками из консоли: `Ludex --version`, `Ludex --update-check`,
@@ -249,7 +256,7 @@ cd installer && makensis Ludex.nsi
 отдельным скриптом — на Linux, без macOS и без подписи Apple:
 
 ```bash
-./tools/make-dmg.sh release/macos-arm64/Ludex.app Ludex-1.5.0-macos-arm64.dmg "Ludex 1.5.0" 90
+./tools/make-dmg.sh release/macos-arm64/Ludex.app Ludex-1.17.0-macos-arm64.dmg "Ludex 1.17.0" 90
 ```
 
 Как собрать эти утилиты на Ubuntu/Debian (проверено на 24.04, gcc 13, OpenSSL 3):

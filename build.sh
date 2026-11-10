@@ -13,12 +13,15 @@ VER=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' src/Ludex/Ludex.csproj | hea
 [ -n "$VER" ] || { echo "не нашёл версию в csproj"; exit 1; }
 WHAT="${1:-all}"
 
+# Публикация набором файлов, а не одним exe: single-file с сжатием распаковывает
+# ~150 МБ в temp при каждом запуске, из-за чего старт занимает лишние секунды.
 PUB="dotnet publish src/Ludex -c Release --self-contained true
-  -p:PublishSingleFile=true
-  -p:IncludeNativeLibrariesForSelfExtract=true
-  -p:EnableCompressionInSingleFile=true
+  -p:PublishSingleFile=false
+  -p:IncludeNativeLibrariesForSelfExtract=false
+  -p:EnableCompressionInSingleFile=false
   -p:PublishReadyToRun=false
-  -p:DebugType=none"
+  -p:DebugType=none
+  -p:SatelliteResourceLanguages=en"
 
 make_icon() { # $1 = png, $2 = выходной каталог
   local src="$1" out="$2"
@@ -34,9 +37,30 @@ build_windows() {
   rm -rf release/app
   $PUB -r win-x64 -o release/app
   ( cd installer && makensis -DAPPVERSION="$VER" Ludex.nsi )
-  cp release/app/Ludex.exe "release/Ludex-${VER}-portable.exe"
-  ( cd release && zip -q "Ludex-${VER}-windows.zip" "Ludex-${VER}-portable.exe" )
-  ls -lh release/Ludex-Setup-${VER}.exe "release/Ludex-${VER}-portable.exe" "release/Ludex-${VER}-windows.zip"
+
+  # портативная версия — папка с файлами в архиве (файлы должны лежать рядом с Ludex.exe)
+  local stage=build/windows
+  rm -rf "$stage"
+  mkdir -p "$stage/Ludex-${VER}"
+  cp -a release/app/. "$stage/Ludex-${VER}/"
+  cat > "$stage/Ludex-${VER}/КАК-ЗАПУСТИТЬ.txt" <<'TXT'
+Ludex для Windows — портативная версия
+======================================
+
+1. Распакуйте архив целиком в любую папку (например, D:\Ludex).
+2. Запускайте Ludex.exe.
+
+Важно: Ludex.exe не работает в одиночку — рядом должны оставаться все файлы
+из архива (Ludex.dll, папка runtimes и остальные). Поэтому не перетаскивайте
+один exe на рабочий стол: сделайте ярлык на Ludex.exe.
+
+Данные (настройки, библиотека, обложки) хранятся в %LOCALAPPDATA%\Ludex.
+
+Если хочется обычной установки с ярлыками и деинсталлятором — скачайте
+Ludex-Setup-*.exe.
+TXT
+  ( cd "$stage" && zip -qry -UN=UTF8 "../../release/Ludex-${VER}-windows.zip" "Ludex-${VER}" )
+  ls -lh release/Ludex-Setup-${VER}.exe "release/Ludex-${VER}-windows.zip"
 }
 
 # -------------------------------------------------------------------- Linux
@@ -47,9 +71,10 @@ build_linux() {
   $PUB -r $rid -o release/$rid
   mkdir -p "$stage"
 
-  # portable-архив
-  cp release/$rid/Ludex "$stage/Ludex"
-  chmod +x "$stage/Ludex"
+  # portable-архив: вся папка публикации, а не один бинарник
+  mkdir -p "$stage/Ludex"
+  cp -a release/$rid/. "$stage/Ludex/"
+  chmod +x "$stage/Ludex/Ludex"
   make_icon assets/logo-ludex.png build/icons
   cp build/icons/ludex-256.png "$stage/ludex.png"
   cat > "$stage/ludex.desktop" <<DESKTOP
@@ -68,14 +93,16 @@ DESKTOP
 Ludex для Linux
 ================
 
-1. Распакуйте архив в любую папку, например ~/Applications/Ludex:
+1. Распакуйте архив в любую папку, например ~/Applications:
 
-       mkdir -p ~/Applications/Ludex
-       tar -xzf Ludex-*.tar.gz -C ~/Applications/Ludex
+       mkdir -p ~/Applications
+       tar -xzf Ludex-*.tar.gz -C ~/Applications
+
+   Появится папка Ludex — все файлы должны оставаться вместе.
 
 2. Запустите:
 
-       ~/Applications/Ludex/Ludex
+       ~/Applications/Ludex/Ludex/Ludex
 
 3. Чтобы приложение появилось в меню приложений, скопируйте ярлык и иконку:
 
@@ -99,7 +126,7 @@ TXT
   rm -rf "$deb"
   mkdir -p "$deb/DEBIAN" "$deb/opt/ludex" "$deb/usr/bin" \
            "$deb/usr/share/applications" "$deb/usr/share/icons/hicolor/256x256/apps"
-  cp release/$rid/Ludex "$deb/opt/ludex/Ludex"
+  cp -a release/$rid/. "$deb/opt/ludex/"
   chmod 755 "$deb/opt/ludex/Ludex"
   ln -s /opt/ludex/Ludex "$deb/usr/bin/ludex"
   ln -s /opt/ludex/Ludex "$deb/usr/bin/Ludex"
@@ -112,7 +139,7 @@ Section: games
 Priority: optional
 Architecture: amd64
 Maintainer: strxkilla <dosherrk@users.noreply.github.com>
-Installed-Size: $(du -k "$deb/opt/ludex/Ludex" | cut -f1)
+Installed-Size: $(du -sk "$deb/opt/ludex" | cut -f1)
 Depends: libx11-6, libice6, libsm6, libfontconfig1, libxrandr2, libxi6, libxcursor1, libxext6, libxrender1, libgl1, libglib2.0-0
 Description: Ludex - local game library with automatic artwork
  Сканирует указанные папки, находит игры (AppImage, нативные бинарники),

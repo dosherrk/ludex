@@ -41,7 +41,7 @@
   function wordClicks(n) { return isEn() ? (n === 1 ? 'click' : 'clicks') : plural(n, ['клик', 'клика', 'кликов']); }
 
   // Имена файлов релиза → ключи кнопок.
-  // Ludex-Setup-1.16.1.exe → setup, Ludex-1.16.1-linux-x64.deb → linux-deb и т.д.
+  // Ludex-Setup-1.17.0.exe → setup, Ludex-1.17.0-linux-x64.deb → linux-deb и т.д.
   function classify(name) {
     var n = String(name || '').toLowerCase();
     if (n.indexOf('sources') !== -1) return null;
@@ -56,12 +56,11 @@
     }
     if (n.indexOf('.zip') === n.length - 4) {
       if (n.indexOf('macos') !== -1) return null;
-      if (n.indexOf('windows') !== -1) return 'win-zip';
+      if (n.indexOf('windows') !== -1 || n.indexOf('portable') !== -1) return 'win-zip';
       return null;
     }
     if (n.indexOf('.exe') === n.length - 4) {
       if (n.indexOf('setup') !== -1 || n.indexOf('installer') !== -1) return 'setup';
-      if (n.indexOf('portable') !== -1) return 'portable';
       return null;
     }
     return null;

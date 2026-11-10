@@ -32,7 +32,12 @@ public sealed class SplashWindow : Window
         Height = 190;
         // без прозрачности: на системах без композитора прозрачное окно рисуется чёрным
         Background = new SolidColorBrush(Skin.BgColor);
-        Topmost = true;
+
+        // не лезем поверх чужих окон: если в фуллскрине запущена игра, заставка
+        // просто ждёт своей очереди в фоне и не перехватывает фокус
+        Topmost = false;
+        ShowActivated = false;
+        Focusable = false;
 
         _fill = new Border
         {

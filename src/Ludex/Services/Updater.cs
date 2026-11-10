@@ -185,11 +185,17 @@ public static class Updater
         if (OperatingSystem.IsWindows())
         {
             var setup = $"Ludex-Setup-{v}.exe";
-            var portable = $"Ludex-{v}-portable.exe";
 
-            // у портативной копии подменяем сам .exe, у установленной — гоняем установщик:
-            // иначе «тихая» установка обновит копию в AppData, а перезапустится старая
-            return IsInstalledCopy() ? new[] { setup, portable } : new[] { portable, setup };
+            // с 1.17.0 приложение ставится набором файлов, поэтому портативная версия
+            // обновляется архивом целиком (раньше хватало подмены одного .exe)
+            var zip = $"Ludex-{v}-windows.zip";
+            var portable = $"Ludex-{v}-portable.exe";   // запасной вариант для старых релизов
+
+            // у установленной копии гоняем установщик: иначе «тихая» установка обновит
+            // копию в AppData, а перезапустится старая
+            return IsInstalledCopy()
+                ? new[] { setup, zip, portable }
+                : new[] { zip, portable, setup };
         }
 
         if (OperatingSystem.IsMacOS())
@@ -306,6 +312,7 @@ public static class Updater
     {
         var dir = Path.GetDirectoryName(exe) ?? work;
         var isInstaller = info.AssetName.Contains("Setup", StringComparison.OrdinalIgnoreCase);
+        var isExe = info.AssetName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase);
         var writable = IsWritable(dir);
 
         var script = Path.Combine(work, "apply.ps1");
@@ -322,9 +329,23 @@ public static class Updater
             sb.AppendLine("if ($inst -and (Test-Path -LiteralPath (Join-Path $inst 'Ludex.exe'))) { Start-Process -FilePath (Join-Path $inst 'Ludex.exe') }");
             sb.AppendLine($"else {{ Start-Process -FilePath '{Escape(exe)}' }}");
         }
+        else if (writable && !isExe)
+        {
+            // портативная версия: распаковываем архив и накрываем папку приложения файлами
+            sb.AppendLine($"$zip = '{Escape(packagePath)}'");
+            sb.AppendLine($"$dst = '{Escape(dir)}'");
+            sb.AppendLine($"$tmp = '{Escape(Path.Combine(work, "unpack"))}'");
+            sb.AppendLine("Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue");
+            sb.AppendLine("New-Item -ItemType Directory -Path $tmp | Out-Null");
+            sb.AppendLine("Expand-Archive -LiteralPath $zip -DestinationPath $tmp -Force");
+            sb.AppendLine("$src = Get-ChildItem -LiteralPath $tmp -Directory | Select-Object -First 1");
+            sb.AppendLine("if (-not $src) { throw 'архив обновления пуст' }");
+            sb.AppendLine("Copy-Item -Path (Join-Path $src.FullName '*') -Destination $dst -Recurse -Force");
+            sb.AppendLine($"Start-Process -FilePath '{Escape(exe)}'");
+        }
         else if (writable)
         {
-            // портативная версия: подменяем exe рядом с собой
+            // старый формат обновления: подменяем exe рядом с собой
             sb.AppendLine("$target = '" + Escape(exe) + "'");
             sb.AppendLine("$fresh = $target + '.new'");
             sb.AppendLine("$backup = $target + '.old'");
@@ -347,8 +368,22 @@ public static class Updater
             var inner = new StringBuilder();
             inner.AppendLine("$ErrorActionPreference = 'Stop'");
             inner.AppendLine($"while (Get-Process -Id {pid} -ErrorAction SilentlyContinue) {{ Start-Sleep -Milliseconds 300 }}");
-            inner.AppendLine($"Copy-Item -LiteralPath '{Escape(packagePath)}' -Destination '{Escape(exe)}.new' -Force");
-            inner.AppendLine($"Move-Item -LiteralPath '{Escape(exe)}.new' -Destination '{Escape(exe)}' -Force");
+            if (isExe)
+            {
+                inner.AppendLine($"Copy-Item -LiteralPath '{Escape(packagePath)}' -Destination '{Escape(exe)}.new' -Force");
+                inner.AppendLine($"Move-Item -LiteralPath '{Escape(exe)}.new' -Destination '{Escape(exe)}' -Force");
+            }
+            else
+            {
+                inner.AppendLine($"$zip = '{Escape(packagePath)}'");
+                inner.AppendLine($"$dst = '{Escape(dir)}'");
+                inner.AppendLine($"$tmp = '{Escape(Path.Combine(work, "unpack"))}'");
+                inner.AppendLine("Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue");
+                inner.AppendLine("New-Item -ItemType Directory -Path $tmp | Out-Null");
+                inner.AppendLine("Expand-Archive -LiteralPath $zip -DestinationPath $tmp -Force");
+                inner.AppendLine("$src = Get-ChildItem -LiteralPath $tmp -Directory | Select-Object -First 1");
+                inner.AppendLine("Copy-Item -Path (Join-Path $src.FullName '*') -Destination $dst -Recurse -Force");
+            }
             inner.AppendLine($"Start-Process -FilePath '{Escape(exe)}'");
             File.WriteAllText(elevated, inner.ToString(), new UTF8Encoding(true));
 
@@ -399,18 +434,25 @@ public static class Updater
             sb.AppendLine($"tar -xzf '{Escape(packagePath)}' -C unpack");
             sb.AppendLine($"DST='{dir}'");
             sb.AppendLine("install_here() {");
-            sb.AppendLine("  cp -f unpack/Ludex \"$DST/Ludex.new\"");
-            sb.AppendLine("  chmod +x \"$DST/Ludex.new\"");
-            sb.AppendLine("  mv -f \"$DST/Ludex.new\" \"$DST/Ludex\"");
+            // 1.17.0+: в архиве папка Ludex со всем набором файлов; старые релизы — один бинарник
+            sb.AppendLine("  if [ -d unpack/Ludex ]; then");
+            sb.AppendLine("    cp -a unpack/Ludex/. \"$DST/\"");
+            sb.AppendLine("  else");
+            sb.AppendLine("    cp -f unpack/Ludex \"$DST/Ludex.new\"");
+            sb.AppendLine("    chmod +x \"$DST/Ludex.new\"");
+            sb.AppendLine("    mv -f \"$DST/Ludex.new\" \"$DST/Ludex\"");
+            sb.AppendLine("  fi");
+            sb.AppendLine("  chmod +x \"$DST/Ludex\" 2>/dev/null || true");
             sb.AppendLine("  [ -f unpack/ludex.png ] && cp -f unpack/ludex.png \"$DST/ludex.png\" || true");
             sb.AppendLine("  [ -f unpack/ludex.desktop ] && cp -f unpack/ludex.desktop \"$DST/ludex.desktop\" || true");
+            sb.AppendLine("  [ -f unpack/Ludex/ludex.png ] && cp -f unpack/Ludex/ludex.png \"$DST/ludex.png\" || true");
             sb.AppendLine("  return 0");
             sb.AppendLine("}");
             sb.AppendLine("if [ -w \"$DST\" ]; then");
             sb.AppendLine("  install_here");
             sb.AppendLine("elif command -v pkexec >/dev/null 2>&1; then");
             // системная установка в /opt — просим пароль через pkexec
-            sb.AppendLine("  pkexec sh -c \"cp -f '$work/unpack/Ludex' '$dir/Ludex' && chmod +x '$dir/Ludex'\"");
+            sb.AppendLine("  pkexec sh -c \"if [ -d '$work/unpack/Ludex' ]; then cp -a '$work/unpack/Ludex/.' '$dir/'; else cp -f '$work/unpack/Ludex' '$dir/Ludex'; fi; chmod +x '$dir/Ludex'\"");
             sb.AppendLine("else");
             sb.AppendLine("  exit 2");
             sb.AppendLine("fi");
