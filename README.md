@@ -14,7 +14,7 @@
 [![macOS](https://img.shields.io/badge/macOS-Apple%20Silicon%20%2F%20Intel-000000?logo=apple&logoColor=white)](#macos)
 [![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet&logoColor=white)](#сборка-из-исходников)
 [![Avalonia](https://img.shields.io/badge/Avalonia-11-8B44AC)](https://avaloniaui.net)
-[![Version](https://img.shields.io/badge/version-1.17.0-3B9EFF)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.17.1-3B9EFF)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-35C48A)](LICENSE)
 [![Website](https://img.shields.io/badge/сайт-ludex--one.vercel.app-3B9EFF)](https://ludex-one.vercel.app)
 
@@ -102,15 +102,15 @@
 
 ### Windows 10/11 (x64)
 
-**Вариант 1 — установщик (рекомендуется).** `Ludex-Setup-1.17.0.exe` → выберите язык → «Далее».
+**Вариант 1 — установщик (рекомендуется).** `Ludex-Setup-1.17.1.exe` → выберите язык → «Далее».
 Ставится в `%LOCALAPPDATA%\Programs\Ludex` (запрос администратора не появляется), создаёт ярлыки
 на рабочем столе и в меню «Пуск», добавляет запись в «Установку и удаление программ» и деинсталлятор.
 
-**Вариант 2 — портативно.** `Ludex-1.17.0-windows.zip` — распакуйте папку целиком куда угодно
+**Вариант 2 — портативно.** `Ludex-1.17.1-windows.zip` — распакуйте папку целиком куда угодно
 (флешка, `D:\Ludex`) и запускайте `Ludex.exe`. Настройки и библиотека хранятся в `%LOCALAPPDATA%\Ludex`.
 
 > Файлы должны лежать вместе: `Ludex.exe` не работает без `Ludex.dll` и папки `runtimes` рядом.
-> Поэтому один exe не перетаскивают на рабочий стол — делают ярлык на него. С 1.17.0 приложение
+> Поэтому один exe не перетаскивают на рабочий стол — делают ярлык на него. С 1.17.1 приложение
 > поставляется набором файлов, а не одним большим exe: так запуск заметно быстрее, потому что
 > не нужно распаковывать встроенный рантайм во временную папку при каждом старте.
 
@@ -126,17 +126,17 @@
 **Пакет `.deb`** (Debian, Ubuntu, Mint, Pop!_OS и производные):
 
 ```bash
-sudo apt install ./Ludex-1.17.0-linux-x64.deb
+sudo apt install ./Ludex-1.17.1-linux-x64.deb
 ```
 
 Появится ярлык в меню приложений, `ludex` — в `PATH`; файлы ставятся в `/opt/ludex`.
 Удаление — `sudo apt remove ludex` (данные в `~/.local/share/Ludex` остаются).
 
-**Портативный архив** `Ludex-1.17.0-linux-x64.tar.gz` — для любой системы с glibc 2.31+
+**Портативный архив** `Ludex-1.17.1-linux-x64.tar.gz` — для любой системы с glibc 2.31+
 (Fedora, Arch, openSUSE и т.д.):
 
 ```bash
-mkdir -p ~/Applications && tar -xzf Ludex-1.17.0-linux-x64.tar.gz -C ~/Applications
+mkdir -p ~/Applications && tar -xzf Ludex-1.17.1-linux-x64.tar.gz -C ~/Applications
 ~/Applications/Ludex/Ludex
 ```
 
@@ -147,9 +147,9 @@ libICE, libSM, libGL, libfontconfig, libfreetype, libxkbcommon; под Wayland �
 
 ### macOS 11+ (Apple Silicon и Intel) <a id="macos"></a>
 
-`Ludex-1.17.0-macos-arm64.dmg` — для Apple Silicon (M1–M4), `Ludex-1.17.0-macos-x64.dmg` — для Intel.
+`Ludex-1.17.1-macos-arm64.dmg` — для Apple Silicon (M1–M4), `Ludex-1.17.1-macos-x64.dmg` — для Intel.
 Откройте `.dmg`, перетащите Ludex в `Applications`. Рядом в релизе лежат те же сборки в `.zip`
-(`Ludex-1.17.0-macos-arm64.zip` / `-x64.zip`) — если удобнее архив (его надо просто распаковать).
+(`Ludex-1.17.1-macos-arm64.zip` / `-x64.zip`) — если удобнее архив (его надо просто распаковать).
 
 Приложение не подписано сертификатом Apple, поэтому первый запуск — правый клик по `Ludex.app`
 → **«Открыть»** → **«Открыть»** (или в Терминале: `xattr -dr com.apple.quarantine /Applications/Ludex.app`).
@@ -163,6 +163,22 @@ libICE, libSM, libGL, libfontconfig, libfreetype, libxkbcommon; под Wayland �
 | Обложки, темы, обои, поиск | да | да | да |
 | Автозапуск с системой | да (реестр) | нет | нет |
 | «Запуск от администратора» | да (UAC) | нет | нет |
+
+### Почему в поставке много файлов
+
+Приложение публикуется как набор файлов (`PublishSingleFile=false`): `Ludex`/`Ludex.exe` плюс
+сборки .NET и Avalonia рядом. Так запуск быстрее — не нужно распаковывать встроенный рантайм
+во временную папку при каждом старте (замеры: окно за ~0.5 с вместо ~1.5 с).
+
+Обрезка неиспользуемого кода (`PublishTrimmed` в режиме `partial`) уменьшила поставку с 215
+файлов / 92 МБ до **92 файлов / 42 МБ** — лишние сборки фреймворка в архив больше не попадают.
+
+Собрать всё в «несколько dll» нельзя без риска: .NET не поддерживает слияние сборок, а
+сторонние утилиты вроде ILRepack ломают ресурсные адреса Avalonia (`avares://…` — по имени
+сборки грузятся темы и картинки). Раскладывать сборки по подпапкам тоже нельзя: загрузчик
+ищет их рядом с исполняемым файлом согласно `Ludex.deps.json`. Поэтому «аккуратность» решена
+на уровне архива: пользователь получает **одну папку** `Ludex-<версия>`, внутри — файлы
+приложения и `КАК-ЗАПУСТИТЬ.txt`, а на Linux — ещё ярлык и иконку.
 
 ## Первый запуск
 
@@ -256,7 +272,7 @@ cd installer && makensis Ludex.nsi
 отдельным скриптом — на Linux, без macOS и без подписи Apple:
 
 ```bash
-./tools/make-dmg.sh release/macos-arm64/Ludex.app Ludex-1.17.0-macos-arm64.dmg "Ludex 1.17.0" 150
+./tools/make-dmg.sh release/macos-arm64/Ludex.app Ludex-1.17.1-macos-arm64.dmg "Ludex 1.17.1" 150
 ```
 
 Как собрать эти утилиты на Ubuntu/Debian (проверено на 24.04, gcc 13, OpenSSL 3):

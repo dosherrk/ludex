@@ -9,8 +9,8 @@
     <RootNamespace>GameVault</RootNamespace>
     <ApplicationIcon>app.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>1.17.0</Version>
-    <FileVersion>1.17.0.0</FileVersion>
+    <Version>1.17.1</Version>
+    <FileVersion>1.17.1.0</FileVersion>
     <Product>Ludex</Product>
     <Company>Ludex</Company>
     <Description>Ludex - local game library with automatic artwork</Description>
@@ -19,10 +19,27 @@
     <InvariantGlobalization>false</InvariantGlobalization>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <DebugType>none</DebugType>
+
+    <!-- Обрезка неиспользуемого кода: 215 файлов → ~90, 92 МБ → ~42 МБ.
+         Настройки и библиотека пишутся через System.Text.Json, поэтому
+         рефлексию сериализатора нужно оставить включённой. -->
+    <PublishTrimmed>true</PublishTrimmed>
+    <TrimMode>partial</TrimMode>
+    <JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
+    <!--
+      IL2026: анализатор предупреждает про System.Text.Json с рефлексией. У нас это безопасно:
+      настройки, библиотека и кэши — это наши собственные модели из этой же сборки, которая
+      в partial-режиме не обрезается (см. TrimmerRootAssembly), а сериализатор получает
+      TypeInfoResolver по умолчанию. Проверено вживую на trimmed-сборке: library.json и
+      settings.json читаются и пишутся. Полноценное решение — source-generated контексты.
+    -->
+    <NoWarn>$(NoWarn);IL2026</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
     <AvaloniaResource Include="Assets/**" />
+    <!-- модели из этой сборки нужны сериализатору целиком -->
+    <TrimmerRootAssembly Include="Ludex" />
   </ItemGroup>
 
   <ItemGroup>
