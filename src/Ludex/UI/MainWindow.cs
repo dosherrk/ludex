@@ -74,9 +74,17 @@ public sealed class MainWindow : Window
     private DispatcherTimer? _eventTimer;
     private string? _statusPending;
     private bool _statusSwitching;
+
+    /// <summary>
+    /// Активные процессы: ключ → текст. Пока список не пуст, слева показывается последний
+    /// из них; когда процессов не осталось — «Готово · игр: N». Так строка состояния
+    /// не может «зависнуть» на промежуточной фразе.
+    /// </summary>
+    private readonly List<(string Key, string Text)> _processes = new();
     private CancellationTokenSource? _artCts;
     private SettingsPanel? _settingsPanel;
     private IntegrationsPanel? _integrationsPanel;
+    private HiddenPanel? _hiddenPanel;
     private AvaloniaPath? _maximizePath;
 
     private Grid _wallpaperLayer = null!;
@@ -100,6 +108,14 @@ public sealed class MainWindow : Window
         {
             Storage.SaveGames(_games);
             AppPaths.Log($"Убрано несуществующих игр: {phantoms}");
+        }
+
+        // и дубли: одна игра могла прийти и из папки, и из лаунчера
+        var duplicates = RemoveDuplicates();
+        if (duplicates > 0)
+        {
+            Storage.SaveGames(_games);
+            AppPaths.Log($"Убрано дублей: {duplicates}");
         }
 
         _search = _settings.LastSearch ?? "";
@@ -675,6 +691,7 @@ public sealed class MainWindow : Window
 
         // процессы (сканирование, обложки, размеры) — рядом с полоской
         _statusLabel = Ui.T(Loc.T("status.ready"), 11.5, Skin.TextDim);
+        _statusLabel.TextTrimming = TextTrimming.CharacterEllipsis;
         _statusLabel.Margin = new Thickness(14, 0, 12, 0);
         _statusLabel.Transitions = new Transitions
         {
@@ -689,6 +706,8 @@ public sealed class MainWindow : Window
 
         // разовые события (игра запущена, удалена, ошибка) — в правом нижнем углу
         _eventLabel = Ui.T("", 11.5, Skin.TextMuted);
+        _eventLabel.TextTrimming = TextTrimming.CharacterEllipsis;
+        _eventLabel.MaxWidth = 520;
         _eventLabel.HorizontalAlignment = HorizontalAlignment.Right;
         _eventLabel.VerticalAlignment = VerticalAlignment.Center;
         _eventLabel.Opacity = 0;
@@ -707,6 +726,8 @@ public sealed class MainWindow : Window
         // новая строка после перестройки окна начинает с чистого листа
         _statusPending = null;
         _statusSwitching = false;
+        _eventTimer?.Stop();
+        _eventTimer = null;
 
         border.Child = grid;
         Grid.SetRow(border, 2);
@@ -1146,6 +1167,9 @@ public sealed class MainWindow : Window
         menu.Item(Loc.T("ctx.fav"), () => ToggleFavorite(game));
         menu.Separator();
         menu.Item(Loc.T("ctx.remove"), () => RemoveGame(game), true);
+        if (LauncherUninstall.Available(game))
+            menu.Item(Loc.F("ctx.uninstallLauncher", LauncherUninstall.LauncherName(game.Source)),
+                () => UninstallViaLauncher(game), true);
         menu.Item(Loc.T("ctx.uninstall"), () => DeleteFromDisk(game), true);
 
         return menu;
@@ -1258,6 +1282,15 @@ public sealed class MainWindow : Window
         var removeBtn = Ui.GhostButton(Loc.T("btn.remove"), () => RemoveGame(game), Skin.Danger);
         removeBtn.Margin = new Thickness(0, 0, 10, 8);
         secondaryRow.Children.Add(removeBtn);
+
+        if (LauncherUninstall.Available(game))
+        {
+            var viaLauncher = Ui.GhostButton(
+                Loc.F("btn.deleteLauncher", LauncherUninstall.LauncherName(game.Source)),
+                () => UninstallViaLauncher(game), Skin.Danger);
+            viaLauncher.Margin = new Thickness(0, 0, 10, 8);
+            secondaryRow.Children.Add(viaLauncher);
+        }
 
         var deleteBtn = Ui.GhostButton(Loc.T("btn.deleteDisk"), () => DeleteFromDisk(game), Skin.Danger);
         deleteBtn.Margin = new Thickness(0, 0, 10, 8);
@@ -1644,6 +1677,45 @@ public sealed class MainWindow : Window
         ShowEvent(Loc.T("status.removed"));
     }
 
+    /// <summary>
+    /// Удаление через лаунчер: открываем родной деинсталлятор Steam/Epic. Он сам уберёт
+    /// файлы и манифест, поэтому игра не вернётся в библиотеку фантомом.
+    /// </summary>
+    private async void UninstallViaLauncher(GameEntry game)
+    {
+        var url = LauncherUninstall.UrlFor(game);
+        if (url == null)
+        {
+            DeleteFromDisk(game);
+            return;
+        }
+
+        var launcher = LauncherUninstall.LauncherName(game.Source);
+        var ok = await Dialogs.ConfirmAsync(this, Loc.T("dlg.launcherDeleteTitle"),
+            Loc.F("dlg.launcherDeleteText", game.Title, launcher),
+            Loc.F("btn.openLauncher", launcher), Loc.T("btn.cancel"));
+        if (!ok) return;
+
+        ProcessBegin("uninstall", Loc.F("status.uninstallOpening", launcher));
+        try
+        {
+            Shell.OpenUrl(url);
+            AppPaths.Log($"Удаление через лаунчер: {game.Title} → {url}");
+            ShowEvent(Loc.F("status.uninstallOpened", launcher), sticky: true);
+        }
+        catch (Exception ex)
+        {
+            AppPaths.Log("uninstall via launcher failed: " + ex.Message);
+            ShowEvent(Loc.T("status.deleteFailed"));
+        }
+        finally
+        {
+            ProcessEnd("uninstall");
+        }
+
+        _detailLayer.IsVisible = false;
+    }
+
     /// <summary>Удаление игры с диска: сначала деинсталлятор, иначе — папка целиком.</summary>
     private async void DeleteFromDisk(GameEntry game)
     {
@@ -1669,20 +1741,33 @@ public sealed class MainWindow : Window
         if (!ok) return;
 
         _detailLayer.IsVisible = false;
-        SetStatus(Loc.F("status.deleting", game.Title));
+        ProcessBegin("delete", Loc.F("status.deleting", game.Title));
 
-        var (success, _, error) = await Task.Run(() => Uninstaller.RemoveAsync(game, phase =>
+        (bool ok, bool usedUninstaller, string error) result;
+        try
         {
-            if (phase == "deleting-folder")
-                Dispatcher.UIThread.Post(() => SetStatus(Loc.F("status.deleting", game.Title)));
-        }));
+            result = await Task.Run(() => Uninstaller.RemoveAsync(game, phase =>
+            {
+                if (phase == "deleting-folder")
+                    ProcessUpdate("delete", Loc.F("status.deleting", game.Title));
+            }));
+        }
+        catch (Exception ex)
+        {
+            result = (false, false, ex.Message);
+        }
+        finally
+        {
+            // строка состояния не должна оставаться на «Удаляю…»
+            ProcessEnd("delete");
+        }
 
-        if (!success)
+        if (!result.ok)
         {
             ShowEvent(Loc.T("status.deleteFailed"));
-            Dialogs.ShowError(this, string.IsNullOrEmpty(error)
+            Dialogs.ShowError(this, string.IsNullOrEmpty(result.error)
                 ? Loc.T("status.deleteFailed")
-                : $"{Loc.T("status.deleteFailed")}: {error}");
+                : $"{Loc.T("status.deleteFailed")}: {result.error}");
             return;
         }
 
@@ -1706,6 +1791,7 @@ public sealed class MainWindow : Window
         HideForever(game);
         _games.Remove(game);
         Storage.SaveGames(_games);
+        RefreshIdleStatus();
         _detailLayer.IsVisible = false;
         RenderGrid();
     }
@@ -1722,15 +1808,7 @@ public sealed class MainWindow : Window
             CloseSettings();
             _ = CheckUpdatesAsync(silent: false);
         };
-        _settingsPanel.HiddenRestored += () =>
-        {
-            _settings.HiddenGames.Clear();
-            Storage.SaveSettings(_settings);
-            CloseSettings();
-            AppPaths.Log("Скрытые игры возвращены в библиотеку");
-            if (_settings.Folders.Count > 0) _ = StartScanAsync();
-            else _ = ImportLaunchersAsync();
-        };
+        _settingsPanel.HiddenListRequested += ShowHiddenGames;
 
         _settingsPanel.HorizontalAlignment = HorizontalAlignment.Center;
         _settingsPanel.VerticalAlignment = VerticalAlignment.Center;
@@ -1775,6 +1853,72 @@ public sealed class MainWindow : Window
         });
     }
 
+    /// <summary>Список скрытых игр: вернуть можно по одной.</summary>
+    private void ShowHiddenGames()
+    {
+        if (_settings.HiddenGames.Count == 0)
+        {
+            ShowEvent(Loc.T("hidden.empty"));
+            return;
+        }
+
+        _hiddenPanel = new HiddenPanel(_settings.HiddenGames, HiddenTitle);
+        _hiddenPanel.Closed += CloseSettings;
+        _hiddenPanel.Restored += key =>
+        {
+            _settings.HiddenGames.Remove(key);
+            _settings.HiddenTitles.Remove(key);
+            Storage.SaveSettings(_settings);
+            AppPaths.Log($"Игра возвращена в библиотеку: {key}");
+            ShowEvent(Loc.T("hidden.restored"));
+            RefreshLibraryFromDisk();
+        };
+        _hiddenPanel.RestoredAll += () =>
+        {
+            var count = _settings.HiddenGames.Count;
+            _settings.HiddenGames.Clear();
+            _settings.HiddenTitles.Clear();
+            Storage.SaveSettings(_settings);
+            AppPaths.Log($"Скрытые игры возвращены: {count}");
+            ShowEvent(Loc.F("hidden.restoredMany", count));
+            RefreshLibraryFromDisk();
+        };
+
+        _hiddenPanel.HorizontalAlignment = HorizontalAlignment.Center;
+        _hiddenPanel.VerticalAlignment = VerticalAlignment.Center;
+        _hiddenPanel.Margin = new Thickness(24);
+
+        _settingsLayer.Child = _hiddenPanel;
+        _settingsLayer.Opacity = 0;
+        _settingsLayer.IsVisible = true;
+
+        _hiddenPanel.RenderTransform = new ScaleTransform(0.965, 0.965);
+        Dispatcher.UIThread.Post(() =>
+        {
+            _settingsLayer.Opacity = 1;
+            _hiddenPanel.RenderTransform = new ScaleTransform(1, 1);
+        });
+    }
+
+    /// <summary>Название скрытой игры: сохранённое при скрытии, иначе — имя папки.</summary>
+    private string HiddenTitle(string key)
+    {
+        if (_settings.HiddenTitles.TryGetValue(key, out var title) && !string.IsNullOrWhiteSpace(title))
+            return title;
+
+        var name = key.TrimEnd('/', '\\');
+        var slash = name.LastIndexOf('/');
+        name = slash >= 0 ? name[(slash + 1)..] : name;
+        return string.IsNullOrWhiteSpace(name) ? key : name;
+    }
+
+    /// <summary>После возврата скрытых: снова собрать библиотеку из папок и лаунчеров.</summary>
+    private void RefreshLibraryFromDisk()
+    {
+        if (_settings.Folders.Count > 0) _ = StartScanAsync();
+        else _ = ImportLaunchersAsync(quiet: true);
+    }
+
     private void CloseSettings()
     {
         if (!_settingsLayer.IsVisible) return;
@@ -1789,12 +1933,14 @@ public sealed class MainWindow : Window
         _settingsLayer.Opacity = 0;
         if (_settingsPanel != null) _settingsPanel.RenderTransform = new ScaleTransform(0.98, 0.98);
         if (_integrationsPanel != null) _integrationsPanel.RenderTransform = new ScaleTransform(0.98, 0.98);
+        if (_hiddenPanel != null) _hiddenPanel.RenderTransform = new ScaleTransform(0.98, 0.98);
         DispatcherTimer.RunOnce(() =>
         {
             _settingsLayer.IsVisible = false;
             _settingsLayer.Child = null;
             _settingsPanel = null;
             _integrationsPanel = null;
+            _hiddenPanel = null;
 
             // кастомизация применяется сразу: перекрашиваем окно после закрытия панели
             if (_appearanceDirty)
@@ -2171,6 +2317,55 @@ public sealed class MainWindow : Window
     }
 
     /// <summary>Строка состояния меняется с мягким проявлением, а не «прыжком» текста.</summary>
+    /// <summary>Начать процесс: текст сразу появляется в строке состояния.</summary>
+    private void ProcessBegin(string key, string text)
+    {
+        RunOnUi(() =>
+        {
+            _processes.RemoveAll(p => p.Key == key);
+            _processes.Add((key, text));
+            RefreshProcessStatus();
+        });
+    }
+
+    /// <summary>Обновить текст процесса (например, счётчик обложек).</summary>
+    private void ProcessUpdate(string key, string text)
+    {
+        RunOnUi(() =>
+        {
+            var index = _processes.FindIndex(p => p.Key == key);
+            if (index < 0) _processes.Add((key, text));
+            else _processes[index] = (key, text);
+
+            RefreshProcessStatus();
+        });
+    }
+
+    /// <summary>Процесс закончился: строка возвращается к «Готово · игр: N» или к другому активному процессу.</summary>
+    private void ProcessEnd(string key)
+    {
+        RunOnUi(() =>
+        {
+            _processes.RemoveAll(p => p.Key == key);
+            RefreshProcessStatus();
+        });
+    }
+
+    private void RefreshProcessStatus()
+    {
+        if (_processes.Count > 0) SetStatus(_processes[^1].Text);
+        else SetStatus(_idleStatus());
+    }
+
+    private string _idleStatus() => Loc.F("status.done", _games.Count);
+
+    /// <summary>Выполнить на UI-потоке (строку состояния дёргают и фоновые задачи).</summary>
+    private void RunOnUi(Action action)
+    {
+        if (Dispatcher.UIThread.CheckAccess()) action();
+        else Dispatcher.UIThread.Post(action);
+    }
+
     private void SetStatus(string text)
     {
         if (_statusLabel == null) return;
@@ -2262,8 +2457,15 @@ public sealed class MainWindow : Window
         if (key.Length == 0 || _settings.HiddenGames.Contains(key)) return;
 
         _settings.HiddenGames.Add(key);
+        _settings.HiddenTitles[key] = game.Title;
         Storage.SaveSettings(_settings);
         AppPaths.Log($"Игра скрыта навсегда: {game.Title} ({key})");
+    }
+
+    /// <summary>Обновить строку состояния, если сейчас не идёт ни один процесс.</summary>
+    private void RefreshIdleStatus()
+    {
+        if (_processes.Count == 0) RunOnUi(RefreshProcessStatus);
     }
 
     private void UpdateCount()
@@ -2292,7 +2494,7 @@ public sealed class MainWindow : Window
         var ct = _workCts.Token;
 
         _progress.SetActive(true);
-        SetStatus(Loc.T("status.scanFolders"));
+        ProcessBegin("scan", Loc.T("status.scanFolders"));
 
         try
         {
@@ -2310,6 +2512,19 @@ public sealed class MainWindow : Window
 
             if (ct.IsCancellationRequested) return;
 
+            // «программы» (обои, саундпады, прицелы, драйверы) отсеиваются, если включён фильтр
+            if (_settings.FilterPrograms)
+            {
+                var before = hits.Count;
+                hits = hits.Where(h => !Scanner.LooksLikeProgram(h.Title, h.ExePath)).ToList();
+                var skipped = before - hits.Count;
+                if (skipped > 0)
+                {
+                    AppPaths.Log($"Отсеяно программ: {skipped}");
+                    ShowEvent(Loc.F("status.filtered", skipped), sticky: true);
+                }
+            }
+
             var added = MergeHits(hits);
             var imported = await ImportLaunchersAsync(quiet: true);
             Storage.SaveGames(_games);
@@ -2317,7 +2532,7 @@ public sealed class MainWindow : Window
 
             var message = folders.Count > 0 ? Loc.F("status.found", hits.Count) : "";
             if (imported > 0) message = (message + "  " + Loc.F("status.launchers", imported)).Trim();
-            SetStatus(message.Length > 0 ? message : Loc.T("status.ready"));
+            ProcessUpdate("scan", message.Length > 0 ? message : Loc.T("status.scanFolders"));
 
             await FetchArtworkForAsync(_games.Where(g => string.IsNullOrEmpty(g.CoverFile) || !File.Exists(g.CoverFile)).ToList());
             Storage.SaveGames(_games);
@@ -2326,7 +2541,7 @@ public sealed class MainWindow : Window
         }
         catch (OperationCanceledException)
         {
-            SetStatus(Loc.T("status.ready"));
+            // скан отменён — ниже в finally процесс всё равно закрывается
         }
         catch (Exception ex)
         {
@@ -2339,7 +2554,7 @@ public sealed class MainWindow : Window
             _progress.SetActive(false);
             _scanButton.Opacity = 1;
             _scanButton.IsEnabled = true;
-            SetStatus(Loc.F("status.done", _games.Count));
+            ProcessEnd("scan");
         }
     }
 
@@ -2365,17 +2580,35 @@ public sealed class MainWindow : Window
             return 0;
         }
 
-        if (!quiet) SetStatus(Loc.T("status.importing"));
+        if (!quiet) ProcessBegin("import", Loc.T("status.importing"));
+
+        if (_settings.FilterPrograms)
+        {
+            var before = found.Count;
+            found = found
+                .Where(f => !Scanner.LooksLikeProgram(f.Title, string.IsNullOrWhiteSpace(f.Exe) ? f.Folder : f.Exe))
+                .ToList();
+            if (before != found.Count) AppPaths.Log($"Отсеяно программ среди игр лаунчеров: {before - found.Count}");
+        }
 
         var added = MergeImported(found);
         var pruned = PrunePhantomGames();
         if (pruned > 0) AppPaths.Log($"Убрано несуществующих игр: {pruned}");
+
+        var dupes = RemoveDuplicates();
+        if (dupes > 0)
+        {
+            AppPaths.Log($"Убрано дублей: {dupes}");
+            ShowEvent(Loc.F("status.dupes", dupes), sticky: true);
+        }
+
         Storage.SaveGames(_games);
 
         if (!quiet)
         {
             RenderGrid();
-            SetStatus(Loc.F("status.launchers", found.Count));
+            ProcessUpdate("import", Loc.F("status.launchers", found.Count));
+            ProcessEnd("import");
         }
 
         var imported = new HashSet<string>(found.Select(f => f.Folder), StringComparer.OrdinalIgnoreCase);
@@ -2401,10 +2634,11 @@ public sealed class MainWindow : Window
             if (!string.IsNullOrWhiteSpace(game.FolderPath) && !byFolder.ContainsKey(game.FolderPath))
                 byFolder[game.FolderPath] = game;
 
+        // по названию сравниваем со ВСЕМИ записями: иначе игра, один раз получившая метку
+        // лаунчера, при следующем импорте из другой папки добавлялась второй карточкой
         var byTitle = new Dictionary<string, GameEntry>(StringComparer.OrdinalIgnoreCase);
         foreach (var game in _games)
-            if (game.Source == null && !game.FromLauncher)
-                byTitle.TryAdd(Normalize(game.Title), game);
+            byTitle.TryAdd(Normalize(game.Title), game);
 
         foreach (var item in found)
         {
@@ -2448,6 +2682,56 @@ public sealed class MainWindow : Window
             game.Source = null;
 
         return added;
+    }
+
+    /// <summary>
+    /// Убирает дубли в библиотеке. Два одинаковых названия — одна карточка: остаётся та,
+    /// что реально лежит на диске, с обложкой и источником; полезные поля переносятся.
+    /// Возвращает число убранных записей.
+    /// </summary>
+    private int RemoveDuplicates()
+    {
+        var keep = new Dictionary<string, GameEntry>(StringComparer.OrdinalIgnoreCase);
+        var remove = new List<GameEntry>();
+
+        int Score(GameEntry g) =>
+            (Directory.Exists(g.FolderPath) ? 4 : 0) +
+            (!string.IsNullOrEmpty(g.CoverFile) && File.Exists(g.CoverFile) ? 2 : 0) +
+            (g.FromLauncher ? 1 : 0);
+
+        foreach (var game in _games.OrderByDescending(Score).ThenBy(g => g.AddedUtc))
+        {
+            var key = Normalize(game.Title);
+            if (key.Length == 0) continue;
+
+            if (!keep.TryGetValue(key, out var survivor))
+            {
+                keep[key] = game;
+                continue;
+            }
+
+            // переносим то, чего не хватает у оставшейся записи
+            if (string.IsNullOrEmpty(survivor.ExePath)) survivor.ExePath = game.ExePath;
+            if (string.IsNullOrEmpty(survivor.CoverFile) && !string.IsNullOrEmpty(game.CoverFile))
+            {
+                survivor.CoverFile = game.CoverFile;
+                survivor.CoverIsPortrait = game.CoverIsPortrait;
+            }
+
+            if (!survivor.SteamAppId.HasValue) survivor.SteamAppId = game.SteamAppId;
+            if (survivor.Source == null) survivor.Source = game.Source;
+            if (game.PlayCount > survivor.PlayCount) survivor.PlayCount = game.PlayCount;
+            if (game.LastPlayedUtc.HasValue &&
+                (!survivor.LastPlayedUtc.HasValue || game.LastPlayedUtc > survivor.LastPlayedUtc))
+                survivor.LastPlayedUtc = game.LastPlayedUtc;
+            survivor.Favorite |= game.Favorite;
+
+            remove.Add(game);
+            AppPaths.Log($"Дубль убран: {game.Title} ({game.FolderPath}) → оставлено {survivor.FolderPath}");
+        }
+
+        foreach (var game in remove) _games.Remove(game);
+        return remove.Count;
     }
 
     /// <summary>Название без регистра и знаков — для сравнения игр между лаунчерами.</summary>
@@ -2496,6 +2780,10 @@ public sealed class MainWindow : Window
         return added;
     }
 
+    /// <summary>
+    /// Подбор обложек. На одну игру даётся не больше минуты: если обложка не нашлась,
+    /// алгоритм идёт дальше, а обложку можно поставить вручную.
+    /// </summary>
     private async Task FetchArtworkForAsync(List<GameEntry> games)
     {
         if (games.Count == 0) return;
@@ -2509,13 +2797,20 @@ public sealed class MainWindow : Window
         string? key = _settings.SteamGridDbKey;
 
         _progress.SetActive(true);
+        ProcessBegin("artwork", Loc.F("status.art", 0, total));
 
         var tasks = games.Select(async game =>
         {
             await semaphore.WaitAsync();
+
+            // свой лимит на игру: одна «залипшая» игра не тормозит остальные
+            using var gameCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            gameCts.CancelAfter(TimeSpan.FromSeconds(60));
+            var gameCt = gameCts.Token;
+
             try
             {
-                if (ct.IsCancellationRequested) return;
+                if (gameCt.IsCancellationRequested) return;
 
                 string? path = null;
                 var portrait = false;
@@ -2525,7 +2820,7 @@ public sealed class MainWindow : Window
                 // у игр из Steam appId известен из манифеста — берём обложку напрямую
                 if (game.SteamAppId.HasValue)
                 {
-                    var direct = await Artwork.DirectAsync(game.SteamAppId.Value, game.Id, ct);
+                    var direct = await Artwork.DirectAsync(game.SteamAppId.Value, game.Id, gameCt);
                     path = direct.path;
                     portrait = direct.portrait;
 
@@ -2535,7 +2830,7 @@ public sealed class MainWindow : Window
 
                 if (path == null)
                 {
-                    var auto = await Artwork.AutoArtworkAsync(game.Title, key, game.Id, ct);
+                    var auto = await Artwork.AutoArtworkAsync(game.Title, key, game.Id, gameCt);
                     path = auto.path;
                     portrait = auto.portrait;
                     appId = auto.appId;
@@ -2562,6 +2857,10 @@ public sealed class MainWindow : Window
 
                 Storage.SaveGames(_games);
             }
+            catch (OperationCanceledException) when (gameCts.IsCancellationRequested && !ct.IsCancellationRequested)
+            {
+                AppPaths.Log($"Обложка не найдена за минуту: {game.Title}");
+            }
             catch (Exception ex)
             {
                 AppPaths.Log("Artwork failed for " + game.Title + ": " + ex.Message);
@@ -2570,7 +2869,7 @@ public sealed class MainWindow : Window
             {
                 semaphore.Release();
                 var current = Interlocked.Increment(ref done);
-                await Dispatcher.UIThread.InvokeAsync(() => SetStatus(Loc.F("status.art", current, total)));
+                ProcessUpdate("artwork", Loc.F("status.art", current, total));
             }
         });
 
@@ -2584,7 +2883,7 @@ public sealed class MainWindow : Window
         }
 
         _progress.SetActive(false);
-        SetStatus(Loc.T("status.ready"));
+        ProcessEnd("artwork");
     }
 
     private async Task ComputeSizesAsync()
@@ -2592,9 +2891,10 @@ public sealed class MainWindow : Window
         var pending = _games.Where(g => g.SizeBytes <= 0).ToList();
         if (pending.Count == 0) return;
 
-        SetStatus(Loc.F("status.sizes", 0, pending.Count));
+        ProcessBegin("sizes", Loc.F("status.sizes", 0, pending.Count));
 
         var semaphore = new SemaphoreSlim(2);
+        int done = 0;
         var tasks = pending.Select(async game =>
         {
             await semaphore.WaitAsync();
@@ -2610,10 +2910,22 @@ public sealed class MainWindow : Window
             finally
             {
                 semaphore.Release();
+                var current = Interlocked.Increment(ref done);
+                if (current == pending.Count || current % 5 == 0)
+                    ProcessUpdate("sizes", Loc.F("status.sizes", current, pending.Count));
             }
         });
 
-        await Task.WhenAll(tasks);
+        try
+        {
+            await Task.WhenAll(tasks);
+        }
+        catch
+        {
+            // ignored
+        }
+
         Storage.SaveGames(_games);
+        ProcessEnd("sizes");
     }
 }

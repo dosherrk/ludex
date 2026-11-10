@@ -17,6 +17,9 @@ public sealed class LauncherGame
 
     /// <summary>Steam AppId (из манифеста) — по нему обложка берётся напрямую с CDN.</summary>
     public int? AppId;
+
+    /// <summary>Идентификатор внутри лаунчера (Epic AppName, GOG product id).</summary>
+    public string ExternalId = "";
 }
 
 /// <summary>Итог проверки одного лаунчера: установлен ли, сколько игр нашлось.</summary>
@@ -432,6 +435,7 @@ public static class Launchers
                         Folder = folder,
                         Exe = FindExe(folder),
                         AppId = appId,
+                        ExternalId = appId?.ToString() ?? "",
                     });
                 }
                 catch (Exception ex)
@@ -499,6 +503,7 @@ public static class Launchers
                     var title = Str(root, "DisplayName");
                     var location = Str(root, "InstallLocation");
                     var launch = Str(root, "LaunchExecutable");
+                    var appName = Str(root, "AppName");
                     if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(location)) continue;
                     if (IsToolOrRuntime(title) || !LooksInstalled(location)) continue;
 
@@ -507,6 +512,7 @@ public static class Launchers
                         Launcher = "epic",
                         Title = Clean(title),
                         Folder = location,
+                        ExternalId = appName,
                         Exe = launch != "" ? Path.Combine(location, launch.Replace('/', Path.DirectorySeparatorChar)) : FindExe(location),
                     });
                 }

@@ -135,20 +135,8 @@ public sealed class IntegrationsPanel : Border
         textColumn.Children.Add(name);
         textColumn.Children.Add(hint);
 
-        var badge = new Border
-        {
-            Width = 32,
-            Height = 32,
-            CornerRadius = new CornerRadius(8),
-            Background = Skin.PanelAlt,
-            Child = Ui.T(Initials(key), 11.5, Skin.TextMuted, FontWeight.Bold),
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        if (badge.Child is TextBlock initials)
-        {
-            initials.HorizontalAlignment = HorizontalAlignment.Center;
-            initials.VerticalAlignment = VerticalAlignment.Center;
-        }
+        // фирменный знак лаунчера вместо двух букв
+        var badge = LauncherLogo.Create(key, 32);
 
         var status = Ui.T(Loc.T("integrations.checking"), 10.5, Skin.TextDim);
         status.VerticalAlignment = VerticalAlignment.Center;
@@ -199,19 +187,6 @@ public sealed class IntegrationsPanel : Border
             Child = grid,
         };
     }
-
-    private static string Initials(string key) => key switch
-    {
-        "steam" => "ST",
-        "epic" => "EP",
-        "gog" => "GOG",
-        "ubisoft" => "UB",
-        "ea" => "EA",
-        "battlenet" => "BZ",
-        "heroic" => "HR",
-        "lutris" => "LT",
-        _ => key.Length >= 2 ? key[..2].ToUpperInvariant() : key.ToUpperInvariant(),
-    };
 
     private async Task LoadAsync(bool force = false)
     {

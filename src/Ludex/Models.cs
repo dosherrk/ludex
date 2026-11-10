@@ -17,6 +17,9 @@ public sealed class GameEntry
     public int? SteamAppId { get; set; }
     public string? SteamName { get; set; }
 
+    /// <summary>Идентификатор игры в лаунчере (Epic AppName, GOG product id) — для удаления оттуда.</summary>
+    public string? ExternalId { get; set; }
+
     /// <summary>Absolute path to the cached cover image (may be null -> placeholder).</summary>
     public string? CoverFile { get; set; }
     public bool CoverIsPortrait { get; set; }
@@ -74,6 +77,15 @@ public sealed class AppSettings
     /// их больше не добавляют, пока пользователь не нажмёт «Вернуть скрытые».
     /// </summary>
     public List<string> HiddenGames { get; set; } = new();
+
+    /// <summary>Названия скрытых игр (ключ папки → название) — чтобы список скрытых был читаемым.</summary>
+    public Dictionary<string, string> HiddenTitles { get; set; } = new();
+
+    /// <summary>
+    /// Отсеивать «программы» при сканировании: обои, саундпады, прицелы, тренеры,
+    /// драйверы и прочее, что похоже на игру только названием.
+    /// </summary>
+    public bool FilterPrograms { get; set; } = true;
 }
 
 public sealed class LibraryFile

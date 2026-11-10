@@ -260,6 +260,50 @@ public static class Scanner
     private static bool PathsEqual(string a, string b) =>
         string.Equals(a.TrimEnd('\\', '/'), b.TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Признаки программы, а не игры: обои, саундпад, прицел, тренер, драйвер, плеер.
+    /// Сравниваем название и имя исполняемого файла в «сплющенном» виде (только буквы и цифры).
+    /// </summary>
+    private static readonly string[] ProgramWords =
+    {
+        "wallpaperengine", "wallpaper", "livelywallpaper", "обои", "soundpad", "soundpad", "voicemod",
+        "crosshair", "прицел", "aimlab", "aimtrainer", "aimbot", "trainer", "тренер", "cheatengine",
+        "cheat", "чит", "obsstudio", "obs64", "streamlabs", "prismlive", "xsplit",
+        "discord", "teamspeak", "mumble", "mumble", "skype", "zoom", "teams", "slack", "telegram", "whatsapp",
+        "spotify", "foobar", "winamp", "vlc", "mpc", "mediaplayer", "potplayer", "kmplayer", "itunes",
+        "fraps", "rtss", "rivatuner", "afterburner", "cpuz", "gpuz", "hwinfo", "aida64", "speccy",
+        "benchmark", "cinebench", "furmark", "unigine", "3dmark", "novabench", "userbenchmark",
+        "драйвер", "realtek", "nvidia", "geforce", "amdsoftware", "radeon", "armoury", "icue",
+        "razer", "logitech", "corsair", "steelseries", "bloody", "a4tech",
+        "antivirus", "kaspersky", "eset", "avast", "avg", "malwarebytes", "defender", "ccleaner",
+        "cleaner", "winrar", "winzip", "7zip", "bandizip", "notepad", "putty", "winscp",
+        "photoshop", "gimp", "krita", "blender", "audacity", "reaper", "flstudio", "obsidian",
+        "chrome", "firefox", "opera", "browser", "браузер", "utorrent", "qbit",
+        "anydesk", "teamviewer", "rustdesk", "parsec", "sunshine", "moonlight",
+        "editor", "редактор", "visualstudio", "rider", "pycharm", "intellij", "netbeans",
+    };
+
+    /// <summary>Короткие слова ищем только как отдельное слово: иначе «aim» ловит названия игр.</summary>
+    private static readonly string[] ProgramWordsExact = { "aim", "obs", "cheat", "чит", "vpn", "proxifier" };
+
+    /// <summary>Похоже ли найденное на программу, а не на игру.</summary>
+    public static bool LooksLikeProgram(string title, string exePath)
+    {
+        var haystack = Normalize(title) + "|" + Normalize(Path.GetFileNameWithoutExtension(exePath ?? "")) +
+                       "|" + Normalize(Path.GetFileName(Path.GetDirectoryName(exePath ?? "") ?? ""));
+        if (haystack.Trim('|').Length == 0) return false;
+
+        foreach (var word in ProgramWords)
+            if (haystack.Contains(word, StringComparison.Ordinal)) return true;
+
+        var parts = haystack.Split(new[] { '|', ' ', '-', '_', '.', ',', '(', ')' },
+            StringSplitOptions.RemoveEmptyEntries);
+        foreach (var part in parts)
+            if (ProgramWordsExact.Contains(part, StringComparer.Ordinal)) return true;
+
+        return false;
+    }
+
     public static string Normalize(string s)
     {
         return Regex.Replace(s.ToLowerInvariant(), "[^a-z0-9а-яё]+", "");

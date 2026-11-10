@@ -38,6 +38,8 @@ public sealed class SettingsPanel : Border
     private bool _scanOnStartup;
     private bool _runAtStartup;
     private bool _checkUpdates;
+    private bool _filterPrograms;
+    private Toggle? _filterProgramsToggle;
 
     public bool ScanRequested { get; private set; }
 
@@ -54,7 +56,8 @@ public sealed class SettingsPanel : Border
     public event Action? UpdateCheckRequested;
 
     /// <summary>Вернуть игры, скрытые «навсегда» после удаления из библиотеки.</summary>
-    public event Action? HiddenRestored;
+    /// <summary>Открыть список скрытых игр (вернуть можно по одной).</summary>
+    public event Action? HiddenListRequested;
 
     public SettingsPanel(AppSettings settings)
     {
@@ -68,6 +71,7 @@ public sealed class SettingsPanel : Border
         _scanOnStartup = settings.AutoScanOnStartup;
         _runAtStartup = Autostart.IsEnabled();
         _checkUpdates = settings.CheckUpdatesOnStartup;
+        _filterPrograms = settings.FilterPrograms;
 
         MaxWidth = 860;
         MaxHeight = 720;
@@ -152,11 +156,12 @@ public sealed class SettingsPanel : Border
 
         if (settings_hasHidden())
         {
-            var restore = Ui.GhostButton(
-                Loc.F("settings.restoreHidden", _original.HiddenGames.Count),
-                () => HiddenRestored?.Invoke());
-            restore.Margin = new Thickness(12, 0, 0, 0);
-            listButtons.Children.Add(restore);
+            // вместо «вернуть всё разом» — вход в список, где игры возвращаются по одной
+            var hidden = Ui.GhostButton(
+                Loc.F("settings.hiddenList", _original.HiddenGames.Count),
+                () => HiddenListRequested?.Invoke());
+            hidden.Margin = new Thickness(12, 0, 0, 0);
+            listButtons.Children.Add(hidden);
         }
 
         body.Children.Add(listButtons);
@@ -266,6 +271,12 @@ public sealed class SettingsPanel : Border
         _autoUpdate = new Toggle(Loc.T("settings.autoupdate"), _checkUpdates,
             v => _checkUpdates = v);
         body.Children.Add(_autoUpdate);
+
+        // ---- отсев программ при сканировании
+        _filterProgramsToggle = new Toggle(Loc.T("settings.filterPrograms"), _filterPrograms,
+            v => _filterPrograms = v);
+        body.Children.Add(_filterProgramsToggle);
+        body.Children.Add(Ui.T(Loc.T("settings.filterProgramsHint"), 11, Skin.TextDim, wrap: TextWrapping.Wrap));
 
         var checkNow = Ui.GhostButton(Loc.T("settings.checkNow"), () => UpdateCheckRequested?.Invoke());
         checkNow.HorizontalAlignment = HorizontalAlignment.Left;
@@ -451,6 +462,7 @@ public sealed class SettingsPanel : Border
         _original.SteamGridDbKey = string.IsNullOrWhiteSpace(_keyBox.Text) ? null : _keyBox.Text.Trim();
         _original.AutoScanOnStartup = _autoScan.Value;
         _original.CheckUpdatesOnStartup = _autoUpdate.Value;
+        _original.FilterPrograms = _filterPrograms;
         _original.ExtraIgnoreExe = (_ignoreBox.Text ?? "")
             .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
             .Select(x => x.Trim())
