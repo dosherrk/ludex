@@ -256,7 +256,7 @@ cd installer && makensis Ludex.nsi
 отдельным скриптом — на Linux, без macOS и без подписи Apple:
 
 ```bash
-./tools/make-dmg.sh release/macos-arm64/Ludex.app Ludex-1.17.0-macos-arm64.dmg "Ludex 1.17.0" 90
+./tools/make-dmg.sh release/macos-arm64/Ludex.app Ludex-1.17.0-macos-arm64.dmg "Ludex 1.17.0" 150
 ```
 
 Как собрать эти утилиты на Ubuntu/Debian (проверено на 24.04, gcc 13, OpenSSL 3):
