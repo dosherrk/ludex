@@ -29,6 +29,7 @@ import sys
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
@@ -212,6 +213,84 @@ def save_checkpoint(path, rows):
         print(f"  ! чекпойнт: {e}", flush=True)
 
 
+# ---------------------------------------------------------------- описания и разработчики
+
+BROWSE_URL = "https://api.steampowered.com/IStoreBrowseService/GetItems/v1/"
+UA = "Mozilla/5.0 Ludex/1.19"
+
+
+def details_chunk(ids, lang, cc):
+    """Один запрос GetItems: до 200 приложений, иначе URL не влезает и магазин отвечает 400."""
+    req = {
+        "ids": [{"appid": i} for i in ids],
+        "context": {"language": lang, "country_code": cc.upper(), "steam_realm": 1},
+        "data_request": {"include_basic_info": True, "include_release": True},
+    }
+    url = BROWSE_URL + "?input_json=" + urllib.parse.quote(json.dumps(req, separators=(",", ":")))
+    r = urllib.request.Request(url, headers={"User-Agent": UA})
+    for attempt in range(4):
+        try:
+            with urllib.request.urlopen(r, timeout=60) as resp:
+                return json.load(resp)["response"]["store_items"]
+        except urllib.error.HTTPError as e:
+            if e.code == 400 and len(ids) > 20:
+                half = len(ids) // 2
+                return details_chunk(ids[:half], lang, cc) + details_chunk(ids[half:], lang, cc)
+            if e.code in (429, 403) and attempt < 3:
+                time.sleep(2.0 * (attempt + 1))
+                continue
+            raise
+        except Exception:
+            if attempt == 3:
+                raise
+            time.sleep(1.5)
+    return []
+
+
+def fetch_details(app_ids, lang, cc, gap_ms=140, workers=4):
+    """Название, разработчик, издатель, год и короткое описание — по 200 игр за запрос."""
+    info = {}
+    lock = threading.Lock()
+    next_slot = [time.monotonic()]
+
+    def slot():
+        with lock:
+            now = time.monotonic()
+            wait = max(0.0, next_slot[0] - now)
+            next_slot[0] = max(now, next_slot[0]) + gap_ms / 1000.0
+        if wait:
+            time.sleep(wait)
+
+    def work(chunk):
+        slot()
+        try:
+            items = details_chunk(chunk, lang, cc)
+        except Exception as e:
+            print(f"  ! описание {chunk[0]}…: {e}", flush=True)
+            return
+        got = {}
+        for it in items:
+            if not it.get("success"):
+                continue
+            bi = it.get("basic_info") or {}
+            rel = it.get("release") or {}
+            ts = rel.get("steam_release_date") or 0
+            year = time.gmtime(ts).tm_year if ts else 0
+            dev = (bi.get("developers") or [{}])[0].get("name", "") or ""
+            pub = (bi.get("publishers") or [{}])[0].get("name", "") or ""
+            desc = " ".join((bi.get("short_description") or "").split())
+            got[it["appid"]] = (it.get("name") or "", dev[:80], pub[:80], year, desc[:280])
+        with lock:
+            info.update(got)
+
+    chunks = [app_ids[i:i + 200] for i in range(0, len(app_ids), 200)]
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        list(pool.map(work, chunks))
+
+    print(f"  описания: {len(info)} из {len(app_ids)} игр, {len(chunks)} запросов", flush=True)
+    return info
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="catalog.json.gz")
@@ -221,20 +300,32 @@ def main():
     ap.add_argument("--lang", default="russian")
     ap.add_argument("--exclude-pages", type=int, default=0, help="страниц для бесплатных/MMO (0 — все)")
     ap.add_argument("--checkpoint", default="")
+    ap.add_argument("--details-top", type=int, default=0,
+                    help="сколько первых (самых заметных) игр снабдить описанием и разработчиком")
+    ap.add_argument("--base", default="",
+                    help="файл обхода: если есть — берём готовый, иначе пишем после обхода")
     args = ap.parse_args()
 
     started = time.time()
     fetcher = Fetcher(args.cc, args.lang, args.gap_ms)
 
     ex_limited = args.exclude_pages
-    try:
-        free = crawl(fetcher, "бесплатные", "maxprice=free", ex_limited)
-        mmo = crawl(fetcher, "MMO", "tags=128", ex_limited)
-        games = crawl(fetcher, "все игры", "", args.limit_pages,
-                      args.checkpoint or None, with_tags=True)
-    except Blocked:
-        print("Обход прерван: магазин ограничил запросы. Файл не записан.", flush=True)
-        return 2
+    base_ready = args.base and os.path.exists(args.base)
+    if base_ready:
+        print(f"обход не нужен: берём {args.base}", flush=True)
+        with open(args.base, encoding="utf-8") as f:
+            base = json.load(f)
+        games = {row[0]: (i, row[1], row[2] or []) for i, row in enumerate(base["rows"])}
+        free, mmo = set(), set()
+    else:
+        try:
+            free = crawl(fetcher, "бесплатные", "maxprice=free", ex_limited)
+            mmo = crawl(fetcher, "MMO", "tags=128", ex_limited)
+            games = crawl(fetcher, "все игры", "", args.limit_pages,
+                          args.checkpoint or None, with_tags=True)
+        except Blocked:
+            print("Обход прерван: магазин ограничил запросы. Файл не записан.", flush=True)
+            return 2
 
     if not games:
         print("Ничего не собрано.", flush=True)
@@ -253,8 +344,33 @@ def main():
         idx = sorted({labels.index(tag_to_genre[t]) for t in tags if t in tag_to_genre})
         out.append([app_id, name, " ".join(str(i) for i in idx)])
 
+    # базовый файл обхода — чтобы второй язык не обходил магазин заново
+    if args.base and not base_ready:
+        base_payload = {"rows": [[r[0], r[1], games[r[0]][2]] for r in out]}
+        tmp = args.base + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(base_payload, f, ensure_ascii=False, separators=(",", ":"))
+        os.replace(tmp, args.base)
+        print(f"база обхода: {args.base} ({len(out)} игр)", flush=True)
+
+    details_count = 0
+    if args.details_top > 0:
+        wanted = [r[0] for r in out[:args.details_top]]
+        info = fetch_details(wanted, args.lang, args.cc)
+        for row in out:
+            got = info.get(row[0])
+            if not got:
+                continue
+            name, dev, pub, year, desc = got
+            if name and len(row[1]) < 3:
+                row[1] = name
+            row.extend([dev, pub, year, desc])
+            details_count += 1
+
     payload = {
-        "v": 1,
+        "v": 2,
+        "lang": "ru" if args.lang.startswith("rus") else "en",
+        "details": details_count,
         "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "count": len(out),
         "genres": labels,

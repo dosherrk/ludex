@@ -47,7 +47,21 @@ public static class StoreCatalog
     /// Готовый каталог, который собирается в CI раз в сутки (workflow «catalog»).
     /// Так приложению не нужно самому обходить магазин: файл полный и свежий.
     /// </summary>
-    public const string RemoteCatalogUrl = "https://dosherrk.github.io/ludex/catalog.json.gz";
+    public static string[] RemoteCatalogUrls
+    {
+        get
+        {
+            var custom = Environment.GetEnvironmentVariable("LUDEX_CATALOG_URL");
+            if (!string.IsNullOrWhiteSpace(custom)) return new[] { custom };
+
+            // сначала свой язык (с описаниями), потом общий файл старых версий
+            return new[]
+            {
+                $"https://dosherrk.github.io/ludex/catalog.{(Loc.IsRu ? "ru" : "en")}.json.gz",
+                "https://dosherrk.github.io/ludex/catalog.json.gz",
+            };
+        }
+    }
 
     private static DateTime _remoteStamp;
     private static readonly TimeSpan FailTtl = TimeSpan.FromMinutes(10);
@@ -309,17 +323,30 @@ public static class StoreCatalog
     /// </summary>
     private static async Task<List<StoreGame>?> TryRemoteAsync(Action<string>? progress, CancellationToken ct)
     {
+        foreach (var url in RemoteCatalogUrls)
+        {
+            var ready = await TryRemoteFromAsync(url, progress, ct);
+            if (ready != null) return ready;
+            ct.ThrowIfCancellationRequested();
+        }
+
+        return null;
+    }
+
+    private static async Task<List<StoreGame>?> TryRemoteFromAsync(string url, Action<string>? progress,
+        CancellationToken ct)
+    {
         try
         {
             Report(progress, Loc.T("catalog.download"), 0.12);
 
             using var http = MakeClient();
-            http.Timeout = TimeSpan.FromSeconds(60);
+            http.Timeout = TimeSpan.FromSeconds(90);
 
-            using var response = await http.GetAsync(RemoteCatalogUrl, HttpCompletionOption.ResponseHeadersRead, ct);
+            using var response = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
             if (!response.IsSuccessStatusCode)
             {
-                AppPaths.Log($"StoreCatalog remote: HTTP {(int)response.StatusCode}");
+                AppPaths.Log($"StoreCatalog remote {url}: HTTP {(int)response.StatusCode}");
                 return null;
             }
 
@@ -365,7 +392,19 @@ public static class StoreCatalog
                     HeaderUrl = $"https://cdn.cloudflare.steamstatic.com/steam/apps/{appId}/header.jpg",
                 };
 
-                if (row.GetArrayLength() >= 3 && labels.Length > 0)
+                var len = row.GetArrayLength();
+
+                if (len >= 7)
+                {
+                    if (row[3].ValueKind == JsonValueKind.String) game.Developer = (row[3].GetString() ?? "").Trim();
+                    if (row[4].ValueKind == JsonValueKind.String) game.Publisher = (row[4].GetString() ?? "").Trim();
+                    if (row[5].ValueKind == JsonValueKind.Number && row[5].GetInt32() > 1900)
+                        game.ReleaseDate = row[5].GetInt32().ToString(CultureInfo.InvariantCulture);
+                    var text = (row[6].GetString() ?? "").Trim();
+                    if (text.Length > 0) game.Description = text;
+                }
+
+                if (len >= 3 && labels.Length > 0)
                 {
                     var idx = row[2].GetString() ?? "";
                     var genres = new List<string>(3);
@@ -397,7 +436,7 @@ public static class StoreCatalog
         }
         catch (Exception ex)
         {
-            AppPaths.Log("StoreCatalog remote: " + ex.Message);
+            AppPaths.Log($"StoreCatalog remote {url}: {ex.Message}");
             return null;
         }
     }
@@ -644,6 +683,10 @@ public static class StoreCatalog
         public int Id { get; set; }
         public string Name { get; set; } = "";
         public string[] G { get; set; } = Array.Empty<string>();
+        public string? Dev { get; set; }
+        public string? Pub { get; set; }
+        public string? Year { get; set; }
+        public string? About { get; set; }
     }
 
     private static DateTime ReadCacheStamp()
@@ -682,6 +725,10 @@ public static class StoreCatalog
                 };
 
                 game.Genres = e.G;
+                game.Developer = e.Dev ?? "";
+                game.Publisher = e.Pub ?? "";
+                game.ReleaseDate = e.Year;
+                game.Description = e.About;
                 game.Sections.Add("all");
 
                 var cover = Path.Combine(StoreFeed.CoversDir, $"{e.Id}.jpg");
@@ -712,6 +759,10 @@ public static class StoreCatalog
                     Id = g.AppId,
                     Name = g.Name,
                     G = g.Genres,
+                    Dev = string.IsNullOrEmpty(g.Developer) ? null : g.Developer,
+                    Pub = string.IsNullOrEmpty(g.Publisher) ? null : g.Publisher,
+                    Year = g.ReleaseDate,
+                    About = string.IsNullOrEmpty(g.Description) ? null : g.Description,
                 });
             }
 
