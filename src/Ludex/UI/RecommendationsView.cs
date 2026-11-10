@@ -52,7 +52,6 @@ public sealed class RecommendationsView : Grid
     private readonly Border _loading;
     private readonly Border _detail;
     private readonly Border _more;
-    private readonly TextBlock _moreLabel;
 
     private List<StoreGame> _games = new();
     private CancellationTokenSource? _cts;
@@ -67,7 +66,7 @@ public sealed class RecommendationsView : Grid
         _status = status;
         _count = count;
 
-        RowDefinitions = new RowDefinitions("Auto,*,Auto");
+        RowDefinitions = new RowDefinitions("Auto,*");
 
         // ---------------------------------------------------------------- панель фильтров
         var toolbar = new StackPanel { Spacing = 9, Margin = new Thickness(22, 12, 22, 8) };
@@ -119,9 +118,49 @@ public sealed class RecommendationsView : Grid
         Children.Add(toolbar);
 
         // ---------------------------------------------------------------- карточки
+        // кнопка «показать ещё» — в конце списка, под последней карточкой:
+        // её видно, только когда долистали до низа
+        var moreContent = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 9,
+            VerticalAlignment = VerticalAlignment.Center,
+            Children =
+            {
+                Ui.T(Loc.T("recs.more"), 13, Skin.OnAccent, FontWeight.SemiBold),
+                Ui.Icon("M1 4 L7 10 L13 4", Skin.OnAccent, 15, 15, stroke: true, thickness: 2.1),
+            },
+        };
+
+        _more = Ui.Clickable(moreContent, () =>
+        {
+            _shown += PageSize;
+            Refresh();
+        }, Skin.Accent, Skin.AccentHover, new CornerRadius(999), new Thickness(26, 13));
+
+        _more.HorizontalAlignment = HorizontalAlignment.Center;
+        _more.Margin = new Thickness(0, 18, 0, 24);
+        _more.BoxShadow = Ui.GlowShadow();
+        _more.IsVisible = false;
+        _more.Transitions = new Transitions
+        {
+            new BoxShadowsTransition
+            {
+                Property = Border.BoxShadowProperty,
+                Duration = TimeSpan.FromMilliseconds(200),
+            },
+        };
+        _more.PointerEntered += (_, _) => _more.BoxShadow = Ui.GlowShadow(strong: true);
+        _more.PointerExited += (_, _) => _more.BoxShadow = Ui.GlowShadow();
+
+        var cardsHost = new StackPanel
+        {
+            Children = { _cards, _more },
+        };
+
         var scroll = new ScrollViewer
         {
-            Content = _cards,
+            Content = cardsHost,
             Padding = new Thickness(20, 4, 14, 12),
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
@@ -157,25 +196,12 @@ public sealed class RecommendationsView : Grid
         Grid.SetRow(_loading, 1);
         Children.Add(_loading);
 
-        // ---------------------------------------------------------------- «показать ещё»
-        _moreLabel = Ui.T(Loc.T("recs.more"), 12.5, Skin.Text, FontWeight.SemiBold);
-        _more = Ui.Clickable(_moreLabel, () =>
-        {
-            _shown += PageSize;
-            Refresh();
-        }, Skin.PanelAlt, Skin.CardHover, new CornerRadius(4), new Thickness(20, 10));
-        _more.HorizontalAlignment = HorizontalAlignment.Left;
-        _more.Margin = new Thickness(22, 0, 0, 10);
-        _more.IsVisible = false;
-        Grid.SetRow(_more, 2);
-        Children.Add(_more);
-
         _detail = new Border { Background = Skin.Overlay, IsVisible = false };
         _detail.PointerPressed += (_, e) =>
         {
             if (ReferenceEquals(e.Source, _detail)) _detail.IsVisible = false;
         };
-        Grid.SetRowSpan(_detail, 3);
+        Grid.SetRowSpan(_detail, 2);
         Children.Add(_detail);
 
         KeyDown += (_, e) =>
@@ -381,8 +407,8 @@ public sealed class RecommendationsView : Grid
         _found.Text = Loc.F("catalog.showing", slice.Count, list.Count);
         _empty.Text = Loc.T("recs.empty");
         _emptyBox.IsVisible = !_loading.IsVisible && list.Count == 0;
+        // кнопка нужна только если в каталоге осталось что показать
         _more.IsVisible = list.Count > slice.Count;
-        _moreLabel.Text = Loc.F("recs.more", Math.Min(PageSize, list.Count - slice.Count));
         _count?.Invoke(list.Count);
 
         if (slice.Count > 0 && !_loading.IsVisible) Ui.FadeSlideIn(_cards, 0, 160, 6);
@@ -806,6 +832,5 @@ public sealed class RecommendationsView : Grid
         };
 
         Shell.OpenUrl(url);
-        _status?.Invoke(Loc.F("recs.opening", game.Name));
     }
 }

@@ -99,7 +99,7 @@ public static class Loc
         ["recs.sectionFree"] = ("Бесплатные", "Free"),
         ["recs.sortStore"] = ("Как в магазине", "Store order"),
         ["recs.sortPopular"] = ("По популярности", "By popularity"),
-        ["recs.more"] = ("Показать ещё {0}", "Show {0} more"),
+        ["recs.more"] = ("Показать ещё", "Show more"),
         ["recs.devLine"] = ("{0} · издатель: {1}", "{0} · publisher: {1}"),
         ["recs.owners"] = ("владельцев: {0}", "owners: {0}"),
         ["recs.online"] = ("сейчас играют: {0}", "playing now: {0}"),
