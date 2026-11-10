@@ -2648,6 +2648,8 @@ public sealed class MainWindow : Window
             {
                 entry.Source = item.Launcher;
                 if (item.AppId.HasValue && !entry.SteamAppId.HasValue) entry.SteamAppId = item.AppId;
+                if (string.IsNullOrEmpty(entry.ExternalId) && !string.IsNullOrEmpty(item.ExternalId))
+                    entry.ExternalId = item.ExternalId;
                 if (string.IsNullOrEmpty(entry.ExePath)) entry.ExePath = item.Exe;
                 if (!entry.Locked && string.IsNullOrWhiteSpace(entry.Title)) entry.Title = item.Title;
                 continue;
@@ -2668,6 +2670,7 @@ public sealed class MainWindow : Window
                 Source = item.Launcher,
                 FromLauncher = true,
                 SteamAppId = item.AppId,
+                ExternalId = string.IsNullOrEmpty(item.ExternalId) ? null : item.ExternalId,
                 AddedUtc = DateTime.UtcNow,
             };
             _games.Add(created);
@@ -2719,6 +2722,7 @@ public sealed class MainWindow : Window
             }
 
             if (!survivor.SteamAppId.HasValue) survivor.SteamAppId = game.SteamAppId;
+            if (string.IsNullOrEmpty(survivor.ExternalId)) survivor.ExternalId = game.ExternalId;
             if (survivor.Source == null) survivor.Source = game.Source;
             if (game.PlayCount > survivor.PlayCount) survivor.PlayCount = game.PlayCount;
             if (game.LastPlayedUtc.HasValue &&

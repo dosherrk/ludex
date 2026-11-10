@@ -840,6 +840,8 @@ public static class Launchers
                     Title = Clean(title),
                     Folder = folder,
                     Exe = !string.IsNullOrWhiteSpace(exe) && File.Exists(exe) ? exe : FindExe(folder),
+                    // ключ в installed.json — это AppName из Epic: по нему работает удаление
+                    ExternalId = launcher == "epic" ? prop.Name : "",
                 });
             }
         }
