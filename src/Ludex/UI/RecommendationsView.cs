@@ -391,9 +391,16 @@ public sealed class RecommendationsView : Grid
         if (slice.Count > 0) _ = EnsureCoversAsync(slice);
     }
 
+    /// <summary>Когда обложка не нашлась — не пытаемся снова раньше, чем через 5 минут.</summary>
+    private static readonly Dictionary<int, DateTime> _coverFailed = new();
+
     private async Task EnsureCoversAsync(List<StoreGame> slice)
     {
-        var need = slice.Where(g => g.CoverPath == null || !File.Exists(g.CoverPath)).ToList();
+        var now = DateTime.UtcNow;
+        var need = slice
+            .Where(g => g.CoverPath == null || !File.Exists(g.CoverPath))
+            .Where(g => !_coverFailed.TryGetValue(g.AppId, out var at) || now - at > TimeSpan.FromMinutes(5))
+            .ToList();
         if (need.Count == 0) return;
 
         var token = _cts?.Token ?? CancellationToken.None;
@@ -421,7 +428,13 @@ public sealed class RecommendationsView : Grid
                 if (!File.Exists(path) || new FileInfo(path).Length < 1000)
                 {
                     var bytes = await DownloadCoverAsync(http, game, token);
-                    if (bytes == null) return;
+                    if (bytes == null)
+                    {
+                        _coverFailed[game.AppId] = DateTime.UtcNow;
+                        return;
+                    }
+
+                    _coverFailed.Remove(game.AppId);
                     await File.WriteAllBytesAsync(path, bytes, token);
                 }
 
@@ -441,11 +454,29 @@ public sealed class RecommendationsView : Grid
 
     private static async Task<byte[]?> DownloadCoverAsync(HttpClient http, StoreGame game, CancellationToken ct)
     {
-        var urls = new[]
+        var urls = new List<string>
         {
             game.CoverUrl,
             $"https://cdn.cloudflare.steamstatic.com/steam/apps/{game.AppId}/capsule_231x87.jpg",
+            $"https://cdn.cloudflare.steamstatic.com/steam/apps/{game.AppId}/capsule_616x353.jpg",
+            $"https://cdn.akamai.steamstatic.com/steam/apps/{game.AppId}/header.jpg",
         };
+
+        // у новых и снятых с продажи игр прямые адреса отдают 404 — тогда берём
+        // ссылку из карточки магазина, там у обложки свой хеш в пути
+        try
+        {
+            var fromStore = await StoreFeed.HeaderImageAsync(game.AppId, ct);
+            if (!string.IsNullOrWhiteSpace(fromStore)) urls.Add(fromStore);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch
+        {
+            // карточка не открылась — обойдёмся прямыми адресами
+        }
 
         foreach (var url in urls)
         {
@@ -586,7 +617,8 @@ public sealed class RecommendationsView : Grid
     private static Control Placeholder(StoreGame game)
     {
         var (a, b) = RecGame.PosterColors(game.Name);
-        return new Border
+
+        var grid = new Grid
         {
             Background = new LinearGradientBrush
             {
@@ -599,6 +631,37 @@ public sealed class RecommendationsView : Grid
                 },
             },
         };
+
+        var initials = Initials(game.Name);
+        if (initials.Length > 0)
+        {
+            grid.Children.Add(new TextBlock
+            {
+                Text = initials,
+                FontSize = 30,
+                FontWeight = FontWeight.Bold,
+                Foreground = new SolidColorBrush(Color.FromArgb(46, 255, 255, 255)),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+            });
+        }
+
+        return grid;
+    }
+
+    /// <summary>Первые буквы названия — на случай, пока обложки нет.</summary>
+    private static string Initials(string name)
+    {
+        var letters = new List<char>();
+        foreach (var word in name.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var ch = word[0];
+            if (!char.IsLetterOrDigit(ch)) continue;
+            letters.Add(char.ToUpperInvariant(ch));
+            if (letters.Count == 2) break;
+        }
+
+        return new string(letters.ToArray());
     }
 
     private static Bitmap? LoadCover(string? path)

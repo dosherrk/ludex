@@ -89,6 +89,17 @@ public static class StoreCatalog
     /// <summary>Последняя ошибка загрузки — её показываем в интерфейсе, если каталог не собрался.</summary>
     public static string? LastError { get; private set; }
 
+    /// <summary>Что каталог делает прямо сейчас — заставка при запуске показывает эту строку.</summary>
+    public static string? ProgressText { get; private set; }
+
+    /// <summary>Доля готовности каталога: 0 — только начали, 1 — готов.</summary>
+    public static double ProgressFraction { get; private set; }
+
+    private static Task<List<StoreGame>>? _task;
+
+    /// <summary>Каталог уже загружен (или грузится) — тогда повторный вызов ничего не начинает.</summary>
+    public static bool IsReady => _task is { IsCompletedSuccessfully: true };
+
     private static string CacheDir
     {
         get
@@ -103,12 +114,30 @@ public static class StoreCatalog
     private static string FailFile => Path.Combine(CacheDir, "catalog-fail.txt");
 
     /// <summary>Собирает каталог: сначала кэш, если он свежий, иначе обход жанров.</summary>
-    public static async Task<List<StoreGame>> LoadAsync(bool force, Action<string>? progress, CancellationToken ct)
+    public static Task<List<StoreGame>> LoadAsync(bool force, Action<string>? progress, CancellationToken ct)
+    {
+        // заставка и вкладка рекомендаций просят каталог одновременно — грузим один раз
+        if (!force && _task is { IsCompletedSuccessfully: true }) return _task;
+        if (!force && _task is { IsCompleted: false }) return _task;
+
+        _task = LoadCoreAsync(force, progress, ct);
+        return _task;
+    }
+
+    private static void Report(Action<string>? progress, string text, double fraction)
+    {
+        ProgressText = text;
+        ProgressFraction = fraction;
+        progress?.Invoke(text);
+    }
+
+    private static async Task<List<StoreGame>> LoadCoreAsync(bool force, Action<string>? progress, CancellationToken ct)
     {
         var cached = ReadCache();
         if (!force && cached != null)
         {
             FetchedUtc = ReadCacheStamp();
+            Report(progress, Loc.T("splash.catalogReady"), 1);
             return cached;
         }
 
@@ -127,10 +156,10 @@ public static class StoreCatalog
             var order = new List<int>();
 
             // 1. списки, которые из каталога вычитаем
-            progress?.Invoke(Loc.T("catalog.loadingFree"));
+            Report(progress, Loc.T("catalog.loadingFree"), 0.05);
             var free = (await CollectAsync(http, "maxprice=free", FreePages, ct))
                 .Select(r => r.AppId).ToHashSet();
-            progress?.Invoke(Loc.T("catalog.loadingMmo"));
+            Report(progress, Loc.T("catalog.loadingMmo"), 0.12);
             var mmo = (await CollectAsync(http, "tags=128", MmoPages, ct))
                 .Select(r => r.AppId).ToHashSet();
 
@@ -139,7 +168,8 @@ public static class StoreCatalog
             foreach (var (genre, tag) in SteamGenres)
             {
                 ct.ThrowIfCancellationRequested();
-                progress?.Invoke(Loc.F("catalog.loading", ++genreIndex, SteamGenres.Length, DisplayGenre(genre)));
+                Report(progress, Loc.F("catalog.loading", ++genreIndex, SteamGenres.Length, DisplayGenre(genre)),
+                    0.15 + 0.8 * genreIndex / SteamGenres.Length);
 
                 if (DateTime.UtcNow > deadline) break;
 
@@ -182,6 +212,7 @@ public static class StoreCatalog
 
             FetchedUtc = DateTime.UtcNow;
             LastError = null;
+            Report(progress, Loc.F("recs.loaded", games.Count), 1);
             AppPaths.Log($"StoreCatalog: собрано {games.Count} игр");
 
             WriteCache(games);

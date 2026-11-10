@@ -284,6 +284,9 @@ public static class StoreFeed
                 if (data.TryGetProperty("short_description", out var sd))
                     item.Description = sd.GetString();
 
+                if (data.TryGetProperty("header_image", out var hi) && hi.ValueKind == JsonValueKind.String)
+                    item.HeaderImage = hi.GetString();
+
                 item.Developer = FirstOf(data, "developers");
                 item.Publisher = FirstOf(data, "publishers");
 
@@ -417,6 +420,7 @@ public static class StoreFeed
     private sealed class MetaEntry
     {
         public string[] Genres { get; set; } = Array.Empty<string>();
+        public string? HeaderImage { get; set; }
         public string? Developer { get; set; }
         public string? Publisher { get; set; }
         public string? ReleaseDate { get; set; }
@@ -454,6 +458,45 @@ public static class StoreFeed
     {
         try { File.WriteAllText(FeedFile, json); }
         catch (Exception ex) { AppPaths.Log("StoreFeed cache write: " + ex.Message); }
+    }
+
+    /// <summary>
+    /// Ссылка на обложку из карточки магазина. Нужна, когда прямой адрес CDN
+    /// (<c>apps/{id}/header.jpg</c>) у новой или снятой с продажи игры отдаёт 404:
+    /// в ответе магазина у обложки собственный хеш в пути.
+    /// </summary>
+    public static async Task<string?> HeaderImageAsync(int appId, CancellationToken ct)
+    {
+        var meta = ReadMetaCache();
+        if (meta.TryGetValue(appId, out var known) && !string.IsNullOrWhiteSpace(known.HeaderImage))
+            return known.HeaderImage;
+
+        try
+        {
+            using var http = NewClient();
+            var url = $"{DetailsUrl}?appids={appId}&l={SteamLang}&cc={Country}";
+            var json = await http.GetStringAsync(url, ct);
+
+            using var doc = JsonDocument.Parse(json);
+            if (!doc.RootElement.TryGetProperty(appId.ToString(CultureInfo.InvariantCulture), out var entry)) return null;
+            if (!entry.TryGetProperty("data", out var data)) return null;
+            if (!data.TryGetProperty("header_image", out var hi) || hi.ValueKind != JsonValueKind.String) return null;
+
+            var header = hi.GetString();
+            if (string.IsNullOrWhiteSpace(header)) return null;
+
+            known ??= new MetaEntry { UpdatedUtc = DateTime.UtcNow };
+            known.HeaderImage = header;
+            lock (meta) meta[appId] = known;
+            WriteMetaCache(meta);
+
+            return header;
+        }
+        catch (Exception ex)
+        {
+            AppPaths.Log($"StoreFeed header {appId}: {ex.Message}");
+            return null;
+        }
     }
 
     /// <summary>Первый элемент массива строк из ответа магазина (разработчик, издатель).</summary>
