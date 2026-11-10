@@ -1,7 +1,7 @@
-Ludex 1.17.2 — локальная библиотека игр (Windows, Linux, macOS)
+Ludex 1.18.0 — локальная библиотека игр (Windows, Linux, macOS)
 ================================================================
 
-ЧТО НОВОГО В 1.17.2
+ЧТО НОВОГО В 1.18.0
 -------------------
 + приложение ставится набором файлов, а не одним большим exe — запуск быстрее;
 + заставка при старте не лезет поверх чужих окон и не крадёт фокус
@@ -19,13 +19,13 @@ Ludex 1.17.2 — локальная библиотека игр (Windows, Linux,
 
 ЧТО В РЕЛИЗЕ
 ------------
-  Ludex-Setup-1.17.2.exe           — установщик для Windows 10/11 x64 (рекомендуется)
-  Ludex-1.17.2-windows.zip         — портативная версия архивом (файлы держим вместе)
-  Ludex-1.17.2-linux-x64.deb        — пакет для Debian/Ubuntu/Mint
-  Ludex-1.17.2-linux-x64.tar.gz     — портативный архив для любого Linux x64
-  Ludex-1.17.2-macos-arm64.dmg      — macOS для Apple Silicon (M1–M4)
-  Ludex-1.17.2-macos-x64.dmg        — macOS для Intel
-  (те же сборки в .zip — Ludex-1.17.2-macos-arm64.zip / -x64.zip, если удобнее архив)
+  Ludex-Setup-1.18.0.exe           — установщик для Windows 10/11 x64 (рекомендуется)
+  Ludex-1.18.0-windows.zip         — портативная версия архивом (файлы держим вместе)
+  Ludex-1.18.0-linux-x64.deb        — пакет для Debian/Ubuntu/Mint
+  Ludex-1.18.0-linux-x64.tar.gz     — портативный архив для любого Linux x64
+  Ludex-1.18.0-macos-arm64.dmg      — macOS для Apple Silicon (M1–M4)
+  Ludex-1.18.0-macos-x64.dmg        — macOS для Intel
+  (те же сборки в .zip — Ludex-1.18.0-macos-arm64.zip / -x64.zip, если удобнее архив)
 
 WINDOWS 10/11
 -------------

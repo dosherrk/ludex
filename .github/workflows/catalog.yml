@@ -1,0 +1,74 @@
+name: catalog
+
+# Раз в сутки собирает полный каталог игр Steam и публикует готовый файл
+# на GitHub Pages, чтобы приложению не приходилось обходить магазин самому.
+#
+# Результат: https://dosherrk.github.io/ludex/catalog.json.gz  (~3 МБ, ~150 тыс. игр)
+
+on:
+  schedule:
+    - cron: '17 3 * * *'      # каждый день в 03:17 UTC (06:17 МСК)
+  workflow_dispatch:
+
+concurrency:
+  group: catalog
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # Полный обход: ~2000 вежливых запросов к поиску магазина, ~20–25 минут.
+      - name: Сборка каталога
+        run: python3 tools/build-catalog.py --out catalog.json.gz --checkpoint "$RUNNER_TEMP/checkpoint.json"
+
+      - name: Публикация на GitHub Pages
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          PUB="$RUNNER_TEMP/publish"
+          mkdir -p "$PUB"
+          cp catalog.json.gz "$PUB/"
+          python3 - "$PUB/catalog.meta.json" <<'PY'
+          import gzip, json, os, sys, time
+          d = json.load(gzip.open('catalog.json.gz', 'rt', encoding='utf-8'))
+          meta = {
+              'v': d['v'],
+              'utc': d['utc'],
+              'count': d['count'],
+              'genres': d['genres'],
+              'size_gz': os.path.getsize('catalog.json.gz'),
+              'built_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+          }
+          json.dump(meta, open(sys.argv[1], 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
+          print('игр в каталоге:', meta['count'])
+          PY
+
+          cd "$PUB"
+          git init -q -b gh-pages
+          git add -A
+          git -c user.name="Ludex" -c user.email="dev@ludex.local" commit -q -m "каталог $(date -u +%F)"
+          # ветка каждый раз из одного коммита: история не растёт
+          git push -q --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages
+
+      - name: Файл каталога (на случай разбора)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: catalog
+          path: |
+            catalog.json.gz
+          if-no-files-found: warn
+          retention-days: 7

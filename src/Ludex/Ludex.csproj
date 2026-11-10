@@ -9,8 +9,8 @@
     <RootNamespace>GameVault</RootNamespace>
     <ApplicationIcon>app.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>1.17.2</Version>
-    <FileVersion>1.17.2.0</FileVersion>
+    <Version>1.18.0</Version>
+    <FileVersion>1.18.0.0</FileVersion>
     <Product>Ludex</Product>
     <Company>Ludex</Company>
     <Description>Ludex - local game library with automatic artwork</Description>

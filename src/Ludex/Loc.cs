@@ -90,6 +90,7 @@ public static class Loc
         ["settings.engineYandex"] = ("Яндекс", "Yandex"),
         ["settings.engineDdg"] = ("DuckDuckGo", "DuckDuckGo"),
         ["catalog.loadingStart"] = ("Собираем каталог игр…", "Building the catalogue…"),
+        ["catalog.download"] = ("Скачиваем каталог игр…", "Downloading the game catalogue…"),
         ["catalog.loading"] = ("Загружаем жанры: {0} из {1} · {2}", "Loading genres: {0} of {1} · {2}"),
         ["catalog.updated"] = ("обновлено {0}", "updated {0}"),
         ["catalog.count"] = ("игр в каталоге: {0} · обновлено {1}", "{0} games in the catalogue · updated {1}"),

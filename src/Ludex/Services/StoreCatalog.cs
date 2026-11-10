@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -40,7 +41,15 @@ public static class StoreCatalog
 
     private static readonly TimeSpan ExcludeTtl = TimeSpan.FromDays(14);
 
-    private static readonly TimeSpan Ttl = TimeSpan.FromDays(3);
+    private static readonly TimeSpan Ttl = TimeSpan.FromDays(1);
+
+    /// <summary>
+    /// Готовый каталог, который собирается в CI раз в сутки (workflow «catalog»).
+    /// Так приложению не нужно самому обходить магазин: файл полный и свежий.
+    /// </summary>
+    public const string RemoteCatalogUrl = "https://dosherrk.github.io/ludex/catalog.json.gz";
+
+    private static DateTime _remoteStamp;
     private static readonly TimeSpan FailTtl = TimeSpan.FromMinutes(10);
 
     /// <summary>Жанры магазина: подпись и тег поиска.</summary>
@@ -177,6 +186,19 @@ public static class StoreCatalog
 
         try
         {
+            // 0. готовый каталог из CI: полный, свежий, без обхода магазина
+            var ready = await TryRemoteAsync(progress, ct);
+            if (ready != null)
+            {
+                FetchedUtc = _remoteStamp == default ? DateTime.UtcNow : _remoteStamp;
+                LastError = null;
+                Report(progress, Loc.F("recs.loaded", ready.Count), 1);
+                AppPaths.Log($"StoreCatalog: готовый каталог {ready.Count} игр");
+                WriteCache(ready, FetchedUtc);
+                TryDelete(FailFile);
+                return ready;
+            }
+
             using var http = MakeClient();
             var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(90);
 
@@ -278,6 +300,105 @@ public static class StoreCatalog
             AppPaths.Log("StoreCatalog failed: " + ex.Message);
             try { File.WriteAllText(FailFile, DateTime.UtcNow.ToString("O") + " " + ex.Message); } catch { /* ignore */ }
             return cached ?? new List<StoreGame>();
+        }
+    }
+
+    /// <summary>
+    /// Берёт готовый каталог из сети. Возвращает null, если файла нет или он битый —
+    /// тогда вызывающий код обходит магазин сам, как раньше.
+    /// </summary>
+    private static async Task<List<StoreGame>?> TryRemoteAsync(Action<string>? progress, CancellationToken ct)
+    {
+        try
+        {
+            Report(progress, Loc.T("catalog.download"), 0.12);
+
+            using var http = MakeClient();
+            http.Timeout = TimeSpan.FromSeconds(60);
+
+            using var response = await http.GetAsync(RemoteCatalogUrl, HttpCompletionOption.ResponseHeadersRead, ct);
+            if (!response.IsSuccessStatusCode)
+            {
+                AppPaths.Log($"StoreCatalog remote: HTTP {(int)response.StatusCode}");
+                return null;
+            }
+
+            await using var raw = await response.Content.ReadAsStreamAsync(ct);
+            await using var gz = new GZipStream(raw, CompressionMode.Decompress);
+            using var doc = await JsonDocument.ParseAsync(gz, cancellationToken: ct);
+
+            var root = doc.RootElement;
+            if (!root.TryGetProperty("games", out var rows) || rows.ValueKind != JsonValueKind.Array)
+            {
+                AppPaths.Log("StoreCatalog remote: в файле нет списка игр");
+                return null;
+            }
+
+            var labels = Array.Empty<string>();
+            if (root.TryGetProperty("genres", out var labelsEl) && labelsEl.ValueKind == JsonValueKind.Array)
+                labels = labelsEl.EnumerateArray().Select(x => x.GetString() ?? "").ToArray();
+
+            _remoteStamp = DateTime.UtcNow;
+            if (root.TryGetProperty("utc", out var utcEl) && utcEl.ValueKind == JsonValueKind.String &&
+                DateTime.TryParse(utcEl.GetString(), CultureInfo.InvariantCulture,
+                    DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var parsed))
+                _remoteStamp = parsed;
+
+            var list = new List<StoreGame>(rows.GetArrayLength());
+
+            foreach (var row in rows.EnumerateArray())
+            {
+                if (row.ValueKind != JsonValueKind.Array || row.GetArrayLength() < 2) continue;
+
+                var appId = row[0].ValueKind == JsonValueKind.Number ? row[0].GetInt32() : 0;
+                var name = (row[1].GetString() ?? "").Trim();
+                if (appId <= 0 || name.Length == 0) continue;
+
+                // те же фильтры, что и при обходе магазина
+                if (Rejected(name)) continue;
+
+                var game = new StoreGame
+                {
+                    AppId = appId,
+                    Name = name,
+                    CoverUrl = $"https://cdn.cloudflare.steamstatic.com/steam/apps/{appId}/header.jpg",
+                    HeaderUrl = $"https://cdn.cloudflare.steamstatic.com/steam/apps/{appId}/header.jpg",
+                };
+
+                if (row.GetArrayLength() >= 3 && labels.Length > 0)
+                {
+                    var idx = row[2].GetString() ?? "";
+                    var genres = new List<string>(3);
+                    foreach (var part in idx.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+                    {
+                        if (!int.TryParse(part, out var n) || n < 0 || n >= labels.Length) continue;
+                        var label = labels[n];
+                        if (label.Length > 0 && !genres.Contains(label)) genres.Add(label);
+                    }
+                    game.Genres = genres.ToArray();
+                }
+
+                game.Sections.Add("all");
+                list.Add(game);
+            }
+
+            // подозрительно мало игр — считаем файл битым и идём обходить магазин
+            if (list.Count < 500)
+            {
+                AppPaths.Log($"StoreCatalog remote: всего {list.Count} игр — файл не используем");
+                return null;
+            }
+
+            return list;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            AppPaths.Log("StoreCatalog remote: " + ex.Message);
+            return null;
         }
     }
 
@@ -579,11 +700,11 @@ public static class StoreCatalog
         }
     }
 
-    private static void WriteCache(List<StoreGame> games)
+    private static void WriteCache(List<StoreGame> games, DateTime? stamp = null)
     {
         try
         {
-            var model = new CacheFileModel { FetchedUtc = DateTime.UtcNow };
+            var model = new CacheFileModel { FetchedUtc = stamp ?? DateTime.UtcNow };
             foreach (var g in games)
             {
                 model.Games.Add(new CacheEntry
