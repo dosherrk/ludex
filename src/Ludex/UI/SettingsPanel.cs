@@ -53,6 +53,9 @@ public sealed class SettingsPanel : Border
     /// <summary>Пользователь попросил проверить обновления прямо сейчас.</summary>
     public event Action? UpdateCheckRequested;
 
+    /// <summary>Вернуть игры, скрытые «навсегда» после удаления из библиотеки.</summary>
+    public event Action? HiddenRestored;
+
     public SettingsPanel(AppSettings settings)
     {
         _original = settings;
@@ -90,6 +93,8 @@ public sealed class SettingsPanel : Border
 
         BuildContent();
     }
+
+    private bool settings_hasHidden() => _original.HiddenGames.Count > 0;
 
     private void BuildContent()
     {
@@ -144,7 +149,20 @@ public sealed class SettingsPanel : Border
             11.5, Skin.TextDim);
         _folderCount.Margin = new Thickness(6, 0, 0, 0);
         listButtons.Children.Add(_folderCount);
+
+        if (settings_hasHidden())
+        {
+            var restore = Ui.GhostButton(
+                Loc.F("settings.restoreHidden", _original.HiddenGames.Count),
+                () => HiddenRestored?.Invoke());
+            restore.Margin = new Thickness(12, 0, 0, 0);
+            listButtons.Children.Add(restore);
+        }
+
         body.Children.Add(listButtons);
+
+        if (settings_hasHidden())
+            body.Children.Add(Ui.T(Loc.T("settings.restoreHiddenHint"), 11, Skin.TextDim, wrap: TextWrapping.Wrap));
 
         body.Children.Add(Ui.Divider());
 

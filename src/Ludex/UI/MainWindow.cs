@@ -1713,6 +1713,7 @@ public sealed class MainWindow : Window
             // ignored
         }
 
+        HideForever(game);
         _games.Remove(game);
         Storage.SaveGames(_games);
         _detailLayer.IsVisible = false;
@@ -1730,6 +1731,15 @@ public sealed class MainWindow : Window
         {
             CloseSettings();
             _ = CheckUpdatesAsync(silent: false);
+        };
+        _settingsPanel.HiddenRestored += () =>
+        {
+            _settings.HiddenGames.Clear();
+            Storage.SaveSettings(_settings);
+            CloseSettings();
+            AppPaths.Log("Скрытые игры возвращены в библиотеку");
+            if (_settings.Folders.Count > 0) _ = StartScanAsync();
+            else _ = ImportLaunchersAsync();
         };
 
         _settingsPanel.HorizontalAlignment = HorizontalAlignment.Center;
@@ -1950,7 +1960,7 @@ public sealed class MainWindow : Window
         // бегущий блик по полоске — без текста, просто «идёт работа»
         _splashFill = new Border
         {
-            Width = 90,
+            Width = 64,
             Height = 3,
             CornerRadius = new CornerRadius(2),
             Background = Skin.Accent,
@@ -1959,26 +1969,33 @@ public sealed class MainWindow : Window
 
         var track = new Border
         {
-            Width = 260,
+            Width = 220,
             Height = 3,
             CornerRadius = new CornerRadius(2),
             Background = Skin.PanelAlt,
-            HorizontalAlignment = HorizontalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
             ClipToBounds = true,
             Child = new Canvas
             {
-                Width = 260,
+                Width = 220,
                 Height = 3,
                 Children = { _splashFill },
             },
         };
 
+        // логотип и полоска — одной ширины и по одной оси, ничего не «съезжает»
+        var logo = Ui.T("LUDEX", 21, Skin.Text, FontWeight.Bold);
+        logo.TextAlignment = TextAlignment.Center;
+        logo.HorizontalAlignment = HorizontalAlignment.Stretch;
+        logo.LetterSpacing = 1.2;
+
         var stack = new StackPanel
         {
-            Spacing = 20,
+            Width = 220,
+            Spacing = 14,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
-            Children = { Ui.T("LUDEX", 26, Skin.Text, FontWeight.Bold), track },
+            Children = { logo, track },
         };
 
         _splash = new Border
@@ -2007,8 +2024,8 @@ public sealed class MainWindow : Window
     {
         if (_splashFill == null || _splashClosed) return;
 
-        const double trackWidth = 260;
-        const double segment = 90;
+        const double trackWidth = 220;
+        const double segment = 64;
         const double period = 1.4;
 
         var phase = (DateTime.UtcNow - _splashStarted).TotalSeconds % period / period;
@@ -2310,14 +2327,18 @@ public sealed class MainWindow : Window
         return before - _games.Count;
     }
 
-    /// <summary>Разовое событие в правом нижнем углу: гаснет само через несколько секунд.</summary>
-    private void ShowEvent(string text)
+    /// <summary>
+    /// Разовое событие в правом нижнем углу: гаснет само через несколько секунд.
+    /// Обновляемое (sticky) сообщение — например «Проверено папок: 600» — гаснет
+    /// через несколько секунд после последнего обновления, то есть после проверки.
+    /// </summary>
+    private void ShowEvent(string text, bool sticky = false)
     {
         if (_eventLabel == null) return;
 
         if (!Dispatcher.UIThread.CheckAccess())
         {
-            Dispatcher.UIThread.Post(() => ShowEvent(text));
+            Dispatcher.UIThread.Post(() => ShowEvent(text, sticky));
             return;
         }
 
@@ -2325,13 +2346,38 @@ public sealed class MainWindow : Window
         _eventLabel.Opacity = 1;
 
         _eventTimer?.Stop();
-        _eventTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(6) };
+        _eventTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(sticky ? 4 : 6) };
         _eventTimer.Tick += (_, _) =>
         {
             _eventTimer?.Stop();
             if (_eventLabel != null) _eventLabel.Opacity = 0;
         };
         _eventTimer.Start();
+    }
+
+    // ------------------------------------------------ скрытые навсегда игры
+
+    /// <summary>Ключ папки установки: путь без хвостовых разделителей, в одном регистре.</summary>
+    private static string FolderKey(string? path) =>
+        string.IsNullOrWhiteSpace(path)
+            ? ""
+            : path!.Trim().TrimEnd('\\', '/').Replace('\\', '/').ToLowerInvariant();
+
+    private bool IsHiddenFolder(string? folder)
+    {
+        var key = FolderKey(folder);
+        return key.Length > 0 && _settings.HiddenGames.Contains(key);
+    }
+
+    /// <summary>«Убрать из библиотеки» — навсегда: импорт и сканирование больше её не добавят.</summary>
+    private void HideForever(GameEntry game)
+    {
+        var key = FolderKey(game.FolderPath);
+        if (key.Length == 0 || _settings.HiddenGames.Contains(key)) return;
+
+        _settings.HiddenGames.Add(key);
+        Storage.SaveSettings(_settings);
+        AppPaths.Log($"Игра скрыта навсегда: {game.Title} ({key})");
     }
 
     private void UpdateCount()
@@ -2370,7 +2416,7 @@ public sealed class MainWindow : Window
             var hits = folders.Count > 0
                 ? await Task.Run(() => Scanner.Scan(
                     folders,
-                    message => Dispatcher.UIThread.Post(() => SetStatus(message)),
+                    message => Dispatcher.UIThread.Post(() => ShowEvent(message, sticky: true)),
                     extra,
                     null,
                     () => ct.IsCancellationRequested), ct)
@@ -2476,6 +2522,8 @@ public sealed class MainWindow : Window
 
         foreach (var item in found)
         {
+            if (IsHiddenFolder(item.Folder)) continue;
+
             if (byFolder.TryGetValue(item.Folder, out var entry))
             {
                 entry.Source = item.Launcher;
@@ -2534,6 +2582,8 @@ public sealed class MainWindow : Window
 
         foreach (var hit in hits)
         {
+            if (IsHiddenFolder(hit.FolderPath)) continue;
+
             if (existing.TryGetValue(hit.FolderPath, out var game))
             {
                 game.ExePath = hit.ExePath;

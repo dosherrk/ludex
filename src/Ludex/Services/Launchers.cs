@@ -189,6 +189,84 @@ public static class Launchers
         }
     }
 
+    /// <summary>
+    /// Строгая версия проверки — для папок Steam без манифеста: нужен исполняемый файл
+    /// и хотя бы немного данных. Так отсекаются «хвосты» от удалённых игр, в которых
+    /// осталось несколько крупных файлов, но самой игры уже нет.
+    /// </summary>
+    public static bool LooksInstalledStrict(string? folder, long minBytes = 300L * 1024 * 1024)
+    {
+        if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder)) return false;
+
+        var hasExe = false;
+        long total = 0;
+
+        try
+        {
+            foreach (var file in Directory.EnumerateFiles(folder!, "*", SearchOption.AllDirectories))
+            {
+                FileInfo info;
+                try { info = new FileInfo(file); } catch { continue; }
+                total += info.Length;
+
+                if (!hasExe)
+                {
+                    var ext = info.Extension.ToLowerInvariant();
+                    if (ext is ".exe" or ".sh" or ".appimage" or ".x86_64" or ".x86" or ".run")
+                    {
+                        hasExe = true;
+                    }
+                    else if (ext.Length == 0 && info.Length >= 1L * 1024 * 1024 && !OperatingSystem.IsWindows())
+                    {
+                        try
+                        {
+                            var mode = File.GetUnixFileMode(file);
+                            if ((mode & (UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute)) != 0)
+                                hasExe = true;
+                        }
+                        catch
+                        {
+                            // на Windows режима нет — пропускаем
+                        }
+                    }
+                }
+
+                if (hasExe && total >= minBytes) return true;
+            }
+
+            return false;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>Служебные компоненты Steam/Epic: не игры, в библиотеке им не место.</summary>
+    private static readonly string[] ToolPatterns =
+    {
+        "redistributable", "steamworks", "steam linux runtime", "steam runtime",
+        "proton", "steamvr", "steam audio", "epic online services", "unreal engine",
+        "steam controller", "easyanticheat", "battleye",
+    };
+
+    private static readonly int[] ToolAppIds =
+    {
+        228980,  // Steamworks Common Redistributables
+        1070560, 1391110, 1628350, // Steam Linux Runtime
+        1493710, 2180100, 1826330, 1161040, // Proton
+        250820,   // SteamVR
+    };
+
+    public static bool IsToolOrRuntime(string? title, int? appId = null)
+    {
+        if (appId.HasValue && Array.IndexOf(ToolAppIds, appId.Value) >= 0) return true;
+        if (string.IsNullOrWhiteSpace(title)) return false;
+
+        var name = title!.ToLowerInvariant();
+        return ToolPatterns.Any(name.Contains);
+    }
+
     private static string Home => Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
     private static string ProgramData => Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
@@ -278,6 +356,20 @@ public static class Launchers
                     if (string.IsNullOrWhiteSpace(folder) || !LooksInstalled(folder)) continue;
 
                     int? appId = int.TryParse(Field(text, "appid"), out var parsed) ? parsed : null;
+
+                    // StateFlags: бит 4 = игра действительно установлена (1026 и подобные тоже с ним)
+                    if (int.TryParse(Field(text, "StateFlags"), out var stateFlags) && (stateFlags & 4) == 0)
+                    {
+                        AppPaths.Log($"Steam: пропущена неустановленная игра {name}");
+                        continue;
+                    }
+
+                    if (IsToolOrRuntime(name, appId))
+                    {
+                        AppPaths.Log($"Steam: пропущен служебный компонент {name}");
+                        continue;
+                    }
+
                     known.Add(folder);
 
                     games.Add(new LauncherGame
@@ -306,7 +398,14 @@ public static class Launchers
 
                 var title = Path.GetFileName(folder.TrimEnd(Path.DirectorySeparatorChar));
                 if (string.IsNullOrWhiteSpace(title) || title.StartsWith('.')) continue;
-                if (string.IsNullOrWhiteSpace(folder) || !LooksInstalled(folder)) continue;
+                if (IsToolOrRuntime(title)) continue;
+
+                // без манифеста верим только явной установке: есть .exe и хотя бы 300 МБ данных
+                if (!LooksInstalledStrict(folder))
+                {
+                    AppPaths.Log($"Steam: пропущена папка без манифеста {title}");
+                    continue;
+                }
 
                 games.Add(new LauncherGame
                 {
@@ -348,7 +447,7 @@ public static class Launchers
                     var location = Str(root, "InstallLocation");
                     var launch = Str(root, "LaunchExecutable");
                     if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(location)) continue;
-                    if (!LooksInstalled(location)) continue;
+                    if (IsToolOrRuntime(title) || !LooksInstalled(location)) continue;
 
                     games.Add(new LauncherGame
                     {

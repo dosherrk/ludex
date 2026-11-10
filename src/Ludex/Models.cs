@@ -68,6 +68,12 @@ public sealed class AppSettings
 
     /// <summary>Первый запуск с интеграциями: Steam подключается сам, если библиотека найдена.</summary>
     public bool LaunchersInitialized { get; set; }
+
+    /// <summary>
+    /// Игры, убранные из библиотеки навсегда: ключи папок установки. Импорт и сканирование
+    /// их больше не добавляют, пока пользователь не нажмёт «Вернуть скрытые».
+    /// </summary>
+    public List<string> HiddenGames { get; set; } = new();
 }
 
 public sealed class LibraryFile
