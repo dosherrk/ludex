@@ -9,13 +9,13 @@ const KINDS = ['setup', 'portable', 'win-zip', 'linux-tar', 'linux-deb', 'macos-
 
 // Запасные имена файлов — на случай, если Redis ещё пуст.
 const FALLBACK = {
-  setup: 'Ludex-Setup-1.16.0.exe',
-  portable: 'Ludex-1.16.0-portable.exe',
-  'win-zip': 'Ludex-1.16.0-windows.zip',
-  'linux-tar': 'Ludex-1.16.0-linux-x64.tar.gz',
-  'linux-deb': 'Ludex-1.16.0-linux-x64.deb',
-  'macos-arm': 'Ludex-1.16.0-macos-arm64.dmg',
-  'macos-x64': 'Ludex-1.16.0-macos-x64.dmg',
+  setup: 'Ludex-Setup-1.16.1.exe',
+  portable: 'Ludex-1.16.1-portable.exe',
+  'win-zip': 'Ludex-1.16.1-windows.zip',
+  'linux-tar': 'Ludex-1.16.1-linux-x64.tar.gz',
+  'linux-deb': 'Ludex-1.16.1-linux-x64.deb',
+  'macos-arm': 'Ludex-1.16.1-macos-arm64.dmg',
+  'macos-x64': 'Ludex-1.16.1-macos-x64.dmg',
 };
 
 // Старые ссылки (кнопка «Архив» до 1.5.0) ведут на windows-архив.
