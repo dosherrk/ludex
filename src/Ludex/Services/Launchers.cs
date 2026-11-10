@@ -14,6 +14,9 @@ public sealed class LauncherGame
     public string Title = "";
     public string Folder = "";
     public string Exe = "";
+
+    /// <summary>Steam AppId (из манифеста) — по нему обложка берётся напрямую с CDN.</summary>
+    public int? AppId;
 }
 
 /// <summary>Итог проверки одного лаунчера: установлен ли, сколько игр нашлось.</summary>
@@ -59,7 +62,6 @@ public static class Launchers
 
     public static List<LauncherState> ScanAll(IEnumerable<string> enabled)
     {
-        var on = new HashSet<string>(enabled, StringComparer.OrdinalIgnoreCase);
         var states = new List<LauncherState>();
 
         foreach (var d in All)
@@ -86,7 +88,6 @@ public static class Launchers
                 .ToList();
 
             if (!state.Installed && state.Games.Count > 0) state.Installed = true;
-            _ = on.Contains(d.Key); // выключенные лаунчеры всё равно показываем в панели
             states.Add(state);
         }
 
@@ -118,6 +119,10 @@ public static class Launchers
         foreach (var state in ScanAll(enabled))
         {
             if (!enabled.Contains(state.Key, StringComparer.OrdinalIgnoreCase)) continue;
+
+            // в лог: сколько игр нашлось в каждом лаунчере — проще разбирать «нашлись не все»
+            AppPaths.Log($"Launchers {state.Key}: {state.Games.Count} игр" +
+                         (state.Error != null ? ", ошибка: " + state.Error : ""));
             games.AddRange(state.Games);
         }
 
@@ -156,13 +161,16 @@ public static class Launchers
 
         if (OperatingSystem.IsWindows())
         {
-            roots.AddRange(new[]
+            foreach (var path in new[]
+                     {
+                         RegRead(@"HKEY_CURRENT_USER\Software\Valve\Steam", "SteamPath"),
+                         RegRead(@"HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Valve\Steam", "InstallPath"),
+                         @"C:\Program Files (x86)\Steam",
+                         @"C:\Program Files\Steam",
+                     })
             {
-                RegRead(@"HKEY_CURRENT_USER\Software\Valve\Steam", "SteamPath"),
-                RegRead(@"HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Valve\Steam", "InstallPath"),
-                @"C:\Program Files (x86)\Steam",
-                @"C:\Program Files\Steam",
-            });
+                if (!string.IsNullOrWhiteSpace(path)) roots.Add(path!);
+            }
         }
         else if (OperatingSystem.IsMacOS())
         {
@@ -205,6 +213,8 @@ public static class Launchers
         }
 
         var games = new List<LauncherGame>();
+        var known = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         foreach (var lib in libraries.Distinct(StringComparer.OrdinalIgnoreCase))
         {
             var apps = Path.Combine(lib, "steamapps");
@@ -222,18 +232,43 @@ public static class Launchers
                     var folder = Path.Combine(apps, "common", dir);
                     if (!Directory.Exists(folder)) continue;
 
+                    int? appId = int.TryParse(Field(text, "appid"), out var parsed) ? parsed : null;
+                    known.Add(folder);
+
                     games.Add(new LauncherGame
                     {
                         Launcher = "steam",
                         Title = Clean(name),
                         Folder = folder,
                         Exe = FindExe(folder),
+                        AppId = appId,
                     });
                 }
                 catch (Exception ex)
                 {
                     AppPaths.Log("appmanifest: " + ex.Message);
                 }
+            }
+
+            // вторая попытка: папки в common без манифеста (перенос библиотеки, ручная установка)
+            var common = Path.Combine(apps, "common");
+            if (!Directory.Exists(common)) continue;
+
+            foreach (var folder in Directory.EnumerateDirectories(common))
+            {
+                if (known.Contains(folder)) continue;
+                known.Add(folder);
+
+                var title = Path.GetFileName(folder.TrimEnd(Path.DirectorySeparatorChar));
+                if (string.IsNullOrWhiteSpace(title) || title.StartsWith('.')) continue;
+
+                games.Add(new LauncherGame
+                {
+                    Launcher = "steam",
+                    Title = Clean(title),
+                    Folder = folder,
+                    Exe = FindExe(folder),
+                });
             }
         }
 

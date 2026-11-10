@@ -17,32 +17,48 @@ using Ludex.Services;
 
 namespace Ludex.UI;
 
-/// <summary>Manual artwork picker: search Steam/SteamGridDB or use a local image file.</summary>
-public sealed class CoverWindow : Window
+/// <summary>
+/// Выбор обложки: варианты с CDN Steam, поиск по названию, файл с диска или ссылка.
+/// Панель живёт внутри окна (как настройки): отдельные окна оставляли «залипшее»
+/// наведение после закрытия и лишнюю системную рамку.
+/// </summary>
+public sealed class CoverPanel : Border
 {
     private readonly string _gameId;
     private readonly string? _sgdbKey;
     private readonly WrapPanel _results = new() { Margin = new Thickness(0, 12, 0, 0) };
     private readonly TextBlock _status;
     private readonly TextBox _query;
+    private TextBox _urlBox = null!;
+    private TextBox _appIdBox = null!;
     private CancellationTokenSource? _cts;
 
     public string? ChosenCoverPath { get; private set; }
     public bool ChosenIsPortrait { get; private set; }
     public bool ResetRequested { get; private set; }
 
-    public CoverWindow(string gameTitle, string? sgdbKey, string gameId)
+    /// <summary>Панель закрыта: применяем выбор или просто убираем её.</summary>
+    public event Action? Closed;
+
+    private int? _appId;
+
+    public CoverPanel(string gameTitle, string? sgdbKey, string gameId, int? appId = null)
     {
         _gameId = gameId;
         _sgdbKey = sgdbKey;
+        _appId = appId;
 
-        Title = Loc.T("cover.title");
-        Width = 940;
-        Height = 720;
-        MinWidth = 700;
-        MinHeight = 500;
-        Background = Skin.Bg;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        MaxWidth = 980;
+        MaxHeight = 760;
+        Background = Skin.Panel;
+        CornerRadius = new CornerRadius(14);
+        BoxShadow = new BoxShadows(new BoxShadow
+        {
+            OffsetX = 0,
+            OffsetY = 14,
+            Blur = 44,
+            Color = Color.Parse("#AA000000"),
+        });
 
         _query = new TextBox
         {
@@ -77,6 +93,56 @@ public sealed class CoverWindow : Window
         Grid.SetColumn(pickFile, 2);
         header.Children.Add(pickFile);
 
+        // ссылка на картинку: когда поиск ничего не нашёл, обложку можно вставить руками
+        var urlRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 10,
+            Margin = new Thickness(0, 10, 0, 0),
+        };
+        _urlBox = new TextBox
+        {
+            Watermark = Loc.T("cover.urlWatermark"),
+            FontSize = 12.5,
+            Height = 34,
+            Background = Skin.PanelAlt,
+            Foreground = Skin.Text,
+            BorderBrush = Skin.Border,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(10, 0, 10, 0),
+            VerticalContentAlignment = VerticalAlignment.Center,
+            Width = 420,
+        };
+        Ui.AnimateTextBox(_urlBox);
+        urlRow.Children.Add(_urlBox);
+        urlRow.Children.Add(Ui.GhostButton(Loc.T("cover.urlApply"), () => _ = UseUrlAsync()));
+
+        // Steam AppId вручную: когда поиск по названию не находит игру (переименования, DLC)
+        _appIdBox = new TextBox
+        {
+            Watermark = Loc.T("cover.appIdWatermark"),
+            FontSize = 12.5,
+            Height = 34,
+            Width = 150,
+            Background = Skin.PanelAlt,
+            Foreground = Skin.Text,
+            BorderBrush = Skin.Border,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(10, 0, 10, 0),
+            VerticalContentAlignment = VerticalAlignment.Center,
+        };
+        Ui.AnimateTextBox(_appIdBox);
+        if (_appId.HasValue) _appIdBox.Text = _appId.Value.ToString();
+        urlRow.Children.Add(_appIdBox);
+        urlRow.Children.Add(Ui.GhostButton(Loc.T("cover.appIdApply"), () =>
+        {
+            if (!int.TryParse(_appIdBox.Text?.Trim(), out var id) || id <= 0) return;
+            _appId = id;
+            _ = SearchAsync();
+        }));
+
         var scroll = new ScrollViewer
         {
             Content = _results,
@@ -100,8 +166,12 @@ public sealed class CoverWindow : Window
         bottom.Children.Add(Ui.GhostButton(Loc.T("btn.cancel"), Close));
 
         var root = new DockPanel { Margin = new Thickness(22) };
-        DockPanel.SetDock(header, Dock.Top);
-        root.Children.Add(header);
+
+        var topStack = new StackPanel();
+        topStack.Children.Add(header);
+        topStack.Children.Add(urlRow);
+        DockPanel.SetDock(topStack, Dock.Top);
+        root.Children.Add(topStack);
         DockPanel.SetDock(_status, Dock.Top);
         _status.Margin = new Thickness(0, 12, 0, 0);
         root.Children.Add(_status);
@@ -109,20 +179,38 @@ public sealed class CoverWindow : Window
         root.Children.Add(bottom);
         root.Children.Add(scroll);
 
-        Content = root;
+        Child = root;
 
-        Opened += (_, _) =>
+        AttachedToVisualTree += (_, _) =>
         {
             Ui.FadeSlideIn(root, 0, 220, 10);
             _query.Focus();
             _ = SearchAsync();
         };
-        Closed += (_, _) => _cts?.Cancel();
+
+        KeyDown += (_, e) =>
+        {
+            if (e.Key != Key.Escape) return;
+            e.Handled = true;
+            Close();
+        };
+    }
+
+    /// <summary>Закрыть без применения выбора (клик по затемнению, Esc).</summary>
+    public void Cancel() => Close();
+
+    private void Close()
+    {
+        _cts?.Cancel();
+        Closed?.Invoke();
     }
 
     private async Task PickFileAsync()
     {
-        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        var top = TopLevel.GetTopLevel(this);
+        if (top == null) return;
+
+        var files = await top.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
             Title = Loc.T("cover.title"),
             AllowMultiple = false,
@@ -167,6 +255,46 @@ public sealed class CoverWindow : Window
         }
     }
 
+    /// <summary>Обложка по ссылке: качаем байты и сохраняем как выбранную.</summary>
+    private async Task UseUrlAsync()
+    {
+        var url = _urlBox.Text?.Trim();
+        if (string.IsNullOrWhiteSpace(url)) return;
+
+        if (!url.StartsWith("http", StringComparison.OrdinalIgnoreCase)) url = "https://" + url;
+
+        _status.Text = Loc.T("cover.searching");
+        var bytes = await Artwork.FetchBytesAsync(url);
+        if (bytes == null)
+        {
+            _status.Text = Loc.T("cover.badUrl");
+            return;
+        }
+
+        bool portrait;
+        try
+        {
+            using var bmp = new Bitmap(new MemoryStream(bytes));
+            portrait = bmp.Size.Height >= bmp.Size.Width;
+        }
+        catch
+        {
+            _status.Text = Loc.T("cover.badUrl");
+            return;
+        }
+
+        var path = Artwork.SaveCover(_gameId, bytes, portrait);
+        if (path == null)
+        {
+            _status.Text = Loc.T("cover.badUrl");
+            return;
+        }
+
+        ChosenCoverPath = path;
+        ChosenIsPortrait = portrait;
+        Close();
+    }
+
     private async Task SearchAsync()
     {
         _cts?.Cancel();
@@ -174,22 +302,39 @@ public sealed class CoverWindow : Window
         var ct = _cts.Token;
 
         _results.Children.Clear();
-        _status.Text = Loc.T("cover.searching");
 
         var query = _query.Text?.Trim();
-        if (string.IsNullOrWhiteSpace(query)) return;
+        if (string.IsNullOrWhiteSpace(query) && !_appId.HasValue) return;
 
-        List<ArtCandidate> candidates;
-        try
+        _status.Text = Loc.T("cover.searching");
+
+        var candidates = new List<ArtCandidate>();
+
+        // 1) appId известен — варианты с CDN Steam есть всегда, без поиска и ключей
+        if (_appId.HasValue)
+            candidates.AddRange(await Artwork.SteamCandidatesAsync(_appId.Value, query ?? "", ct));
+
+        // 2) поиск по названию (Steam + SteamGridDB, если задан ключ)
+        if (!string.IsNullOrWhiteSpace(query))
         {
-            candidates = await Artwork.SearchAsync(query, _sgdbKey, ct);
-        }
-        catch
-        {
-            candidates = new List<ArtCandidate>();
+            try
+            {
+                candidates.AddRange(await Artwork.SearchAsync(query, _sgdbKey, ct));
+            }
+            catch
+            {
+                // поиск не удался — остаются варианты по appId
+            }
         }
 
         if (ct.IsCancellationRequested) return;
+
+        candidates = candidates
+            .Where(c => !string.IsNullOrWhiteSpace(c.Url))
+            .GroupBy(c => c.Url)
+            .Select(g => g.First())
+            .OrderByDescending(c => c.Portrait)
+            .ToList();
 
         if (candidates.Count == 0)
         {

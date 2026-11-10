@@ -70,6 +70,9 @@ public sealed class MainWindow : Window
     private int _recsFound;
     private Border _settingsLayer = null!;
     private Border _launchLayer = null!;
+    private string? _statusPending;
+    private bool _statusSwitching;
+    private CancellationTokenSource? _artCts;
     private Border? _splash;
     private Border? _splashFill;
     private DispatcherTimer? _splashTimer;
@@ -671,6 +674,14 @@ public sealed class MainWindow : Window
 
         _statusLabel = Ui.T(Loc.T("status.ready"), 11.5, Skin.TextDim);
         _statusLabel.Margin = new Thickness(14, 0, 0, 0);
+        _statusLabel.Transitions = new Transitions
+        {
+            new DoubleTransition
+            {
+                Property = Visual.OpacityProperty,
+                Duration = TimeSpan.FromMilliseconds(110),
+            },
+        };
         Grid.SetColumn(_statusLabel, 1);
         grid.Children.Add(_statusLabel);
 
@@ -1547,8 +1558,25 @@ public sealed class MainWindow : Window
 
     private async void ChangeCover(GameEntry game)
     {
-        var window = new CoverWindow(game.Title, _settings.SteamGridDbKey, game.Id);
-        await window.ShowDialog(this);
+        var window = new CoverPanel(game.Title, _settings.SteamGridDbKey, game.Id, game.SteamAppId);
+
+        // панель внутри окна: отдельное окно после закрытия оставляло «залипшее» наведение
+        var done = new TaskCompletionSource();
+        window.Closed += () => done.TrySetResult();
+        window.HorizontalAlignment = HorizontalAlignment.Center;
+        window.VerticalAlignment = VerticalAlignment.Center;
+        window.Margin = new Thickness(24);
+
+        _settingsLayer.Child = window;
+        _settingsLayer.Opacity = 0;
+        _settingsLayer.IsVisible = true;
+        Dispatcher.UIThread.Post(() => _settingsLayer.Opacity = 1);
+
+        await done.Task;
+
+        _settingsLayer.Opacity = 0;
+        _settingsLayer.IsVisible = false;
+        _settingsLayer.Child = null;
 
         if (window.ChosenCoverPath != null)
         {
@@ -1717,6 +1745,13 @@ public sealed class MainWindow : Window
     private void CloseSettings()
     {
         if (!_settingsLayer.IsVisible) return;
+
+        // панель обложки закрывает себя сама и сама убирает слой
+        if (_settingsLayer.Child is CoverPanel cover)
+        {
+            cover.Cancel();
+            return;
+        }
 
         _settingsLayer.Opacity = 0;
         if (_settingsPanel != null) _settingsPanel.RenderTransform = new ScaleTransform(0.98, 0.98);
@@ -2100,6 +2135,7 @@ public sealed class MainWindow : Window
     private void OnClosing(object? sender, WindowClosingEventArgs e)
     {
         _workCts?.Cancel();
+        _artCts?.Cancel();
         _settings.Language = Loc.Lang;
         _settings.WindowWidth = Width;
         _settings.WindowHeight = Height;
@@ -2202,29 +2238,37 @@ public sealed class MainWindow : Window
     private void SetStatus(string text)
     {
         if (_statusLabel == null) return;
-        if (_statusLabel.Text == text) return;
 
-        _statusLabel.Transitions = new Transitions
+        // статус прилетает и из фоновых потоков (каталог, импорт, обложки)
+        if (!Dispatcher.UIThread.CheckAccess())
         {
-            new DoubleTransition
-            {
-                Property = Visual.OpacityProperty,
-                Duration = TimeSpan.FromMilliseconds(110),
-            },
-        };
+            Dispatcher.UIThread.Post(() => SetStatus(text));
+            return;
+        }
 
-        _statusLabel.Opacity = 0.25;
+        if (_statusLabel.Text == text && !_statusSwitching) return;
+
+        // одна отложенная смена: десятки вызовов подряд не обгоняют друг друга
+        _statusPending = text;
+        if (_statusSwitching) return;
+
+        _statusSwitching = true;
+        _statusLabel.Opacity = 0.45;
         DispatcherTimer.RunOnce(() =>
         {
-            _statusLabel.Text = text;
-            _statusLabel.Opacity = 1;
+            _statusSwitching = false;
+            if (_statusLabel != null && _statusPending != null)
+            {
+                _statusLabel.Text = _statusPending;
+                _statusLabel.Opacity = 1;
+                _statusPending = null;
+            }
         }, TimeSpan.FromMilliseconds(90));
     }
 
     private void UpdateCount()
     {
         if (_countLabel == null) return;
-        var visible = _grid?.Children.Count ?? 0;
         _countLabel.Text = Loc.F("status.games", _games.Count);
     }
 
@@ -2295,6 +2339,7 @@ public sealed class MainWindow : Window
             _progress.SetActive(false);
             _scanButton.Opacity = 1;
             _scanButton.IsEnabled = true;
+            SetStatus(Loc.F("status.done", _games.Count));
         }
     }
 
@@ -2320,6 +2365,8 @@ public sealed class MainWindow : Window
             return 0;
         }
 
+        if (!quiet) SetStatus(Loc.T("status.importing"));
+
         var added = MergeImported(found);
         Storage.SaveGames(_games);
 
@@ -2329,15 +2376,14 @@ public sealed class MainWindow : Window
             SetStatus(Loc.F("status.launchers", found.Count));
         }
 
+        var imported = new HashSet<string>(found.Select(f => f.Folder), StringComparer.OrdinalIgnoreCase);
         var needArt = _games
-            .Where(g => found_contains(g) && (string.IsNullOrEmpty(g.CoverFile) || !System.IO.File.Exists(g.CoverFile)))
+            .Where(g => imported.Contains(g.FolderPath) &&
+                        (string.IsNullOrEmpty(g.CoverFile) || !System.IO.File.Exists(g.CoverFile)))
             .ToList();
         if (needArt.Count > 0) await FetchArtworkForAsync(needArt);
 
         return found.Count;
-
-        bool found_contains(GameEntry g) =>
-            found.Any(f => string.Equals(f.Folder, g.FolderPath, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>
@@ -2363,6 +2409,7 @@ public sealed class MainWindow : Window
             if (byFolder.TryGetValue(item.Folder, out var entry))
             {
                 entry.Source = item.Launcher;
+                if (item.AppId.HasValue && !entry.SteamAppId.HasValue) entry.SteamAppId = item.AppId;
                 if (string.IsNullOrEmpty(entry.ExePath)) entry.ExePath = item.Exe;
                 if (!entry.Locked && string.IsNullOrWhiteSpace(entry.Title)) entry.Title = item.Title;
                 continue;
@@ -2382,6 +2429,7 @@ public sealed class MainWindow : Window
                 ExePath = item.Exe,
                 Source = item.Launcher,
                 FromLauncher = true,
+                SteamAppId = item.AppId,
                 AddedUtc = DateTime.UtcNow,
             };
             _games.Add(created);
@@ -2446,7 +2494,9 @@ public sealed class MainWindow : Window
     {
         if (games.Count == 0) return;
 
-        var ct = _workCts?.Token ?? CancellationToken.None;
+        // у обложек свой токен: пересборка библиотеки не должна обрывать загрузку
+        _artCts ??= new CancellationTokenSource();
+        var ct = _artCts.Token;
         var semaphore = new SemaphoreSlim(3);
         int done = 0;
         int total = games.Count;
@@ -2461,13 +2511,35 @@ public sealed class MainWindow : Window
             {
                 if (ct.IsCancellationRequested) return;
 
-                var (path, portrait, appId, matchedName) =
-                    await Artwork.AutoArtworkAsync(game.Title, key, game.Id, ct);
+                string? path = null;
+                var portrait = false;
+                int? appId = null;
+                string? matchedName = null;
+
+                // у игр из Steam appId известен из манифеста — берём обложку напрямую
+                if (game.SteamAppId.HasValue)
+                {
+                    var direct = await Artwork.DirectAsync(game.SteamAppId.Value, game.Id, ct);
+                    path = direct.path;
+                    portrait = direct.portrait;
+
+                    // у чужих лаунчеров appId подобран поиском: если обложки нет, id был ошибочным
+                    if (path == null && game.Source != "steam") game.SteamAppId = null;
+                }
+
+                if (path == null)
+                {
+                    var auto = await Artwork.AutoArtworkAsync(game.Title, key, game.Id, ct);
+                    path = auto.path;
+                    portrait = auto.portrait;
+                    appId = auto.appId;
+                    matchedName = auto.matchedName;
+                }
 
                 if (matchedName != null)
                 {
                     game.SteamName = matchedName;
-                    if (appId.HasValue) game.SteamAppId = appId;
+                    if (appId.HasValue && path != null) game.SteamAppId = appId;
                 }
 
                 if (path != null)
@@ -2513,6 +2585,8 @@ public sealed class MainWindow : Window
     {
         var pending = _games.Where(g => g.SizeBytes <= 0).ToList();
         if (pending.Count == 0) return;
+
+        SetStatus(Loc.F("status.sizes", 0, pending.Count));
 
         var semaphore = new SemaphoreSlim(2);
         var tasks = pending.Select(async game =>

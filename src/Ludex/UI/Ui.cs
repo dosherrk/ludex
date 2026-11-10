@@ -48,31 +48,32 @@ public static class Ui
         if (onClick != null)
         {
             frame.Tag = "clickable";
-            frame.Resources["gvBaseBg"] = bg ?? Brushes.Transparent;
-            frame.Resources["gvHoverBg"] = hover ?? Skin.PanelAlt;
+
+            // подложка наведения: та же краска, но прозрачная. Так переход идёт
+            // только по альфе и не даёт яркой «вспышки» в начале наведения
+            var hoverBrush = hover ?? Skin.PanelAlt;
+            var baseBrush = bg ?? Brushes.Transparent;
+            if (hoverBrush is ISolidColorBrush hs && baseBrush is ISolidColorBrush { Color.A: 0 })
+                baseBrush = new SolidColorBrush(Color.FromArgb(0, hs.Color.R, hs.Color.G, hs.Color.B));
+
+            frame.Resources["gvBaseBg"] = baseBrush;
+            frame.Resources["gvHoverBg"] = hoverBrush;
+            frame.Background = baseBrush;
 
             frame.RenderTransformOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative);
             frame.Transitions = new Transitions
             {
-                new BrushTransition { Property = Border.BackgroundProperty, Duration = TimeSpan.FromMilliseconds(170) },
+                new BrushTransition { Property = Border.BackgroundProperty, Duration = TimeSpan.FromMilliseconds(130) },
                 new TransformOperationsTransition
                 {
                     Property = Visual.RenderTransformProperty,
-                    Duration = TimeSpan.FromMilliseconds(150),
+                    Duration = TimeSpan.FromMilliseconds(110),
                     Easing = new Avalonia.Animation.Easings.CubicEaseOut(),
                 },
             };
 
-            frame.PointerEntered += (_, _) =>
-            {
-                frame.Background = HoverOf(frame);
-                frame.RenderTransform = new ScaleTransform(1.02, 1.02);
-            };
-            frame.PointerExited += (_, _) =>
-            {
-                frame.Background = BaseOf(frame);
-                frame.RenderTransform = new ScaleTransform(1, 1);
-            };
+            frame.PointerEntered += (_, _) => frame.Background = HoverOf(frame);
+            frame.PointerExited += (_, _) => frame.Background = BaseOf(frame);
             frame.PointerReleased += (_, _) => frame.RenderTransform = new ScaleTransform(1, 1);
             frame.PointerCaptureLost += (_, _) => frame.RenderTransform = new ScaleTransform(1, 1);
             frame.PointerPressed += (_, e) =>
@@ -97,6 +98,9 @@ public static class Ui
     /// <summary>Поменять цвета «кликабельной» плашки без пересборки интерфейса — плавно.</summary>
     public static void SetColors(Border frame, IBrush baseBg, IBrush hoverBg)
     {
+        if (hoverBg is ISolidColorBrush hs && baseBg is ISolidColorBrush { Color.A: 0 })
+            baseBg = new SolidColorBrush(Color.FromArgb(0, hs.Color.R, hs.Color.G, hs.Color.B));
+
         frame.Resources["gvBaseBg"] = baseBg;
         frame.Resources["gvHoverBg"] = hoverBg;
         frame.Background = baseBg;

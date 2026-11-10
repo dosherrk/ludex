@@ -68,6 +68,38 @@ public static class Artwork
             AppPaths.Log("SearchSteam failed: " + ex.Message);
         }
 
+        if (result.Count == 0) result.AddRange(await SearchCommunityAsync(term, ct).ConfigureAwait(false));
+
+        return result;
+    }
+
+    /// <summary>Запасной поиск: steamcommunity отдаёт JSON без ключей и почти никогда не блокируется.</summary>
+    private static async Task<List<(int, string)>> SearchCommunityAsync(string term, CancellationToken ct)
+    {
+        var result = new List<(int, string)>();
+        if (string.IsNullOrWhiteSpace(term)) return result;
+
+        var url = "https://steamcommunity.com/actions/SearchApps/" + Uri.EscapeDataString(term);
+        try
+        {
+            var json = await Http.GetStringAsync(url, ct).ConfigureAwait(false);
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.ValueKind != JsonValueKind.Array) return result;
+
+            foreach (var item in doc.RootElement.EnumerateArray())
+            {
+                if (!item.TryGetProperty("appid", out var id)) continue;
+                if (!item.TryGetProperty("name", out var name)) continue;
+
+                var raw = id.ValueKind == JsonValueKind.String ? id.GetString() : id.GetRawText();
+                if (int.TryParse(raw, out var appId)) result.Add((appId, name.GetString() ?? ""));
+            }
+        }
+        catch (Exception ex)
+        {
+            AppPaths.Log("SearchCommunity failed: " + ex.Message);
+        }
+
         return result;
     }
 
@@ -90,7 +122,7 @@ public static class Artwork
                 .OrderByDescending(x => x.score)
                 .First();
 
-            if (best.score >= 0.52) return best;
+            if (best.score >= 0.45) return best;
         }
 
         return null;
@@ -235,6 +267,23 @@ public static class Artwork
             .OrderByDescending(c => c.Portrait)
             .ThenBy(c => c.Source == "steamgriddb" ? 0 : 1)
             .ToList();
+    }
+
+    /// <summary>Обложка по известному Steam AppId — без поиска, прямо с CDN.</summary>
+    public static async Task<(string? path, bool portrait)> DirectAsync(int appId, string gameId, CancellationToken ct)
+    {
+        var candidates = await SteamCandidatesAsync(appId, "", ct).ConfigureAwait(false);
+        foreach (var candidate in candidates)
+        {
+            if (ct.IsCancellationRequested) return (null, false);
+            var bytes = await FetchBytesAsync(candidate.Url, ct).ConfigureAwait(false);
+            if (bytes == null) continue;
+
+            var path = SaveCover(gameId, bytes, candidate.Portrait);
+            if (path != null) return (path, candidate.Portrait);
+        }
+
+        return (null, false);
     }
 
     public static async Task<byte[]?> FetchBytesAsync(string url, CancellationToken ct = default)
