@@ -76,7 +76,7 @@ public sealed class IntegrationsPanel : Border
         header.Children.Add(close);
         header.Children.Add(Ui.T(Loc.T("integrations.title"), 21, Skin.Text, FontWeight.Bold));
 
-        var body = new StackPanel { Margin = new Thickness(24, 14, 24, 0), Spacing = 12 };
+        var body = new StackPanel { Margin = new Thickness(24, 14, 24, 16), Spacing = 12 };
         body.Children.Add(Ui.T(Loc.T("integrations.hint"), 11.5, Skin.TextDim, wrap: TextWrapping.Wrap));
 
         _summary = Ui.T("", 11.5, Skin.Accent, FontWeight.Medium);
@@ -89,15 +89,8 @@ public sealed class IntegrationsPanel : Border
             _rows.Children.Add(BuildRow(descriptor.Key));
         }
 
-        var scroll = new ScrollViewer
-        {
-            Content = _rows,
-            MaxHeight = 400,
-            VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
-            Background = Brushes.Transparent,
-        };
-        Ui.SmoothScroll(scroll, 70);
-        body.Children.Add(scroll);
+        // прокрутка одна — общая, на всю панель: вложенный ScrollViewer обрезал текст снизу
+        body.Children.Add(_rows);
 
         body.Children.Add(Ui.Divider());
 
@@ -113,7 +106,7 @@ public sealed class IntegrationsPanel : Border
             HorizontalAlignment = HorizontalAlignment.Right,
         };
 
-        _rescanButton = Ui.GhostButton(Loc.T("btn.rescanAll"), () => _ = LoadAsync());
+        _rescanButton = Ui.GhostButton(Loc.T("btn.rescanAll"), () => _ = LoadAsync(force: true));
         buttons.Children.Add(_rescanButton);
         buttons.Children.Add(Ui.PrimaryButton(Loc.T("btn.close"), () => Closed?.Invoke()));
 
@@ -220,18 +213,26 @@ public sealed class IntegrationsPanel : Border
         _ => key.Length >= 2 ? key[..2].ToUpperInvariant() : key.ToUpperInvariant(),
     };
 
-    private async Task LoadAsync()
+    private async Task LoadAsync(bool force = false)
     {
         if (_scanning) return;
         _scanning = true;
-        _rescanButton.Opacity = 0.55;
-        _rescanButton.IsEnabled = false;
 
-        foreach (var key in _statusTexts.Keys) _statusTexts[key].Text = Loc.T("integrations.checking");
+        // проверка выполняется один раз за запуск: повторно — только по кнопке «Обновить»
+        var cached = !force && Launchers.HasSessionCache;
+
+        if (!cached)
+        {
+            _rescanButton.Opacity = 0.55;
+            _rescanButton.IsEnabled = false;
+            foreach (var key in _statusTexts.Keys) _statusTexts[key].Text = Loc.T("integrations.checking");
+        }
 
         try
         {
-            var states = await Task.Run(() => Launchers.ScanAll(_enabled));
+            var states = cached
+                ? Launchers.ScanAll(_enabled)
+                : await Task.Run(() => Launchers.RescanAll(_enabled));
             _states = states;
 
             await Dispatcher.UIThread.InvokeAsync(() =>

@@ -60,7 +60,18 @@ public static class Launchers
         return !d.WindowsOnly || OperatingSystem.IsWindows();
     }
 
-    public static List<LauncherState> ScanAll(IEnumerable<string> enabled)
+    /// <summary>Результат проверки за текущий запуск: лаунчеры ищутся один раз, не при каждом открытии панели.</summary>
+    private static List<LauncherState>? _session;
+
+    public static bool HasSessionCache => _session != null;
+
+    /// <summary>Проверка при первом обращении; дальше отдаётся уже найденное.</summary>
+    public static List<LauncherState> ScanAll(IEnumerable<string> enabled) => _session ??= DetectAll();
+
+    /// <summary>Принудительная перепроверка (кнопка «Обновить» в интеграциях).</summary>
+    public static List<LauncherState> RescanAll(IEnumerable<string> enabled) => _session = DetectAll();
+
+    private static List<LauncherState> DetectAll()
     {
         var states = new List<LauncherState>();
 
@@ -276,7 +287,68 @@ public static class Launchers
     private static IEnumerable<string> Existing(params string[] paths) =>
         paths.Where(p => !string.IsNullOrWhiteSpace(p) && Directory.Exists(p));
 
+    /// <summary>То же для файлов: Directory.Exists на пути к файлу всегда false.</summary>
+    private static IEnumerable<string> ExistingFiles(params string[] paths) =>
+        paths.Where(p => !string.IsNullOrWhiteSpace(p) && File.Exists(p));
+
     // ------------------------------------------------------------------ Steam
+
+    /// <summary>
+    /// Все библиотеки Steam: основная плюс всё, что перечислено в libraryfolders.vdf.
+    /// Steam держит этот файл в двух местах (steamapps и config), а сами библиотеки
+    /// часто лежат на других дисках — поэтому обходим файлы транзитивно и разбираем
+    /// оба формата (новый с "path" и старый с номером).
+    /// </summary>
+    private static List<string> CollectLibraries(string steamRoot)
+    {
+        var ordered = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var queue = new Queue<string>();
+
+        void Add(string? path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return;
+            var clean = path!.Trim().TrimEnd('\\', '/');
+            if (clean.Length == 0) return;
+            if (!seen.Add(clean)) return;
+            ordered.Add(clean);
+            queue.Enqueue(clean);
+        }
+
+        Add(steamRoot);
+
+        while (queue.Count > 0)
+        {
+            var library = queue.Dequeue();
+
+            foreach (var vdf in ExistingFiles(
+                         Path.Combine(library, "steamapps", "libraryfolders.vdf"),
+                         Path.Combine(library, "config", "libraryfolders.vdf")))
+            {
+                try
+                {
+                    var text = File.ReadAllText(vdf);
+
+                    // новый формат: "path" "D:\\SteamLibrary"
+                    foreach (Match m in Regex.Matches(text, "\"path\"\\s*\"([^\"]+)\""))
+                        Add(m.Groups[1].Value.Replace("\\\\", "\\"));
+
+                    // старый формат: "1" "D:\\SteamLibrary"
+                    foreach (Match m in Regex.Matches(text, "\"\\d+\"\\s*\"([^\"]+)\""))
+                    {
+                        var value = m.Groups[1].Value.Replace("\\\\", "\\");
+                        if (value.Contains(':') || value.StartsWith('/')) Add(value);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    AppPaths.Log("libraryfolders.vdf: " + ex.Message);
+                }
+            }
+        }
+
+        return ordered;
+    }
 
     private static (bool, List<LauncherGame>) Steam()
     {
@@ -313,27 +385,8 @@ public static class Launchers
         var steamRoot = Existing(roots.ToArray()).FirstOrDefault();
         if (steamRoot == null) return (false, new List<LauncherGame>());
 
-        var libraries = new List<string> { steamRoot };
-        foreach (var vdf in Existing(Path.Combine(steamRoot, "steamapps", "libraryfolders.vdf")))
-        {
-            try
-            {
-                var text = File.ReadAllText(vdf);
-                foreach (Match m in Regex.Matches(text, "\"path\"\\s*\"([^\"]+)\""))
-                    libraries.Add(m.Groups[1].Value.Replace("\\\\", "\\"));
-
-                // старый формат: "1" "D:\\SteamLibrary"
-                foreach (Match m in Regex.Matches(text, "\"\\d+\"\\s*\"([^\"]+)\""))
-                {
-                    var value = m.Groups[1].Value.Replace("\\\\", "\\");
-                    if (value.Contains(':') || value.StartsWith('/')) libraries.Add(value);
-                }
-            }
-            catch (Exception ex)
-            {
-                AppPaths.Log("libraryfolders.vdf: " + ex.Message);
-            }
-        }
+        var libraries = CollectLibraries(steamRoot);
+        AppPaths.Log($"Steam: библиотек {libraries.Count} — " + string.Join(" | ", libraries));
 
         var games = new List<LauncherGame>();
         var known = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -465,7 +518,7 @@ public static class Launchers
         }
 
         // Legendary (официальный CLI Epic для Linux) хранит установленные игры в JSON.
-        foreach (var file in Existing(Path.Combine(Home, ".config", "legendary", "installed.json")))
+        foreach (var file in ExistingFiles(Path.Combine(Home, ".config", "legendary", "installed.json")))
         {
             installed = true;
             games.AddRange(ReadInstalledMap(file, "epic"));

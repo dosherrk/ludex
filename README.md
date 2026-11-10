@@ -14,7 +14,7 @@
 [![macOS](https://img.shields.io/badge/macOS-Apple%20Silicon%20%2F%20Intel-000000?logo=apple&logoColor=white)](#macos)
 [![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet&logoColor=white)](#сборка-из-исходников)
 [![Avalonia](https://img.shields.io/badge/Avalonia-11-8B44AC)](https://avaloniaui.net)
-[![Version](https://img.shields.io/badge/version-1.14.3-3B9EFF)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.15.0-3B9EFF)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-35C48A)](LICENSE)
 [![Website](https://img.shields.io/badge/сайт-ludex--one.vercel.app-3B9EFF)](https://ludex-one.vercel.app)
 
@@ -58,33 +58,21 @@
 
 ## Скриншоты
 
-| Экран загрузки | Каталог одиночных игр |
+| Экран загрузки (отдельное окно) | Библиотека |
 |---|---|
-| ![Загрузка](screenshots/splash.png) | ![Каталог](screenshots/catalog.png) |
+| ![Загрузка](screenshots/splash.png) | ![Библиотека](screenshots/library.png) |
 
-| Жанры каталога | Карточка игры |
+| Панель игры | Каталог рекомендаций |
 |---|---|
-| ![Жанры](screenshots/catalog-genres.png) | ![Карточка](screenshots/catalog-card.png) |
+| ![Панель игры](screenshots/game-panel.png) | ![Каталог](screenshots/catalog.png) |
 
-| Панель игры | Наведение на карточку |
+| Интеграции с лаунчерами | Настройки |
 |---|---|
-| ![Панель игры](screenshots/game-panel.png) | ![Наведение](screenshots/card-favorite.png) |
-
-| Сортировка (свой дропдаун) | Окно запуска |
-|---|---|
-| ![Сортировка](screenshots/dropdown.png) | ![Запуск](screenshots/launch.png) |
+| ![Интеграции](screenshots/integrations.png) | ![Настройки](screenshots/settings.png) |
 
 | Кастомизация | Светлая тема |
 |---|---|
 | ![Кастомизация](screenshots/customize.png) | ![Светлая тема](screenshots/library-light.png) |
-
-| Настройки | Обои на фоне |
-|---|---|
-| ![Настройки](screenshots/settings.png) | ![Обои](screenshots/library-wallpaper.png) |
-
-| Интеграции с лаунчерами | Библиотека с источниками |
-|---|---|
-| ![Интеграции](screenshots/integrations.png) | ![Источники](screenshots/library-integrations.png) |
 
 ## Сайт
 

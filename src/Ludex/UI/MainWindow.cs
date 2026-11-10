@@ -75,11 +75,6 @@ public sealed class MainWindow : Window
     private string? _statusPending;
     private bool _statusSwitching;
     private CancellationTokenSource? _artCts;
-    private Border? _splash;
-    private Border? _splashFill;
-    private DispatcherTimer? _splashTimer;
-    private bool _splashClosed;
-    private DateTime _splashStarted = DateTime.UtcNow;
     private SettingsPanel? _settingsPanel;
     private IntegrationsPanel? _integrationsPanel;
     private AvaloniaPath? _maximizePath;
@@ -337,11 +332,6 @@ public sealed class MainWindow : Window
         _launchLayer.PointerPressed += (_, e) => e.Handled = true;
         Grid.SetColumnSpan(_launchLayer, 2);
         root.Children.Add(_launchLayer);
-
-        // заставка нужна только при первом построении окна: перестройка интерфейса
-        // после настроек не должна возвращать экран загрузки
-        if (!_splashClosed) root.Children.Add(BuildSplash());
-        else _splash = null;
 
         Content = root;
         UpdateCount();
@@ -1952,112 +1942,12 @@ public sealed class MainWindow : Window
         };
     }
 
-    // -------------------------------------------------------------- заставка
-
-    /// <summary>Экран загрузки: пока он на виду, каталог и библиотека уже собираются.</summary>
-    private Control BuildSplash()
+    /// <summary>
+    /// Грузит каталог и библиотеку, пока на экране отдельное окно загрузки.
+    /// Вызывается из <see cref="App"/> до показа главного окна.
+    /// </summary>
+    public async Task WarmUpAsync()
     {
-        // бегущий блик по полоске — без текста, просто «идёт работа»
-        _splashFill = new Border
-        {
-            Width = 64,
-            Height = 3,
-            CornerRadius = new CornerRadius(2),
-            Background = Skin.Accent,
-            HorizontalAlignment = HorizontalAlignment.Left,
-        };
-
-        var track = new Border
-        {
-            Width = 220,
-            Height = 3,
-            CornerRadius = new CornerRadius(2),
-            Background = Skin.PanelAlt,
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            ClipToBounds = true,
-            Child = new Canvas
-            {
-                Width = 220,
-                Height = 3,
-                Children = { _splashFill },
-            },
-        };
-
-        // логотип и полоска — одной ширины и по одной оси, ничего не «съезжает»
-        var logo = Ui.T("LUDEX", 21, Skin.Text, FontWeight.Bold);
-        logo.TextAlignment = TextAlignment.Center;
-        logo.HorizontalAlignment = HorizontalAlignment.Stretch;
-        logo.LetterSpacing = 1.2;
-
-        var stack = new StackPanel
-        {
-            Width = 220,
-            Spacing = 14,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-            Children = { logo, track },
-        };
-
-        _splash = new Border
-        {
-            // фон непрозрачный: под заставкой не должно быть видно библиотеку
-            Background = new SolidColorBrush(Skin.BgColor),
-            Child = stack,
-            Transitions = new Transitions
-            {
-                new DoubleTransition
-                {
-                    Property = OpacityProperty,
-                    Duration = TimeSpan.FromMilliseconds(240),
-                    Easing = new Avalonia.Animation.Easings.CubicEaseOut(),
-                },
-            },
-        };
-        _splash.PointerPressed += (_, e) => e.Handled = true;
-
-        Grid.SetColumnSpan(_splash, 2);
-        return _splash;
-    }
-
-    /// <summary>Бегущая полоска: позиция считается по времени, без накопления ошибки.</summary>
-    private void AnimateSplash()
-    {
-        if (_splashFill == null || _splashClosed) return;
-
-        const double trackWidth = 220;
-        const double segment = 64;
-        const double period = 1.4;
-
-        var phase = (DateTime.UtcNow - _splashStarted).TotalSeconds % period / period;
-        // туда-обратно, с плавным краем
-        var eased = phase < 0.5 ? phase * 2 : (1 - phase) * 2;
-        var x = (trackWidth - segment) * eased;
-
-        Canvas.SetLeft(_splashFill, x);
-        _splashFill.Opacity = 0.35 + 0.65 * Math.Sin(Math.PI * eased);
-    }
-
-    private async Task CloseSplashAsync()
-    {
-        if (_splash == null || _splashClosed) return;
-        _splashClosed = true;
-
-        _splashTimer?.Stop();
-        _splashTimer = null;
-        _splash.Opacity = 0;
-        await Task.Delay(280);
-        _splash.IsVisible = false;
-        _splashFill = null;
-    }
-
-    /// <summary>Грузит каталог и библиотеку, пока висит заставка.</summary>
-    private async Task WarmUpAsync()
-    {
-        _splashStarted = DateTime.UtcNow;
-        _splashTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
-        _splashTimer.Tick += (_, _) => AnimateSplash();
-        _splashTimer.Start();
-
         var started = DateTime.UtcNow;
 
         var catalog = StoreCatalog.LoadAsync(false, null, CancellationToken.None);
@@ -2090,7 +1980,6 @@ public sealed class MainWindow : Window
             }
         }
 
-        await CloseSplashAsync();
     }
 
     // -------------------------------------------------------------- scanning
@@ -2104,9 +1993,6 @@ public sealed class MainWindow : Window
 
         if (_settings.Folders.Count == 0 && _games.Count == 0)
             ShowEvent(Loc.T("status.noFolders"));
-
-        // заставка: пока она на экране, грузятся каталог и библиотека
-        _ = WarmUpAsync();
     }
 
     // ------------------------------------------------------- автообновление

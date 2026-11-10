@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Styling;
 using Avalonia.Themes.Fluent;
+using Avalonia.Threading;
 
 namespace Ludex;
 
@@ -48,7 +49,30 @@ public class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            desktop.MainWindow = new Ludex.UI.MainWindow();
+            // сначала отдельное маленькое окно загрузки, как у Steam;
+            // главное окно создаётся сразу, но показывается уже собранным
+            var splash = new Ludex.UI.SplashWindow();
+            splash.Show();
+
+            // окно создаётся сразу, но показывается только после прогрева —
+            // иначе платформа показывает его само, до окончания загрузки
+            var main = new Ludex.UI.MainWindow();
+
+            Dispatcher.UIThread.Post(async () =>
+            {
+                try
+                {
+                    await main.WarmUpAsync();
+                }
+                catch (Exception ex)
+                {
+                    AppPaths.Log("WarmUp: " + ex);
+                }
+
+                main.Show();
+                desktop.MainWindow = main;
+                splash.Finish();
+            });
         }
 
         base.OnFrameworkInitializationCompleted();
