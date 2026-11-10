@@ -14,7 +14,7 @@
 [![macOS](https://img.shields.io/badge/macOS-Apple%20Silicon%20%2F%20Intel-000000?logo=apple&logoColor=white)](#macos)
 [![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet&logoColor=white)](#сборка-из-исходников)
 [![Avalonia](https://img.shields.io/badge/Avalonia-11-8B44AC)](https://avaloniaui.net)
-[![Version](https://img.shields.io/badge/version-1.13.0-3B9EFF)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.13.1-3B9EFF)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-35C48A)](LICENSE)
 [![Website](https://img.shields.io/badge/сайт-ludex--one.vercel.app-3B9EFF)](https://ludex-one.vercel.app)
 
@@ -44,8 +44,8 @@
   вроде прицелов в подборку не попадают: каталог собирается из поиска магазина по фильтру
   «есть одиночная игра» и кэшируется на 3 дня.
 - **Быстрый старт.** При запуске показывается экран загрузки: под ним собираются каталог
-  и ваша библиотека, поэтому «Рекомендации» потом открываются сразу. Кнопка «Пропустить» —
-  если ждать не хочется.
+  и ваша библиотека, поэтому «Рекомендации» открываются сразу, уже с обложками. Кэш каталога
+  живёт 3 дня, устаревший показывается мгновенно и обновляется в фоне.
 - **Карточка игры.** Обложка, название, разработчик и издатель, жанры, короткое описание
   и кнопка **«Найти в браузере»** — открывает в браузере по умолчанию поиск по запросу
   «название игры» скачать (движок — Google, Яндекс или DuckDuckGo, выбирается в настройках).

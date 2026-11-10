@@ -79,6 +79,7 @@ public static class Loc
         ["catalog.loadingFree"] = ("Отсеиваем бесплатные сетевые игры…", "Filtering out free-to-play online games…"),
         ["catalog.loadingMmo"] = ("Отсеиваем MMO…", "Filtering out MMOs…"),
         ["catalog.throttled"] = ("Магазин недавно не отвечал — подождём пару минут", "The store did not respond recently — try again in a few minutes"),
+        ["catalog.blocked"] = ("Магазин временно ограничил запросы — попробуйте обновить через несколько минут", "The store is rate-limiting requests — try refreshing in a few minutes"),
         ["catalog.empty"] = ("Поиск магазина не вернул игр", "The store search returned no games"),
         ["recs.offlineWhy"] = ("Каталог не загрузился: {0}", "The catalogue did not load: {0}"),
         ["settings.webSearch"] = ("Поиск в браузере", "Browser search"),

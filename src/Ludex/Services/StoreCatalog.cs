@@ -27,8 +27,18 @@ public static class StoreCatalog
     private const int PagesPerGenre = 3;
 
     /// <summary>Глубина списков «бесплатные» и «MMO» — их вычитаем из каталога.</summary>
-    private const int FreePages = 12;
-    private const int MmoPages = 6;
+    private const int FreePages = 6;
+    private const int MmoPages = 4;
+
+    /// <summary>Минимальный шаг между запросами к поиску: магазин отвечает 429, если частить.</summary>
+    private static int _minGapMs = 600;
+
+    /// <summary>Не больше двух запросов одновременно — иначе магазин начинает отказывать.</summary>
+    private static readonly SemaphoreSlim Gate = new(2, 2);
+    private static readonly object RateLock = new();
+    private static DateTime _nextSlot = DateTime.UtcNow;
+
+    private static readonly TimeSpan ExcludeTtl = TimeSpan.FromDays(14);
 
     private static readonly TimeSpan Ttl = TimeSpan.FromDays(3);
     private static readonly TimeSpan FailTtl = TimeSpan.FromMinutes(10);
@@ -97,6 +107,9 @@ public static class StoreCatalog
 
     private static Task<List<StoreGame>>? _task;
 
+    /// <summary>Магазин ответил 403 — дальше страницы не запрашиваем, заканчиваем быстро.</summary>
+    private static bool _blocked;
+
     /// <summary>Каталог уже загружен (или грузится) — тогда повторный вызов ничего не начинает.</summary>
     public static bool IsReady => _task is { IsCompletedSuccessfully: true };
 
@@ -134,9 +147,24 @@ public static class StoreCatalog
     private static async Task<List<StoreGame>> LoadCoreAsync(bool force, Action<string>? progress, CancellationToken ct)
     {
         var cached = ReadCache();
+        var stamp = ReadCacheStamp();
+        var fresh = stamp != default && DateTime.UtcNow - stamp <= Ttl;
+
         if (!force && cached != null)
         {
-            FetchedUtc = ReadCacheStamp();
+            FetchedUtc = stamp;
+
+            // устаревший кэш показываем сразу, а свежий собираем в фоне
+            if (!fresh)
+            {
+                AppPaths.Log("StoreCatalog: показываем кэш, обновляем в фоне");
+                _ = Task.Run(async () =>
+                {
+                    try { await LoadCoreAsync(true, null, CancellationToken.None); }
+                    catch (Exception ex) { AppPaths.Log("StoreCatalog background: " + ex.Message); }
+                }, CancellationToken.None);
+            }
+
             Report(progress, Loc.T("splash.catalogReady"), 1);
             return cached;
         }
@@ -152,60 +180,81 @@ public static class StoreCatalog
             using var http = MakeClient();
             var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(90);
 
+            _blocked = false;
             var merged = new Dictionary<int, StoreGame>();
             var order = new List<int>();
 
-            // 1. списки, которые из каталога вычитаем
+            // 1. списки, которые из каталога вычитаем (меняются медленно — кэш на две недели)
             Report(progress, Loc.T("catalog.loadingFree"), 0.05);
-            var free = (await CollectAsync(http, "maxprice=free", FreePages, ct))
-                .Select(r => r.AppId).ToHashSet();
-            Report(progress, Loc.T("catalog.loadingMmo"), 0.12);
-            var mmo = (await CollectAsync(http, "tags=128", MmoPages, ct))
-                .Select(r => r.AppId).ToHashSet();
+            var (free, mmo) = await LoadExclusionsAsync(http, ct);
 
-            // 2. жанровые подборки
-            var genreIndex = 0;
+            // 2. жанровые подборки: страницы идут параллельно, но в общем темпе
+            var jobs = new List<(string Genre, string Tag, int Start)>();
             foreach (var (genre, tag) in SteamGenres)
             {
+                for (var page = 0; page < PagesPerGenre; page++)
+                    jobs.Add((genre, tag, page * 100));
+            }
+
+            var fetched = new System.Collections.Concurrent.ConcurrentDictionary<(string Genre, int Start),
+                List<(int AppId, string Name)>>();
+            var donePages = 0;
+
+            await Task.WhenAll(jobs.Select(async job =>
+            {
                 ct.ThrowIfCancellationRequested();
-                Report(progress, Loc.F("catalog.loading", ++genreIndex, SteamGenres.Length, DisplayGenre(genre)),
-                    0.15 + 0.8 * genreIndex / SteamGenres.Length);
+                if (_blocked || DateTime.UtcNow > deadline) return;
 
-                if (DateTime.UtcNow > deadline) break;
+                var rows = await FetchPageAsync(http, $"tags={job.Tag}", job.Start, ct);
+                fetched[(job.Genre, job.Start)] = rows;
 
-                var rows = await CollectAsync(http, $"tags={tag}", PagesPerGenre, ct);
+                var processed = Interlocked.Increment(ref donePages);
+                Report(progress,
+                    Loc.F("catalog.loading", Math.Min(SteamGenres.Length, processed * SteamGenres.Length / jobs.Count + 1),
+                        SteamGenres.Length, DisplayGenre(job.Genre)),
+                    0.15 + 0.8 * processed / jobs.Count);
+            }));
 
-                foreach (var (appId, name) in rows)
+            // склейка в стабильном порядке: жанр за жанром, страница за страницей
+            foreach (var (genre, tag) in SteamGenres)
+            {
+                for (var page = 0; page < PagesPerGenre; page++)
                 {
-                    if (free.Contains(appId) || mmo.Contains(appId)) continue;
+                    if (!fetched.TryGetValue((genre, page * 100), out var rows)) continue;
 
-                    if (!merged.TryGetValue(appId, out var game))
+                    foreach (var (appId, name) in rows)
                     {
-                        if (Rejected(name)) continue;
+                        if (free.Contains(appId) || mmo.Contains(appId)) continue;
 
-                        game = new StoreGame
+                        if (!merged.TryGetValue(appId, out var game))
                         {
-                            AppId = appId,
-                            Name = name,
-                            CoverUrl = $"https://cdn.cloudflare.steamstatic.com/steam/apps/{appId}/header.jpg",
-                            HeaderUrl = $"https://cdn.cloudflare.steamstatic.com/steam/apps/{appId}/header.jpg",
-                        };
+                            if (Rejected(name)) continue;
 
-                        game.Sections.Add("all");
-                        merged[appId] = game;
-                        order.Add(appId);
+                            game = new StoreGame
+                            {
+                                AppId = appId,
+                                Name = name,
+                                CoverUrl = $"https://cdn.cloudflare.steamstatic.com/steam/apps/{appId}/header.jpg",
+                                HeaderUrl = $"https://cdn.cloudflare.steamstatic.com/steam/apps/{appId}/header.jpg",
+                            };
+
+                            game.Sections.Add("all");
+                            merged[appId] = game;
+                            order.Add(appId);
+                        }
+
+                        var label = DisplayGenre(genre);
+                        if (Array.IndexOf(game.Genres, label) < 0)
+                            game.Genres = game.Genres.Append(label).ToArray();
                     }
-
-                    var label = DisplayGenre(genre);
-                    if (Array.IndexOf(game.Genres, label) < 0)
-                        game.Genres = game.Genres.Append(label).ToArray();
                 }
             }
 
             var games = order.Select(id => merged[id]).ToList();
-            if (games.Count == 0)
+            if (games.Count < 200)
             {
-                LastError = Loc.T("catalog.empty");
+                LastError = _blocked ? Loc.T("catalog.blocked") : Loc.T("catalog.empty");
+                try { File.WriteAllText(FailFile, DateTime.UtcNow.ToString("O") + " " + LastError); } catch { /* ignore */ }
                 AppPaths.Log("StoreCatalog: пустой результат поиска магазина");
                 return cached ?? new List<StoreGame>();
             }
@@ -232,6 +281,60 @@ public static class StoreCatalog
         }
     }
 
+    // ------------------------------------------------------------------ исключения
+
+    private sealed class ExcludeFile
+    {
+        public DateTime FetchedUtc { get; set; }
+        public int[] Free { get; set; } = Array.Empty<int>();
+        public int[] Mmo { get; set; } = Array.Empty<int>();
+    }
+
+    private static string ExcludePath => Path.Combine(CacheDir, "exclude.json");
+
+    /// <summary>
+    /// Бесплатные и MMO-игры, которые не должны попадать в подборку. Списки большие,
+    /// меняются медленно, поэтому кэшируются отдельно на две недели.
+    /// </summary>
+    private static async Task<(HashSet<int> Free, HashSet<int> Mmo)> LoadExclusionsAsync(
+        HttpClient http, CancellationToken ct)
+    {
+        try
+        {
+            if (File.Exists(ExcludePath))
+            {
+                var saved = JsonSerializer.Deserialize<ExcludeFile>(File.ReadAllText(ExcludePath));
+                if (saved != null && DateTime.UtcNow - saved.FetchedUtc < ExcludeTtl && saved.Free.Length > 0)
+                {
+                    return (saved.Free.ToHashSet(), saved.Mmo.ToHashSet());
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            AppPaths.Log("StoreCatalog exclude cache: " + ex.Message);
+        }
+
+        var free = (await CollectAsync(http, "maxprice=free", FreePages, ct)).Select(r => r.AppId).ToHashSet();
+        var mmo = (await CollectAsync(http, "tags=128", MmoPages, ct)).Select(r => r.AppId).ToHashSet();
+
+        try
+        {
+            File.WriteAllText(ExcludePath, JsonSerializer.Serialize(new ExcludeFile
+            {
+                FetchedUtc = DateTime.UtcNow,
+                Free = free.ToArray(),
+                Mmo = mmo.ToArray(),
+            }));
+        }
+        catch (Exception ex)
+        {
+            AppPaths.Log("StoreCatalog exclude write: " + ex.Message);
+        }
+
+        return (free, mmo);
+    }
+
     // ------------------------------------------------------------------ сеть
 
     private static async Task<List<(int AppId, string Name)>> CollectAsync(HttpClient http,
@@ -241,11 +344,29 @@ public static class StoreCatalog
         for (var page = 0; page < pages; page++)
         {
             ct.ThrowIfCancellationRequested();
+            if (_blocked) break;
+
             rows.AddRange(await FetchPageAsync(http, query, page * 100, ct));
-            await Task.Delay(450, ct);
         }
 
         return rows;
+    }
+
+    /// <summary>Ждёт свою очередь по общему темпу запросов.</summary>
+    private static async Task WaitTurnAsync(CancellationToken ct)
+    {
+        int gap;
+        lock (RateLock)
+        {
+            var now = DateTime.UtcNow;
+            if (_nextSlot < now) _nextSlot = now;
+
+            var slot = _nextSlot;
+            _nextSlot = slot.AddMilliseconds(_minGapMs);
+            gap = (int)Math.Max(0, (slot - now).TotalMilliseconds);
+        }
+
+        if (gap > 0) await Task.Delay(gap, ct);
     }
 
     private static async Task<List<(int AppId, string Name)>> FetchPageAsync(HttpClient http,
@@ -256,17 +377,31 @@ public static class StoreCatalog
         for (var attempt = 0; attempt < 3; attempt++)
         {
             ct.ThrowIfCancellationRequested();
+
+            await Gate.WaitAsync(ct);
             try
             {
+                await WaitTurnAsync(ct);
                 using var response = await http.GetAsync(url, ct);
+
+                // 403 — это не «попробуй ещё раз», а «хватит»: прекращаем обход
+                if (response.StatusCode == HttpStatusCode.Forbidden && attempt == 0)
+                {
+                    _blocked = true;
+                    AppPaths.Log($"StoreCatalog: магазин ограничил запросы ({query})");
+                    return new List<(int AppId, string Name)>();
+                }
+
                 if (response.StatusCode == HttpStatusCode.TooManyRequests)
                 {
-                    await Task.Delay(TimeSpan.FromSeconds(8 * (attempt + 1)), ct);
+                    // магазин просит притормозить: замедляемся и постепенно ускоряемся обратно
+                    _minGapMs = Math.Min(_minGapMs * 3 / 2, 2500);
                     continue;
                 }
 
                 response.EnsureSuccessStatusCode();
                 var json = await response.Content.ReadAsStringAsync(ct);
+                if (_minGapMs > 600) _minGapMs -= 40;
                 return ParsePage(json);
             }
             catch (OperationCanceledException)
@@ -276,11 +411,14 @@ public static class StoreCatalog
             catch (Exception ex) when (attempt < 2)
             {
                 AppPaths.Log($"StoreCatalog page {start} ({query}): {ex.Message}");
-                await Task.Delay(TimeSpan.FromSeconds(2 + attempt * 2), ct);
             }
             catch
             {
                 break;
+            }
+            finally
+            {
+                Gate.Release();
             }
         }
 

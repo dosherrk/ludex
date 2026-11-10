@@ -71,11 +71,10 @@ public sealed class MainWindow : Window
     private Border _settingsLayer = null!;
     private Border _launchLayer = null!;
     private Border? _splash;
-    private TextBlock? _splashText;
-    private TextBlock? _splashHint;
     private Border? _splashFill;
     private DispatcherTimer? _splashTimer;
     private bool _splashClosed;
+    private DateTime _splashStarted = DateTime.UtcNow;
     private SettingsPanel? _settingsPanel;
     private AvaloniaPath? _maximizePath;
 
@@ -1824,8 +1823,15 @@ public sealed class MainWindow : Window
     /// <summary>Экран загрузки: пока он на виду, каталог и библиотека уже собираются.</summary>
     private Control BuildSplash()
     {
-        _splashText = Ui.T(Loc.T("splash.library"), 13.5, Skin.TextMuted);
-        _splashHint = Ui.T("", 11.5, Skin.TextDim);
+        // бегущий блик по полоске — без текста, просто «идёт работа»
+        _splashFill = new Border
+        {
+            Width = 90,
+            Height = 3,
+            CornerRadius = new CornerRadius(2),
+            Background = Skin.Accent,
+            HorizontalAlignment = HorizontalAlignment.Left,
+        };
 
         var track = new Border
         {
@@ -1834,48 +1840,21 @@ public sealed class MainWindow : Window
             CornerRadius = new CornerRadius(2),
             Background = Skin.PanelAlt,
             HorizontalAlignment = HorizontalAlignment.Center,
-            Child = _splashFill = new Border
+            ClipToBounds = true,
+            Child = new Canvas
             {
-                Width = 8,
+                Width = 260,
                 Height = 3,
-                CornerRadius = new CornerRadius(2),
-                Background = Skin.Accent,
-                HorizontalAlignment = HorizontalAlignment.Left,
-                Transitions = new Transitions
-                {
-                    new DoubleTransition
-                    {
-                        Property = WidthProperty,
-                        Duration = TimeSpan.FromMilliseconds(320),
-                        Easing = new Avalonia.Animation.Easings.CubicEaseOut(),
-                    },
-                },
+                Children = { _splashFill },
             },
         };
 
-        var mark = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 10,
-            HorizontalAlignment = HorizontalAlignment.Center,
-        };
-        mark.Children.Add(Ui.T("LUDEX", 26, Skin.Text, FontWeight.Bold));
-
-        var skip = Ui.GhostButton(Loc.T("splash.skip"), () => _ = CloseSplashAsync(), Skin.TextDim);
-        skip.HorizontalAlignment = HorizontalAlignment.Center;
-        skip.Opacity = 0;
-        skip.Transitions = new Transitions
-        {
-            new DoubleTransition { Property = OpacityProperty, Duration = TimeSpan.FromMilliseconds(300) },
-        };
-        skip.PointerEntered += (_, _) => skip.Opacity = 1;
-
         var stack = new StackPanel
         {
-            Spacing = 16,
+            Spacing = 20,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
-            Children = { mark, track, _splashText, _splashHint, skip },
+            Children = { Ui.T("LUDEX", 26, Skin.Text, FontWeight.Bold), track },
         };
 
         _splash = new Border
@@ -1888,37 +1867,33 @@ public sealed class MainWindow : Window
                 new DoubleTransition
                 {
                     Property = OpacityProperty,
-                    Duration = TimeSpan.FromMilliseconds(260),
+                    Duration = TimeSpan.FromMilliseconds(240),
                     Easing = new Avalonia.Animation.Easings.CubicEaseOut(),
                 },
             },
         };
         _splash.PointerPressed += (_, e) => e.Handled = true;
 
-        DispatcherTimer.RunOnce(() => skip.Opacity = 1, TimeSpan.FromSeconds(2));
         Grid.SetColumnSpan(_splash, 2);
         return _splash;
     }
 
-    private void UpdateSplash()
+    /// <summary>Бегущая полоска: позиция считается по времени, без накопления ошибки.</summary>
+    private void AnimateSplash()
     {
-        if (_splash == null || _splashClosed) return;
+        if (_splashFill == null || _splashClosed) return;
 
-        var fraction = Math.Clamp(StoreCatalog.ProgressFraction, 0.04, 1);
-        if (_splashFill != null) _splashFill.Width = 8 + 252 * fraction;
+        const double trackWidth = 260;
+        const double segment = 90;
+        const double period = 1.4;
 
-        if (_splashText != null)
-        {
-            _splashText.Text = StoreCatalog.ProgressText
-                               ?? (_scanning ? Loc.T("splash.scan") : Loc.T("splash.catalog"));
-        }
+        var phase = (DateTime.UtcNow - _splashStarted).TotalSeconds % period / period;
+        // туда-обратно, с плавным краем
+        var eased = phase < 0.5 ? phase * 2 : (1 - phase) * 2;
+        var x = (trackWidth - segment) * eased;
 
-        if (_splashHint != null)
-        {
-            _splashHint.Text = _games.Count > 0
-                ? Loc.F("splash.libraryCount", _games.Count)
-                : "";
-        }
+        Canvas.SetLeft(_splashFill, x);
+        _splashFill.Opacity = 0.35 + 0.65 * Math.Sin(Math.PI * eased);
     }
 
     private async Task CloseSplashAsync()
@@ -1935,8 +1910,9 @@ public sealed class MainWindow : Window
     /// <summary>Грузит каталог и библиотеку, пока висит заставка.</summary>
     private async Task WarmUpAsync()
     {
-        _splashTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
-        _splashTimer.Tick += (_, _) => UpdateSplash();
+        _splashStarted = DateTime.UtcNow;
+        _splashTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
+        _splashTimer.Tick += (_, _) => AnimateSplash();
         _splashTimer.Start();
 
         var started = DateTime.UtcNow;
@@ -1956,6 +1932,18 @@ public sealed class MainWindow : Window
         }
 
         if (catalog.IsFaulted) AppPaths.Log("WarmUp catalog: " + catalog.Exception?.GetBaseException().Message);
+
+        // обложки первой страницы догружаем под заставкой, чтобы вкладка открылась готовой
+        if (catalog.IsCompletedSuccessfully)
+        {
+            var first = catalog.Result.Take(60).ToList();
+            var coversBy = DateTime.UtcNow + TimeSpan.FromSeconds(4);
+            while (DateTime.UtcNow < coversBy &&
+                   first.Any(g => g.CoverPath == null || !System.IO.File.Exists(g.CoverPath)))
+            {
+                await Task.Delay(150);
+            }
+        }
 
         await CloseSplashAsync();
     }
