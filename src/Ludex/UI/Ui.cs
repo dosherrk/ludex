@@ -217,7 +217,7 @@ public static class Ui
 
     public const string GridGeometry = "M0,0 H8.4 V8.4 H0 Z M11.6,0 H20 V8.4 H11.6 Z M0,11.6 H8.4 V20 H0 Z M11.6,11.6 H20 V20 H11.6 Z";
 
-    /// <summary>Искра (4-луч) — пункт «Рекомендации».</summary>
+    /// <summary>Искра (4-луч) — пункт «Каталог».</summary>
     public const string SparkleGeometry =
         "M10,0 L12.1,7.9 L20,10 L12.1,12.1 L10,20 L7.9,12.1 L0,10 L7.9,7.9 Z";
 

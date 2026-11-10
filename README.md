@@ -14,7 +14,7 @@
 [![macOS](https://img.shields.io/badge/macOS-Apple%20Silicon%20%2F%20Intel-000000?logo=apple&logoColor=white)](#macos)
 [![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet&logoColor=white)](#сборка-из-исходников)
 [![Avalonia](https://img.shields.io/badge/Avalonia-11-8B44AC)](https://avaloniaui.net)
-[![Version](https://img.shields.io/badge/version-1.19.0-3B9EFF)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.19.1-3B9EFF)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-35C48A)](LICENSE)
 [![Website](https://img.shields.io/badge/сайт-ludex--one.vercel.app-3B9EFF)](https://ludex-one.vercel.app)
 
@@ -38,7 +38,7 @@
 - **Кастомизация.** Тёмная и светлая темы, любой акцентный цвет (квадрат
   «насыщенность/яркость» + полоса оттенков + R/G/B), полупрозрачные стеклянные панели
   и обои на фон по ссылке — обычная картинка или GIF (анимированный).
-- **Каталог одиночных игр.** Вкладка рекомендаций: больше тысячи игр, в которые можно
+- **Каталог одиночных игр.** Вкладка «Каталог»: больше тысячи игр, в которые можно
   играть без онлайна — экшены, приключения, инди, RPG, стратегии, симуляторы, казуальные,
   гонки, спорт и ранний доступ. Сетевые шутеры и MMO, бесплатные лайв-сервисы и программы
   вроде прицелов в подборку не попадают: каталог собирается из поиска магазина по фильтру
@@ -62,7 +62,7 @@
 |---|---|
 | ![Загрузка](screenshots/splash.png) | ![Библиотека](screenshots/library.png) |
 
-| Панель игры | Каталог рекомендаций |
+| Панель игры | Каталог |
 |---|---|
 | ![Панель игры](screenshots/game-panel.png) | ![Каталог](screenshots/catalog.png) |
 
@@ -102,15 +102,15 @@
 
 ### Windows 10/11 (x64)
 
-**Вариант 1 — установщик (рекомендуется).** `Ludex-Setup-1.19.0.exe` → выберите язык → «Далее».
+**Вариант 1 — установщик (рекомендуется).** `Ludex-Setup-1.19.1.exe` → выберите язык → «Далее».
 Ставится в `%LOCALAPPDATA%\Programs\Ludex` (запрос администратора не появляется), создаёт ярлыки
 на рабочем столе и в меню «Пуск», добавляет запись в «Установку и удаление программ» и деинсталлятор.
 
-**Вариант 2 — портативно.** `Ludex-1.19.0-windows.zip` — распакуйте папку целиком куда угодно
+**Вариант 2 — портативно.** `Ludex-1.19.1-windows.zip` — распакуйте папку целиком куда угодно
 (флешка, `D:\Ludex`) и запускайте `Ludex.exe`. Настройки и библиотека хранятся в `%LOCALAPPDATA%\Ludex`.
 
 > Файлы должны лежать вместе: `Ludex.exe` не работает без `Ludex.dll` и папки `runtimes` рядом.
-> Поэтому один exe не перетаскивают на рабочий стол — делают ярлык на него. С 1.19.0 приложение
+> Поэтому один exe не перетаскивают на рабочий стол — делают ярлык на него. С 1.19.1 приложение
 > поставляется набором файлов, а не одним большим exe: так запуск заметно быстрее, потому что
 > не нужно распаковывать встроенный рантайм во временную папку при каждом старте.
 
@@ -126,17 +126,17 @@
 **Пакет `.deb`** (Debian, Ubuntu, Mint, Pop!_OS и производные):
 
 ```bash
-sudo apt install ./Ludex-1.19.0-linux-x64.deb
+sudo apt install ./Ludex-1.19.1-linux-x64.deb
 ```
 
 Появится ярлык в меню приложений, `ludex` — в `PATH`; файлы ставятся в `/opt/ludex`.
 Удаление — `sudo apt remove ludex` (данные в `~/.local/share/Ludex` остаются).
 
-**Портативный архив** `Ludex-1.19.0-linux-x64.tar.gz` — для любой системы с glibc 2.31+
+**Портативный архив** `Ludex-1.19.1-linux-x64.tar.gz` — для любой системы с glibc 2.31+
 (Fedora, Arch, openSUSE и т.д.):
 
 ```bash
-mkdir -p ~/Applications && tar -xzf Ludex-1.19.0-linux-x64.tar.gz -C ~/Applications
+mkdir -p ~/Applications && tar -xzf Ludex-1.19.1-linux-x64.tar.gz -C ~/Applications
 ~/Applications/Ludex/Ludex
 ```
 
@@ -147,9 +147,9 @@ libICE, libSM, libGL, libfontconfig, libfreetype, libxkbcommon; под Wayland �
 
 ### macOS 11+ (Apple Silicon и Intel) <a id="macos"></a>
 
-`Ludex-1.19.0-macos-arm64.dmg` — для Apple Silicon (M1–M4), `Ludex-1.19.0-macos-x64.dmg` — для Intel.
+`Ludex-1.19.1-macos-arm64.dmg` — для Apple Silicon (M1–M4), `Ludex-1.19.1-macos-x64.dmg` — для Intel.
 Откройте `.dmg`, перетащите Ludex в `Applications`. Рядом в релизе лежат те же сборки в `.zip`
-(`Ludex-1.19.0-macos-arm64.zip` / `-x64.zip`) — если удобнее архив (его надо просто распаковать).
+(`Ludex-1.19.1-macos-arm64.zip` / `-x64.zip`) — если удобнее архив (его надо просто распаковать).
 
 Приложение не подписано сертификатом Apple, поэтому первый запуск — правый клик по `Ludex.app`
 → **«Открыть»** → **«Открыть»** (или в Терминале: `xattr -dr com.apple.quarantine /Applications/Ludex.app`).
@@ -303,7 +303,7 @@ cd installer && makensis Ludex.nsi
 отдельным скриптом — на Linux, без macOS и без подписи Apple:
 
 ```bash
-./tools/make-dmg.sh release/macos-arm64/Ludex.app Ludex-1.19.0-macos-arm64.dmg "Ludex 1.19.0" 150
+./tools/make-dmg.sh release/macos-arm64/Ludex.app Ludex-1.19.1-macos-arm64.dmg "Ludex 1.19.1" 150
 ```
 
 Как собрать эти утилиты на Ubuntu/Debian (проверено на 24.04, gcc 13, OpenSSL 3):

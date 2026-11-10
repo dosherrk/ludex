@@ -50,7 +50,6 @@ public sealed class MainWindow : Window
     private Border _detailLayer = null!;
     private TextBlock _statusLabel = null!;
     private TextBlock _countLabel = null!;
-    private ProgressStrip _progress = null!;
     private Border _scanButton = null!;
     private TextBox? _searchBox;
     private Border? _favChip;
@@ -70,7 +69,8 @@ public sealed class MainWindow : Window
     private int _recsFound;
     private Border _settingsLayer = null!;
     private Border _launchLayer = null!;
-    private TextBlock? _eventLabel;
+    private Toast _processToast = null!;
+    private Toast _eventToast = null!;
     private DispatcherTimer? _eventTimer;
     private string? _statusPending;
     private bool _statusSwitching;
@@ -677,51 +677,17 @@ public sealed class MainWindow : Window
 
     private Control BuildStatusBar()
     {
-        var border = new Border
-        {
-            Background = Brushes.Transparent,
-            Padding = new Thickness(22, 7, 22, 9),
-        };
+        // Тонкая полоска под списком: на ней «вырастают» всплывающие уведомления.
+        // Сама полоска места не занимает — уведомления живут в Canvas и поднимаются над списком.
+        var layer = new Canvas { Height = 0, ClipToBounds = false };
 
-        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
-
-        _progress = new ProgressStrip(180, 3);
-        _progress.SetActive(false);
-        grid.Children.Add(_progress);
-
-        // процессы (сканирование, обложки, размеры) — рядом с полоской
-        _statusLabel = Ui.T(Loc.T("status.ready"), 11.5, Skin.TextDim);
-        _statusLabel.TextTrimming = TextTrimming.CharacterEllipsis;
-        _statusLabel.Margin = new Thickness(14, 0, 12, 0);
-        _statusLabel.Transitions = new Transitions
-        {
-            new DoubleTransition
-            {
-                Property = Visual.OpacityProperty,
-                Duration = TimeSpan.FromMilliseconds(110),
-            },
-        };
-        Grid.SetColumn(_statusLabel, 1);
-        grid.Children.Add(_statusLabel);
+        // ход работы (сканирование, обложки, каталог…) — по центру снизу
+        _processToast = new Toast(ToastKind.Process) { IsVisible = false };
+        layer.Children.Add(_processToast);
 
         // разовые события (игра запущена, удалена, ошибка) — в правом нижнем углу
-        _eventLabel = Ui.T("", 11.5, Skin.TextMuted);
-        _eventLabel.TextTrimming = TextTrimming.CharacterEllipsis;
-        _eventLabel.MaxWidth = 520;
-        _eventLabel.HorizontalAlignment = HorizontalAlignment.Right;
-        _eventLabel.VerticalAlignment = VerticalAlignment.Center;
-        _eventLabel.Opacity = 0;
-        _eventLabel.Transitions = new Transitions
-        {
-            new DoubleTransition
-            {
-                Property = Visual.OpacityProperty,
-                Duration = TimeSpan.FromMilliseconds(220),
-                Easing = new Avalonia.Animation.Easings.CubicEaseOut(),
-            },
-        };
-        Grid.SetColumn(_eventLabel, 2);
-        grid.Children.Add(_eventLabel);
+        _eventToast = new Toast(ToastKind.Event) { IsVisible = false };
+        layer.Children.Add(_eventToast);
 
         // новая строка после перестройки окна начинает с чистого листа
         _statusPending = null;
@@ -729,10 +695,44 @@ public sealed class MainWindow : Window
         _eventTimer?.Stop();
         _eventTimer = null;
 
-        border.Child = grid;
-        Grid.SetRow(border, 2);
-        return border;
+        layer.SizeChanged += (_, _) => LayoutToasts();
+        _processToast.Changed += LayoutToasts;
+        _eventToast.Changed += LayoutToasts;
+
+        Grid.SetRow(layer, 2);
+        return layer;
     }
+
+    /// <summary>Разложить уведомления: процессы — по центру, события — справа.</summary>
+    private void LayoutToasts()
+    {
+        if (_processToast == null || _eventToast == null) return;
+        if (_processToast.Parent is not Control host) return;
+
+        var width = host.Bounds.Width;
+        if (width <= 0) return;
+
+        var maxWidth = Math.Max(240, Math.Min(520, width * 0.5));
+
+        _processToast.Measure(new Size(maxWidth, double.PositiveInfinity));
+        var processWidth = Math.Min(maxWidth, Math.Max(0, _processToast.DesiredSize.Width));
+        Canvas.SetLeft(_processToast, Math.Max(16, (width - processWidth) / 2));
+
+        _eventToast.Measure(new Size(maxWidth, double.PositiveInfinity));
+        var eventWidth = Math.Min(maxWidth, Math.Max(0, _eventToast.DesiredSize.Width));
+        Canvas.SetLeft(_eventToast, Math.Max(16, width - eventWidth - 20));
+
+        // низ уведомления — чуть выше нижней кромки списка
+        foreach (var toast in new[] { _processToast, _eventToast })
+        {
+            Canvas.SetTop(toast, 0);
+            var height = toast.Bounds.Height > 0 ? toast.Bounds.Height : toast.DesiredSize.Height;
+            var lift = height + 12;
+            toast.RenderTransform = new TranslateTransform(0, -lift);
+            // Canvas не обрезает: уведомление «висит» над списком, не сдвигая раскладку
+        }
+    }
+
 
     private Control BuildEmptyState()
     {
@@ -2226,7 +2226,7 @@ public sealed class MainWindow : Window
         Storage.SaveGames(_games);
     }
 
-    /// <summary>Открыть вкладку «Рекомендации».</summary>
+    /// <summary>Открыть вкладку «Каталог».</summary>
     private void ShowRecommendations()
     {
         _recsVisible = true;
@@ -2280,7 +2280,7 @@ public sealed class MainWindow : Window
 
     private void ApplyFavChipState()
     {
-        // ---- вкладка «Рекомендации»
+        // ---- вкладка «Каталог»
         if (_recChip != null)
             Ui.SetColors(_recChip,
                 _recsVisible ? Skin.PanelAlt : Brushes.Transparent,
@@ -2368,7 +2368,7 @@ public sealed class MainWindow : Window
 
     private void SetStatus(string text)
     {
-        if (_statusLabel == null) return;
+        if (_processToast == null) return;
 
         // статус прилетает и из фоновых потоков (каталог, импорт, обложки)
         if (!Dispatcher.UIThread.CheckAccess())
@@ -2377,25 +2377,27 @@ public sealed class MainWindow : Window
             return;
         }
 
-        if (_statusLabel.Text == text && !_statusSwitching) return;
+        if (_processToast.Text == text) return;
 
         // одна отложенная смена: десятки вызовов подряд не обгоняют друг друга
         _statusPending = text;
         if (_statusSwitching) return;
 
         _statusSwitching = true;
-        _statusLabel.Opacity = 0.45;
         DispatcherTimer.RunOnce(() =>
         {
             _statusSwitching = false;
-            if (_statusLabel != null && _statusPending != null)
-            {
-                _statusLabel.Text = _statusPending;
-                _statusLabel.Opacity = 1;
-                _statusPending = null;
-            }
-        }, TimeSpan.FromMilliseconds(90));
+            if (_processToast == null || _statusPending == null) return;
+
+            var next = _statusPending;
+            _statusPending = null;
+
+            // «Готово · игр: N» — не работа, а обычное состояние: плашку убираем
+            if (next == _idleStatus()) _processToast.Hide();
+            else _processToast.Show(next);
+        }, TimeSpan.FromMilliseconds(string.IsNullOrEmpty(text) ? 0 : 90));
     }
+
 
     /// <summary>
     /// Убирает из библиотеки записи, которые пришли из лаунчеров, но на диске их больше нет
@@ -2408,14 +2410,9 @@ public sealed class MainWindow : Window
         return before - _games.Count;
     }
 
-    /// <summary>
-    /// Разовое событие в правом нижнем углу: гаснет само через несколько секунд.
-    /// Обновляемое (sticky) сообщение — например «Проверено папок: 600» — гаснет
-    /// через несколько секунд после последнего обновления, то есть после проверки.
-    /// </summary>
     private void ShowEvent(string text, bool sticky = false)
     {
-        if (_eventLabel == null) return;
+        if (_eventToast == null) return;
 
         if (!Dispatcher.UIThread.CheckAccess())
         {
@@ -2423,18 +2420,18 @@ public sealed class MainWindow : Window
             return;
         }
 
-        _eventLabel.Text = text;
-        _eventLabel.Opacity = 1;
+        _eventToast.Show(text);
 
         _eventTimer?.Stop();
-        _eventTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(sticky ? 4 : 6) };
+        _eventTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(sticky ? 6 : 4) };
         _eventTimer.Tick += (_, _) =>
         {
             _eventTimer?.Stop();
-            if (_eventLabel != null) _eventLabel.Opacity = 0;
+            _eventToast?.Hide();
         };
         _eventTimer.Start();
     }
+
 
     // ------------------------------------------------ скрытые навсегда игры
 
@@ -2493,7 +2490,7 @@ public sealed class MainWindow : Window
         _workCts = new CancellationTokenSource();
         var ct = _workCts.Token;
 
-        _progress.SetActive(true);
+        _processToast?.TogglePulse(true);
         ProcessBegin("scan", Loc.T("status.scanFolders"));
 
         try
@@ -2551,7 +2548,7 @@ public sealed class MainWindow : Window
         finally
         {
             _scanning = false;
-            _progress.SetActive(false);
+            _processToast?.TogglePulse(false);
             _scanButton.Opacity = 1;
             _scanButton.IsEnabled = true;
             ProcessEnd("scan");
@@ -2800,7 +2797,7 @@ public sealed class MainWindow : Window
         int total = games.Count;
         string? key = _settings.SteamGridDbKey;
 
-        _progress.SetActive(true);
+        _processToast?.TogglePulse(true);
         ProcessBegin("artwork", Loc.F("status.art", 0, total));
 
         var tasks = games.Select(async game =>
@@ -2886,7 +2883,7 @@ public sealed class MainWindow : Window
             // ignored
         }
 
-        _progress.SetActive(false);
+        _processToast?.TogglePulse(false);
         ProcessEnd("artwork");
     }
 

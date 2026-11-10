@@ -135,7 +135,7 @@ public static class Loc
         ["recs.release"] = ("выход: {0}", "release: {0}"),
         ["recs.soon"] = ("скоро", "soon"),
         ["store.free"] = ("Бесплатно", "Free"),
-        ["nav.recs"] = ("Рекомендации", "Recommendations"),
+        ["nav.recs"] = ("Каталог", "Catalogue"),
         ["recs.search"] = ("Поиск по каталогу…", "Search the catalogue…"),
         ["recs.allGenres"] = ("Все жанры", "All genres"),
         ["recs.years"] = ("Все годы", "All years"),

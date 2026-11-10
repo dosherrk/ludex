@@ -56,6 +56,10 @@ public static class Skin
     public static IBrush PlaceholderTextDim = Brushes.Transparent;
     public static IBrush PlaceholderGradientA = Brushes.Transparent;
     public static BoxShadows CardShadow = default;
+    /// <summary>Фон всплывающего уведомления (строка состояния) — «стеклянная» плашка.</summary>
+    public static IBrush ToastBg = Brushes.Transparent;
+    /// <summary>Кромка всплывающего уведомления.</summary>
+    public static IBrush ToastEdge = Brushes.Transparent;
 
     /// <summary>
     /// Быстрая смена только акцентных кистей — для живого предпросмотра при перетаскивании
@@ -221,6 +225,8 @@ public static class Skin
                 Blur = 10,
                 Color = Color.Parse("#22000000"),
             });
+            ToastBg = new SolidColorBrush(Alpha(Color.Parse("#FFFFFF"), Transparent ? (byte)0xF2 : (byte)0xFF));
+            ToastEdge = new SolidColorBrush(Color.Parse("#28202A33"));
         }
         else
         {
@@ -293,6 +299,8 @@ public static class Skin
                 Blur = 12,
                 Color = Color.Parse("#66000000"),
             });
+            ToastBg = new SolidColorBrush(Alpha(Color.Parse("#171A21"), Transparent ? (byte)0xF7 : (byte)0xFF));
+            ToastEdge = new SolidColorBrush(Color.Parse("#26FFFFFF"));
         }
 
         UpdateOnAccent();
