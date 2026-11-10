@@ -57,6 +57,35 @@ public static class Skin
     public static IBrush PlaceholderGradientA = Brushes.Transparent;
     public static BoxShadows CardShadow = default;
 
+    /// <summary>
+    /// Быстрая смена только акцентных кистей — для живого предпросмотра при перетаскивании
+    /// маркера в палитре. Полный <see cref="Apply"/> перекраивает всю тему и вызывает
+    /// пересчёт разметки, из-за чего панель «дёргалась» под курсором.
+    /// </summary>
+    public static void ApplyAccent(string? accent)
+    {
+        if (string.IsNullOrWhiteSpace(accent)) return;
+
+        var name = accent.Trim().ToLowerInvariant();
+        Color color;
+
+        if (name.StartsWith("#") && Color.TryParse(name, out var custom))
+        {
+            color = IsLight ? FitForLightTheme(custom) : EnsureReadable(custom);
+        }
+        else
+        {
+            var pair = System.Array.Find(Accents, a => a.Id == name);
+            if (pair.Id == null) return;
+            color = Color.Parse(IsLight ? pair.Light : pair.Dark);
+        }
+
+        AccentColor = color;
+        Accent = new SolidColorBrush(color);
+        AccentHover = new SolidColorBrush(Lighten(color, 0.14));
+        AccentSoft = new SolidColorBrush(Alpha(color, 0x38));
+    }
+
     /// <summary>Доступные акцентные палитры: имя -> (тёмная тема, светлая тема).</summary>
     public static readonly (string Id, string Ru, string En, string Dark, string Light)[] Accents =
     {
@@ -84,7 +113,10 @@ public static class Skin
         if (transparent.HasValue) Transparent = transparent.Value;
 
         if (Application.Current is { } app)
-            app.RequestedThemeVariant = IsLight ? ThemeVariant.Light : ThemeVariant.Dark;
+        {
+            var variant = IsLight ? ThemeVariant.Light : ThemeVariant.Dark;
+            if (app.RequestedThemeVariant != variant) app.RequestedThemeVariant = variant;
+        }
 
         // акцент: либо готовый пресет ("blue", "violet", …), либо свой цвет "#RRGGBB" из круга палитры
         if (AccentName.StartsWith("#") && Color.TryParse(AccentName, out var custom))

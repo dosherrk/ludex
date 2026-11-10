@@ -144,6 +144,51 @@ public static class Launchers
         _ => (false, new List<LauncherGame>()),
     };
 
+    /// <summary>
+    /// Похоже ли это на настоящую установку: в папке есть исполняемый файл или крупный
+    /// файл данных. Так отсекаются «хвосты» от давно удалённых игр — пустые каталоги
+    /// и папки с парой логов, из-за которых в библиотеке появлялись игры, которых нет.
+    /// </summary>
+    public static bool LooksInstalled(string? folder)
+    {
+        if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder)) return false;
+
+        try
+        {
+            var checkedCount = 0;
+            foreach (var file in Directory.EnumerateFiles(folder!, "*", SearchOption.AllDirectories))
+            {
+                if (++checkedCount > 4000) return true; // папка явно большая — считаем установленной
+
+                var info = new FileInfo(file);
+                var ext = info.Extension.ToLowerInvariant();
+
+                if (ext is ".exe" or ".sh" or ".appimage" or ".x86_64" or ".x86" or ".run") return true;
+                if (info.Length >= 20L * 1024 * 1024) return true;
+
+                if (ext.Length == 0 && info.Length >= 1L * 1024 * 1024)
+                {
+                    try
+                    {
+                        var mode = File.GetUnixFileMode(file);
+                        if ((mode & (UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute)) != 0)
+                            return true;
+                    }
+                    catch
+                    {
+                        // на Windows режима нет — просто продолжаем
+                    }
+                }
+            }
+
+            return false;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     private static string Home => Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
     private static string ProgramData => Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
@@ -230,7 +275,7 @@ public static class Launchers
                     if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(dir)) continue;
 
                     var folder = Path.Combine(apps, "common", dir);
-                    if (!Directory.Exists(folder)) continue;
+                    if (string.IsNullOrWhiteSpace(folder) || !LooksInstalled(folder)) continue;
 
                     int? appId = int.TryParse(Field(text, "appid"), out var parsed) ? parsed : null;
                     known.Add(folder);
@@ -261,6 +306,7 @@ public static class Launchers
 
                 var title = Path.GetFileName(folder.TrimEnd(Path.DirectorySeparatorChar));
                 if (string.IsNullOrWhiteSpace(title) || title.StartsWith('.')) continue;
+                if (string.IsNullOrWhiteSpace(folder) || !LooksInstalled(folder)) continue;
 
                 games.Add(new LauncherGame
                 {
@@ -302,7 +348,7 @@ public static class Launchers
                     var location = Str(root, "InstallLocation");
                     var launch = Str(root, "LaunchExecutable");
                     if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(location)) continue;
-                    if (!Directory.Exists(location)) continue;
+                    if (!LooksInstalled(location)) continue;
 
                     games.Add(new LauncherGame
                     {
@@ -350,7 +396,7 @@ public static class Launchers
                     var title = RegRead($@"{path}\{sub}", "gameName");
                     var folder = RegRead($@"{path}\{sub}", "path");
                     var exe = RegRead($@"{path}\{sub}", "exe");
-                    if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder)) continue;
+                    if (string.IsNullOrWhiteSpace(folder) || !LooksInstalled(folder)) continue;
 
                     games.Add(new LauncherGame
                     {
@@ -385,7 +431,7 @@ public static class Launchers
             {
                 installed = true;
                 var folder = RegRead($@"{path}\{sub}", "InstallDir");
-                if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder)) continue;
+                if (string.IsNullOrWhiteSpace(folder) || !LooksInstalled(folder)) continue;
 
                 // в реестре только числовой id — имя берём по папке установки
                 games.Add(new LauncherGame
@@ -428,7 +474,7 @@ public static class Launchers
                 installed = true;
                 var folder = RegRead($@"{path}\{sub}", "Install Dir")
                              ?? RegRead($@"{path}\{sub}", "InstallDir");
-                if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder)) continue;
+                if (string.IsNullOrWhiteSpace(folder) || !LooksInstalled(folder)) continue;
 
                 var name = RegRead($@"{path}\{sub}", "DisplayName");
                 games.Add(new LauncherGame
@@ -459,7 +505,7 @@ public static class Launchers
             var folder = RegRead($@"{root}\{sub}", "InstallPath");
             if (string.IsNullOrWhiteSpace(folder)) continue;
             installed = true;
-            if (!Directory.Exists(folder)) continue;
+            if (string.IsNullOrWhiteSpace(folder) || !LooksInstalled(folder)) continue;
 
             games.Add(new LauncherGame
             {
@@ -517,7 +563,7 @@ public static class Launchers
                                 folder = Str(install, "install_path");
                         }
 
-                        if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder)) continue;
+                        if (string.IsNullOrWhiteSpace(folder) || !LooksInstalled(folder)) continue;
 
                         var title = Str(value, "title");
                         if (string.IsNullOrWhiteSpace(title)) title = prop.Name;
@@ -577,7 +623,7 @@ public static class Launchers
                             ? Path.GetDirectoryName(exe) ?? ""
                             : "";
 
-                    if (string.IsNullOrWhiteSpace(dirPath) || !Directory.Exists(dirPath)) continue;
+                    if (string.IsNullOrWhiteSpace(dirPath) || !LooksInstalled(dirPath)) continue;
 
                     games.Add(new LauncherGame
                     {
@@ -624,7 +670,7 @@ public static class Launchers
                 if (value.ValueKind != JsonValueKind.Object) continue;
 
                 var folder = Str(value, "install_path");
-                if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder)) continue;
+                if (string.IsNullOrWhiteSpace(folder) || !LooksInstalled(folder)) continue;
 
                 var title = Str(value, "title");
                 if (string.IsNullOrWhiteSpace(title)) title = prop.Name;

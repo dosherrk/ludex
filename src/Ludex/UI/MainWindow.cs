@@ -70,6 +70,8 @@ public sealed class MainWindow : Window
     private int _recsFound;
     private Border _settingsLayer = null!;
     private Border _launchLayer = null!;
+    private TextBlock? _eventLabel;
+    private DispatcherTimer? _eventTimer;
     private string? _statusPending;
     private bool _statusSwitching;
     private CancellationTokenSource? _artCts;
@@ -96,6 +98,15 @@ public sealed class MainWindow : Window
         Loc.Lang = _settings.Language;
         Skin.Apply(_settings.Theme, _settings.Accent, _settings.Transparent);
         _games = Storage.LoadGames();
+
+        // чистим «фантомы» от прежних импортов: игр на диске давно нет, а карточка осталась
+        var phantoms = PrunePhantomGames();
+        if (phantoms > 0)
+        {
+            Storage.SaveGames(_games);
+            AppPaths.Log($"Убрано несуществующих игр: {phantoms}");
+        }
+
         _search = _settings.LastSearch ?? "";
 
         // при первом запуске Steam подключается сам, если нашлась его библиотека
@@ -666,14 +677,15 @@ public sealed class MainWindow : Window
             Padding = new Thickness(22, 7, 22, 9),
         };
 
-        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
+        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
 
         _progress = new ProgressStrip(180, 3);
         _progress.SetActive(false);
         grid.Children.Add(_progress);
 
+        // процессы (сканирование, обложки, размеры) — рядом с полоской
         _statusLabel = Ui.T(Loc.T("status.ready"), 11.5, Skin.TextDim);
-        _statusLabel.Margin = new Thickness(14, 0, 0, 0);
+        _statusLabel.Margin = new Thickness(14, 0, 12, 0);
         _statusLabel.Transitions = new Transitions
         {
             new DoubleTransition
@@ -684,6 +696,27 @@ public sealed class MainWindow : Window
         };
         Grid.SetColumn(_statusLabel, 1);
         grid.Children.Add(_statusLabel);
+
+        // разовые события (игра запущена, удалена, ошибка) — в правом нижнем углу
+        _eventLabel = Ui.T("", 11.5, Skin.TextMuted);
+        _eventLabel.HorizontalAlignment = HorizontalAlignment.Right;
+        _eventLabel.VerticalAlignment = VerticalAlignment.Center;
+        _eventLabel.Opacity = 0;
+        _eventLabel.Transitions = new Transitions
+        {
+            new DoubleTransition
+            {
+                Property = Visual.OpacityProperty,
+                Duration = TimeSpan.FromMilliseconds(220),
+                Easing = new Avalonia.Animation.Easings.CubicEaseOut(),
+            },
+        };
+        Grid.SetColumn(_eventLabel, 2);
+        grid.Children.Add(_eventLabel);
+
+        // новая строка после перестройки окна начинает с чистого листа
+        _statusPending = null;
+        _statusSwitching = false;
 
         border.Child = grid;
         Grid.SetRow(border, 2);
@@ -1338,7 +1371,7 @@ public sealed class MainWindow : Window
                 game.PlayCount++;
                 Storage.SaveGames(_games);
                 if (_subtitles.TryGetValue(game.Id, out var sub)) sub.Text = Subtitle(game);
-                SetStatus(Loc.F("status.launched", game.Title));
+                ShowEvent(Loc.F("status.launched", game.Title));
 
                 HideLaunchOverlay(1500, () =>
                 {
@@ -1348,7 +1381,7 @@ public sealed class MainWindow : Window
             else
             {
                 HideLaunchOverlay(0);
-                SetStatus(Loc.T("status.launchError"));
+                ShowEvent(Loc.T("status.launchError"));
                 DispatcherTimer.RunOnce(() => _ = Dialogs.ShowMessageAsync(this, "Ludex",
                     $"{Loc.T("status.launchError")}\n{error}"), TimeSpan.FromMilliseconds(320));
             }
@@ -1618,7 +1651,7 @@ public sealed class MainWindow : Window
         if (!ok) return;
 
         RemoveFromLibraryOnly(game);
-        SetStatus(Loc.T("status.removed"));
+        ShowEvent(Loc.T("status.removed"));
     }
 
     /// <summary>Удаление игры с диска: сначала деинсталлятор, иначе — папка целиком.</summary>
@@ -1656,7 +1689,7 @@ public sealed class MainWindow : Window
 
         if (!success)
         {
-            SetStatus(Loc.T("status.deleteFailed"));
+            ShowEvent(Loc.T("status.deleteFailed"));
             Dialogs.ShowError(this, string.IsNullOrEmpty(error)
                 ? Loc.T("status.deleteFailed")
                 : $"{Loc.T("status.deleteFailed")}: {error}");
@@ -1664,7 +1697,7 @@ public sealed class MainWindow : Window
         }
 
         RemoveFromLibraryOnly(game);
-        SetStatus(Loc.T("status.deleted"));
+        ShowEvent(Loc.T("status.deleted"));
     }
 
     /// <summary>Убрать запись из библиотеки (файлы на диске не трогаем).</summary>
@@ -2053,7 +2086,7 @@ public sealed class MainWindow : Window
         if (_settings.CheckUpdatesOnStartup) _ = CheckUpdatesAsync(silent: true);
 
         if (_settings.Folders.Count == 0 && _games.Count == 0)
-            SetStatus(Loc.T("status.noFolders"));
+            ShowEvent(Loc.T("status.noFolders"));
 
         // заставка: пока она на экране, грузятся каталог и библиотека
         _ = WarmUpAsync();
@@ -2096,7 +2129,7 @@ public sealed class MainWindow : Window
             return;
         }
 
-        SetStatus(Loc.F("update.available", info.Version.ToString(3), Updater.CurrentVersionText));
+        ShowEvent(Loc.F("update.available", info.Version.ToString(3), Updater.CurrentVersionText));
         if (!await Dialogs.UpdateAvailableAsync(this, info)) return;
 
         string? package = null;
@@ -2266,6 +2299,41 @@ public sealed class MainWindow : Window
         }, TimeSpan.FromMilliseconds(90));
     }
 
+    /// <summary>
+    /// Убирает из библиотеки записи, которые пришли из лаунчеров, но на диске их больше нет
+    /// (пустая папка, удалённая установка, старая запись в реестре).
+    /// </summary>
+    private int PrunePhantomGames()
+    {
+        var before = _games.Count;
+        _games.RemoveAll(g => g.Source != null && !Launchers.LooksInstalled(g.FolderPath));
+        return before - _games.Count;
+    }
+
+    /// <summary>Разовое событие в правом нижнем углу: гаснет само через несколько секунд.</summary>
+    private void ShowEvent(string text)
+    {
+        if (_eventLabel == null) return;
+
+        if (!Dispatcher.UIThread.CheckAccess())
+        {
+            Dispatcher.UIThread.Post(() => ShowEvent(text));
+            return;
+        }
+
+        _eventLabel.Text = text;
+        _eventLabel.Opacity = 1;
+
+        _eventTimer?.Stop();
+        _eventTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(6) };
+        _eventTimer.Tick += (_, _) =>
+        {
+            _eventTimer?.Stop();
+            if (_eventLabel != null) _eventLabel.Opacity = 0;
+        };
+        _eventTimer.Start();
+    }
+
     private void UpdateCount()
     {
         if (_countLabel == null) return;
@@ -2278,7 +2346,7 @@ public sealed class MainWindow : Window
 
         if (_settings.Folders.Count == 0 && _settings.Launchers.Count == 0)
         {
-            SetStatus(Loc.T("status.noFolders"));
+            ShowEvent(Loc.T("status.noFolders"));
             ShowSettings();
             return;
         }
@@ -2331,7 +2399,7 @@ public sealed class MainWindow : Window
         catch (Exception ex)
         {
             AppPaths.Log("Scan failed: " + ex);
-            SetStatus(Loc.T("status.launchError"));
+            ShowEvent(Loc.T("status.launchError"));
         }
         finally
         {
@@ -2368,6 +2436,8 @@ public sealed class MainWindow : Window
         if (!quiet) SetStatus(Loc.T("status.importing"));
 
         var added = MergeImported(found);
+        var pruned = PrunePhantomGames();
+        if (pruned > 0) AppPaths.Log($"Убрано несуществующих игр: {pruned}");
         Storage.SaveGames(_games);
 
         if (!quiet)

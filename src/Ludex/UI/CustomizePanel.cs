@@ -15,6 +15,7 @@ namespace Ludex.UI;
 public sealed class CustomizePanel : Border
 {
     private readonly AppSettings _settings;
+    private string? _liveAccent;
 
     private TextBox _urlBox = null!;
     private Border _applyBtn = null!;
@@ -100,8 +101,16 @@ public sealed class CustomizePanel : Border
         picker.SetColor(Skin.AccentColor);
 
         // во время движения — только живой предпросмотр, чтобы ничего не подвисало
+        // живой предпросмотр: меняем только акцент и не чаще ~30 кадров в секунду,
+        // чтобы панель не «дёргалась» под курсором
         picker.ColorChanged += color =>
-            Skin.Apply(_settings.Theme, Skin.ColorHex(color), _settings.Transparent);
+        {
+            var hex = Skin.ColorHex(color);
+            if (string.Equals(hex, _liveAccent, StringComparison.OrdinalIgnoreCase)) return;
+
+            _liveAccent = hex;
+            Skin.ApplyAccent(hex);
+        };
 
         // закончили выбор — сохраняем
         picker.ColorCommitted += color =>
@@ -110,6 +119,7 @@ public sealed class CustomizePanel : Border
             if (string.Equals(_settings.Accent, hex, StringComparison.OrdinalIgnoreCase)) return;
 
             _settings.Accent = hex;
+            _liveAccent = hex;
             Skin.Apply(_settings.Theme, _settings.Accent, _settings.Transparent);
             Storage.SaveSettings(_settings);
             AppearanceChanged?.Invoke();
