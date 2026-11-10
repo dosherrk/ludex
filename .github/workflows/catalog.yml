@@ -20,7 +20,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 180
 
     steps:
       - uses: actions/checkout@v4
@@ -29,7 +29,8 @@ jobs:
         with:
           python-version: '3.12'
 
-      # Полный обход: ~2000 вежливых запросов к поиску магазина, ~20–25 минут.
+      # Полный обход: ~2000 вежливых запросов к поиску магазина. Магазин ограничивает
+      # темп, поэтому на деле выходит 60–80 минут.
       - name: Сборка каталога
         run: python3 tools/build-catalog.py --out catalog.json.gz --checkpoint "$RUNNER_TEMP/checkpoint.json"
 

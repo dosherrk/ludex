@@ -183,8 +183,9 @@ def crawl(fetcher, label, extra="", limit_pages=0, checkpoint=None, with_tags=Fa
             html_text = fetcher.page(page * 100, extra)
         except Blocked:
             return
-        for app_id, name, tags in parse(html_text, with_tags=with_tags):
-            rows.setdefault(app_id, (name, tags))
+        # порядок магазина (релевантность) сохраняем: страница → место в ней
+        for offset, (app_id, name, tags) in enumerate(parse(html_text, with_tags=with_tags)):
+            rows.setdefault(app_id, (page * 100 + offset, name, tags))
 
     done = 0
     with ThreadPoolExecutor(max_workers=2) as pool:
@@ -205,7 +206,7 @@ def save_checkpoint(path, rows):
     try:
         tmp = path + ".tmp"
         with open(tmp, "w", encoding="utf-8") as f:
-            json.dump({"rows": [[k, v[0], v[1]] for k, v in rows.items()]}, f, ensure_ascii=False)
+            json.dump({"rows": [[k, v[0], v[1], v[2]] for k, v in rows.items()]}, f, ensure_ascii=False)
         os.replace(tmp, path)
     except Exception as e:
         print(f"  ! чекпойнт: {e}", flush=True)
@@ -242,14 +243,15 @@ def main():
     tag_to_genre = dict(GENRE_TAGS)
     labels = [g for _, g in GENRE_TAGS]
 
+    # порядок — как в магазине (по релевантности), а не по номеру приложения
+    ordered = sorted(games.items(), key=lambda kv: kv[1][0])
+
     out = []
-    for app_id, (name, tags) in games.items():
+    for app_id, (_, name, tags) in ordered:
         if app_id in free or app_id in mmo:
             continue
         idx = sorted({labels.index(tag_to_genre[t]) for t in tags if t in tag_to_genre})
         out.append([app_id, name, " ".join(str(i) for i in idx)])
-
-    out.sort(key=lambda row: row[0])
 
     payload = {
         "v": 1,
