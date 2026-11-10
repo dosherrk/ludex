@@ -3,244 +3,342 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace Ludex.Services;
 
 /// <summary>
-/// Большой каталог игр: список жанров берётся из открытой статистики SteamSpy
-/// (по одному запросу на жанр), поэтому в каталоге тысячи игр с жанрами, ценами,
-/// скидками и оценкой популярности. Обложки качаются по мере показа карточек.
+/// Большой каталог игр: собирается из поиска магазина Steam по жанровым тегам,
+/// с фильтром «есть одиночная игра» и без программ, бесплатных сетевых поделок
+/// и MMO. Данные кэшируются на три дня, ключи API не нужны.
 /// </summary>
 public static class StoreCatalog
 {
-    private const string SpyApi = "https://steamspy.com/api.php";
+    private const string SearchUrl =
+        "https://store.steampowered.com/search/results/?query&count=100&infinite=1&json=1" +
+        "&cc=ru&l=russian&category1=998&category2=2";
 
-    /// <summary>Жанры, которые забираем. «Massively Multiplayer» намеренно нет:
-    /// в рекомендациях не нужны сетевые игры вроде Dota 2 и CS.</summary>
-    private static readonly string[] SteamGenres =
-    {
-        "Action", "Adventure", "Indie", "RPG", "Strategy", "Simulation",
-        "Casual", "Racing", "Sports", "Early Access",
-    };
+    /// <summary>Сколько страниц по 100 игр берём с каждого жанра.</summary>
+    private const int PagesPerGenre = 3;
 
-    /// <summary>Известные сетевые free-to-play — исключаем, даже если попали в жанр.</summary>
-    private static readonly HashSet<int> Blacklist = new()
-    {
-        570,    // Dota 2
-        730,    // Counter-Strike 2
-        440,    // Team Fortress 2
-        1172470,// Apex Legends
-        230410, // Warframe
-        1085660,// Destiny 2
-        2357570,// Overwatch 2
-        2767030,// Marvel Rivals
-        1097150,// Fall Guys
-        236390, // War Thunder
-        386180, // Crossout
-        238960, // Path of Exile
-        761890, // Albion Online
-        1599340,// Lost Ark
-        291550, // Brawlhalla
-        252950, // Rocket League
-        1203220,// Naraka: Bladepoint
-        2073850,// The Finals
-        2507950,// Delta Force
-        2139460,// Once Human
-        578080, // PUBG: BATTLEGROUNDS
-        3320700,// Deadlock
-    };
-
-    /// <summary>Порог владельцев: ниже — это уже шум из инди-свалки.</summary>
-    private const int MinOwners = 100000;
-
-    /// <summary>Не больше стольких игр с одного жанра (самые популярные) — держим память в узде.</summary>
-    private const int PerGenre = 1200;
+    /// <summary>Глубина списков «бесплатные» и «MMO» — их вычитаем из каталога.</summary>
+    private const int FreePages = 12;
+    private const int MmoPages = 6;
 
     private static readonly TimeSpan Ttl = TimeSpan.FromDays(3);
     private static readonly TimeSpan FailTtl = TimeSpan.FromMinutes(10);
 
-    private static string CacheFile => Path.Combine(StoreFeed.CacheDir, "catalog.json");
-    private static string FailFile => Path.Combine(StoreFeed.CacheDir, "catalog-fail.txt");
+    /// <summary>Жанры магазина: подпись и тег поиска.</summary>
+    public static readonly (string Genre, string Tag)[] SteamGenres =
+    {
+        ("Action", "19"),
+        ("Adventure", "21"),
+        ("Indie", "492"),
+        ("RPG", "122"),
+        ("Strategy", "9"),
+        ("Simulation", "599"),
+        ("Casual", "597"),
+        ("Racing", "699"),
+        ("Sports", "701"),
+        ("Early Access", "493"),
+    };
 
-    public static string DisplayGenre(string steamGenre) => Loc.T("cgenre." + steamGenre);
+    /// <summary>
+    /// Игры, которые без онлайна бессмысленны: сетевые шутеры, лайв-сервисы и
+    /// кооперативы «только с друзьями». Сверяем по названию, без учёта регистра.
+    /// </summary>
+    private static readonly string[] OnlineOnly =
+    {
+        "dota", "counter-strike", "counter strike", "cs2", "cs:go", "cs go", "pubg", "apex legends",
+        "valorant", "overwatch", "warframe", "war thunder", "world of tanks", "world of warships",
+        "destiny 2", "rainbow six", "tarkov", "hunt: showdown", "dead by daylight", "rust",
+        "dayz", "garry's mod", "team fortress", "fallout 76", "elder scrolls online",
+        "final fantasy xiv", "guild wars", "path of exile", "lost ark", "black desert",
+        "new world", "throne and liberty", "albion online", "eve online", "star citizen",
+        "marvel rivals", "deadlock", "the finals", "delta force", "naraka", "crossout",
+        "enlisted", "genshin", "honkai", "zenless", "wuthering waves", "tower of fantasy",
+        "torchlight: infinite", "limbus", "where winds meet", "once human", "r.e.p.o",
+        "peak", "phasmophobia", "backrooms", "lethal company", "content warning",
+        "among us", "fall guys", "rocket league", "brawlhalla", "paladins", "smite",
+        "warface", "crossfire", "arma reforger", "squad", "hell let loose", "insurgency",
+        "battlefield", "call of duty", "halo infinite", "the isle", "scum", "miscreated",
+        "realm royale", "super people", "vampire: the masquerade - bloodhunt", "bloodhunt",
+        "the cycle", "spellbreak", "crucible", "artifact", "gwent", "hearthstone",
+        "magic: the gathering arena", "yu-gi-oh", "master duel", "mtg arena",
+        "payday", "казино", "casino", "rv there yet", "how to fish", "gtfo",
+        "deep rock galactic", "sea of thieves", "star wars: the old republic",
+        "dc universe online", "neverwinter", "blade & soul", "archeage", "ragnarok online",
+        "runescape", "tibia", "mabinogi", "second life", "vrchat", "rec room", "roblox",
+        "the elder scrolls online", "eso:", "deadside", "escape from backrooms",
+    };
 
-    // ------------------------------------------------------------------ загрузка
+    private static readonly string[] Noise =
+    {
+        "soundtrack", "dedicated server", " sdk", "demo", "beta test", "playtest",
+        "wallpaper engine", "crosshair", "benchmark", "editor",
+    };
 
     /// <summary>Когда каталог собран (UTC): кэш или свежий обход жанров.</summary>
     public static DateTime FetchedUtc { get; private set; }
 
+    /// <summary>Последняя ошибка загрузки — её показываем в интерфейсе, если каталог не собрался.</summary>
+    public static string? LastError { get; private set; }
+
+    private static string CacheDir
+    {
+        get
+        {
+            var dir = StoreFeed.CacheDir;
+            Directory.CreateDirectory(dir);
+            return dir;
+        }
+    }
+
+    private static string CacheFile => Path.Combine(CacheDir, "catalog.json");
+    private static string FailFile => Path.Combine(CacheDir, "catalog-fail.txt");
+
+    /// <summary>Собирает каталог: сначала кэш, если он свежий, иначе обход жанров.</summary>
     public static async Task<List<StoreGame>> LoadAsync(bool force, Action<string>? progress, CancellationToken ct)
     {
         var cached = ReadCache();
-        if (!force && cached != null) return cached;
-
-        // недавняя неудача — не долбим сеть каждым открытием вкладки
-        try
+        if (!force && cached != null)
         {
-            if (File.Exists(FailFile) && DateTime.UtcNow - File.GetLastWriteTimeUtc(FailFile) < FailTtl)
-            {
-                AppPaths.Log("StoreCatalog: недавняя неудача, берём кэш");
-                return cached ?? new List<StoreGame>();
-            }
+            FetchedUtc = ReadCacheStamp();
+            return cached;
         }
-        catch { /* не критично */ }
+
+        if (!force && Throttled())
+        {
+            LastError = Loc.T("catalog.throttled");
+            if (cached != null) return cached;
+        }
 
         try
         {
             using var http = MakeClient();
+            var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(90);
 
             var merged = new Dictionary<int, StoreGame>();
-            var genreIndex = 0;
+            var order = new List<int>();
 
-            foreach (var genre in SteamGenres)
+            // 1. списки, которые из каталога вычитаем
+            progress?.Invoke(Loc.T("catalog.loadingFree"));
+            var free = (await CollectAsync(http, "maxprice=free", FreePages, ct))
+                .Select(r => r.AppId).ToHashSet();
+            progress?.Invoke(Loc.T("catalog.loadingMmo"));
+            var mmo = (await CollectAsync(http, "tags=128", MmoPages, ct))
+                .Select(r => r.AppId).ToHashSet();
+
+            // 2. жанровые подборки
+            var genreIndex = 0;
+            foreach (var (genre, tag) in SteamGenres)
             {
                 ct.ThrowIfCancellationRequested();
                 progress?.Invoke(Loc.F("catalog.loading", ++genreIndex, SteamGenres.Length, DisplayGenre(genre)));
 
-                var url = $"{SpyApi}?request=genre&genre={Uri.EscapeDataString(genre)}";
-                var json = await http.GetByteArrayAsync(url, ct);
+                if (DateTime.UtcNow > deadline) break;
 
-                MergeGenre(merged, json, genre);
+                var rows = await CollectAsync(http, $"tags={tag}", PagesPerGenre, ct);
 
-                // жанровые ответы большие — освобождаем память до следующего
-                GC.Collect(2, GCCollectionMode.Forced, true, true);
+                foreach (var (appId, name) in rows)
+                {
+                    if (free.Contains(appId) || mmo.Contains(appId)) continue;
+
+                    if (!merged.TryGetValue(appId, out var game))
+                    {
+                        if (Rejected(name)) continue;
+
+                        game = new StoreGame
+                        {
+                            AppId = appId,
+                            Name = name,
+                            CoverUrl = $"https://cdn.cloudflare.steamstatic.com/steam/apps/{appId}/header.jpg",
+                            HeaderUrl = $"https://cdn.cloudflare.steamstatic.com/steam/apps/{appId}/header.jpg",
+                        };
+
+                        game.Sections.Add("all");
+                        merged[appId] = game;
+                        order.Add(appId);
+                    }
+
+                    var label = DisplayGenre(genre);
+                    if (Array.IndexOf(game.Genres, label) < 0)
+                        game.Genres = game.Genres.Append(label).ToArray();
+                }
             }
 
-            var games = merged.Values.ToList();
+            var games = order.Select(id => merged[id]).ToList();
+            if (games.Count == 0)
+            {
+                LastError = Loc.T("catalog.empty");
+                AppPaths.Log("StoreCatalog: пустой результат поиска магазина");
+                return cached ?? new List<StoreGame>();
+            }
+
             FetchedUtc = DateTime.UtcNow;
+            LastError = null;
             AppPaths.Log($"StoreCatalog: собрано {games.Count} игр");
 
             WriteCache(games);
             TryDelete(FailFile);
             return games;
         }
+        catch (OperationCanceledException)
+        {
+            return cached ?? new List<StoreGame>();
+        }
         catch (Exception ex)
         {
+            LastError = ex.Message;
             AppPaths.Log("StoreCatalog failed: " + ex.Message);
-            try { File.WriteAllText(FailFile, ex.Message); } catch { /* ignore */ }
+            try { File.WriteAllText(FailFile, DateTime.UtcNow.ToString("O") + " " + ex.Message); } catch { /* ignore */ }
             return cached ?? new List<StoreGame>();
         }
     }
 
+    // ------------------------------------------------------------------ сеть
+
+    private static async Task<List<(int AppId, string Name)>> CollectAsync(HttpClient http,
+        string query, int pages, CancellationToken ct)
+    {
+        var rows = new List<(int AppId, string Name)>();
+        for (var page = 0; page < pages; page++)
+        {
+            ct.ThrowIfCancellationRequested();
+            rows.AddRange(await FetchPageAsync(http, query, page * 100, ct));
+            await Task.Delay(450, ct);
+        }
+
+        return rows;
+    }
+
+    private static async Task<List<(int AppId, string Name)>> FetchPageAsync(HttpClient http,
+        string query, int start, CancellationToken ct)
+    {
+        var url = $"{SearchUrl}&start={start}&{query}";
+
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            ct.ThrowIfCancellationRequested();
+            try
+            {
+                using var response = await http.GetAsync(url, ct);
+                if (response.StatusCode == HttpStatusCode.TooManyRequests)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(8 * (attempt + 1)), ct);
+                    continue;
+                }
+
+                response.EnsureSuccessStatusCode();
+                var json = await response.Content.ReadAsStringAsync(ct);
+                return ParsePage(json);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex) when (attempt < 2)
+            {
+                AppPaths.Log($"StoreCatalog page {start} ({query}): {ex.Message}");
+                await Task.Delay(TimeSpan.FromSeconds(2 + attempt * 2), ct);
+            }
+            catch
+            {
+                break;
+            }
+        }
+
+        return new List<(int AppId, string Name)>();
+    }
+
+    private static readonly Regex RowRegex = new("data-ds-appid=\"(\\d+)[,\"](.*?)</a>", RegexOptions.Singleline);
+    private static readonly Regex TitleRegex = new("<span class=\"title\">(.*?)</span>", RegexOptions.Singleline);
+
+    /// <summary>Разбирает HTML-кусок ответа поиска: пары «идентификатор — название».</summary>
+    private static List<(int AppId, string Name)> ParsePage(string json)
+    {
+        var result = new List<(int AppId, string Name)>();
+
+        using var doc = JsonDocument.Parse(json);
+        if (!doc.RootElement.TryGetProperty("results_html", out var html) ||
+            html.ValueKind != JsonValueKind.String)
+            return result;
+
+        var text = html.GetString() ?? "";
+
+        foreach (Match row in RowRegex.Matches(text))
+        {
+            if (!int.TryParse(row.Groups[1].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var appId))
+                continue;
+
+            var title = TitleRegex.Match(row.Groups[2].Value);
+            if (!title.Success) continue;
+
+            var name = WebUtility.HtmlDecode(Regex.Replace(title.Groups[1].Value, "<.*?>", "")).Trim();
+            if (name.Length == 0) continue;
+
+            result.Add((appId, name));
+        }
+
+        return result;
+    }
+
     private static HttpClient MakeClient()
     {
-        var http = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("Ludex/" + Updater.CurrentVersionText);
+        var http = new HttpClient { Timeout = TimeSpan.FromSeconds(45) };
+        http.DefaultRequestHeaders.UserAgent.ParseAdd(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Ludex/" + Updater.CurrentVersionText);
+        http.DefaultRequestHeaders.TryAddWithoutValidation("Accept-Language", "ru,en;q=0.8");
         return http;
     }
 
-    private static void MergeGenre(Dictionary<int, StoreGame> merged, byte[] json, string genre)
+    // ------------------------------------------------------------------ фильтры
+
+    /// <summary>Название игры на языке интерфейса.</summary>
+    public static string DisplayGenre(string genre) => Loc.T("cgenre." + genre);
+
+    private static bool Rejected(string name)
     {
-        // жанровые списки приходят целиком (до 60 тысяч игр), поэтому разбираем их
-        // потоком: целый документ в память не поднимаем, объекты создаём только для
-        // тех игр, что прошли фильтры, и держим не больше PerGenre штук на жанр
-        var picked = new List<(int Id, string Name, string Dev, string Pub, int Price, int Discount, int Ccu, int Owners)>();
-        var reader = new Utf8JsonReader(json);
+        var lower = name.ToLowerInvariant();
 
-        while (reader.Read())
-        {
-            if (reader.TokenType != JsonTokenType.PropertyName || reader.CurrentDepth != 1) continue;
+        foreach (var word in Noise)
+            if (lower.Contains(word, StringComparison.Ordinal)) return true;
 
-            if (!int.TryParse(reader.GetString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var id) || id <= 0)
-                continue;
+        foreach (var word in OnlineOnly)
+            if (lower.Contains(word, StringComparison.Ordinal)) return true;
 
-            if (!reader.Read() || reader.TokenType != JsonTokenType.StartObject) continue;
-
-            using var doc = JsonDocument.ParseValue(ref reader);
-            var el = doc.RootElement;
-
-            var name = GetString(el, "name");
-            if (name.Length == 0) continue;
-
-            var owners = OwnersLow(GetString(el, "owners"));
-            if (owners < MinOwners) continue;
-
-            var price = GetInt(el, "price", 0);
-            var ccu = GetInt(el, "ccu", 0);
-
-            // бесплатные сетевые поделки с огромным онлайном — мимо,
-            // а «цена 0 и онлайн 0» — давно снятые с продажи дубли
-            if (price == 0 && ccu == 0) continue;
-            if (price == 0 && ccu > 20000) continue;
-
-            picked.Add((id, name, GetString(el, "developer"), GetString(el, "publisher"),
-                price, GetInt(el, "discount", 0), ccu, owners));
-        }
-
-        foreach (var item in picked.OrderByDescending(x => x.Owners).Take(PerGenre))
-            MergeItem(merged, item.Id, item.Name, item.Dev, item.Pub, item.Price, item.Discount, item.Ccu, item.Owners, genre);
-    }
-
-    private static void MergeItem(Dictionary<int, StoreGame> merged, int appId, string name,
-        string developer, string publisher, int price, int discount, int ccu, int owners, string genre)
-    {
-        if (Blacklist.Contains(appId)) return;
-        if (LooksLikeNoise(name)) return;
-
-        if (!merged.TryGetValue(appId, out var game))
-        {
-            game = new StoreGame
-            {
-                AppId = appId,
-                Name = name,
-                CoverUrl = $"https://cdn.cloudflare.steamstatic.com/steam/apps/{appId}/header.jpg",
-                HeaderUrl = $"https://cdn.cloudflare.steamstatic.com/steam/apps/{appId}/header.jpg",
-                Developer = developer,
-                Publisher = publisher,
-                FinalPrice = price,
-                OriginalPrice = discount > 0 ? (int)Math.Round(price / (1 - discount / 100.0)) : price,
-                Currency = "USD",
-                DiscountPercent = discount,
-                Free = price == 0,
-                OwnersLow = owners,
-                Ccu = ccu,
-            };
-
-            game.Sections.Add("all");
-            if (owners >= 200000) game.Sections.Add("hits");
-            if (discount > 0) game.Sections.Add("discount");
-            if (price == 0) game.Sections.Add("free");
-
-            merged[appId] = game;
-        }
-
-        var label = DisplayGenre(genre);
-        if (Array.IndexOf(game.Genres, label) < 0)
-            game.Genres = game.Genres.Append(label).ToArray();
-    }
-
-    private static bool LooksLikeNoise(string name)
-    {
-        string[] noise = { "Soundtrack", "Dedicated Server", " SDK", "Demo", "Beta Test", "Playtest" };
-        foreach (var n in noise)
-            if (name.Contains(n, StringComparison.OrdinalIgnoreCase)) return true;
         return false;
     }
 
-    private static int OwnersLow(string owners)
+    private static bool Throttled()
     {
-        if (string.IsNullOrWhiteSpace(owners)) return 0;
-        var head = owners.Split("..")[0].Trim().Replace(",", "").Replace(" ", "");
-        return int.TryParse(head, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) ? v : 0;
+        try
+        {
+            if (!File.Exists(FailFile)) return false;
+            var stamp = File.GetLastWriteTimeUtc(FailFile);
+            return DateTime.UtcNow - stamp < FailTtl;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
-    private static string GetString(JsonElement el, string name) =>
-        el.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() ?? "" : "";
-
-    private static int GetInt(JsonElement el, string name, int fallback)
+    private static void TryDelete(string path)
     {
-        if (!el.TryGetProperty(name, out var v)) return fallback;
-
-        if (v.ValueKind == JsonValueKind.Number && v.TryGetInt32(out var number)) return number;
-        if (v.ValueKind == JsonValueKind.String &&
-            int.TryParse(v.GetString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed))
-            return parsed;
-
-        return fallback;
+        try
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+        catch
+        {
+            // не критично
+        }
     }
 
     // ------------------------------------------------------------------ кэш
@@ -255,14 +353,21 @@ public static class StoreCatalog
     {
         public int Id { get; set; }
         public string Name { get; set; } = "";
-        public string Dev { get; set; } = "";
-        public string Pub { get; set; } = "";
         public string[] G { get; set; } = Array.Empty<string>();
-        public int Price { get; set; }
-        public int Old { get; set; }
-        public int Disc { get; set; }
-        public int Owners { get; set; }
-        public int Ccu { get; set; }
+    }
+
+    private static DateTime ReadCacheStamp()
+    {
+        try
+        {
+            if (!File.Exists(CacheFile)) return default;
+            var model = JsonSerializer.Deserialize<CacheFileModel>(File.ReadAllText(CacheFile));
+            return model?.FetchedUtc ?? default;
+        }
+        catch
+        {
+            return default;
+        }
     }
 
     private static List<StoreGame>? ReadCache()
@@ -273,7 +378,7 @@ public static class StoreCatalog
 
             var model = JsonSerializer.Deserialize<CacheFileModel>(File.ReadAllText(CacheFile));
             if (model == null || model.Games.Count == 0) return null;
-            if (DateTime.UtcNow - model.FetchedUtc > Ttl && model.Games.Count < 100) return null;
+            if (DateTime.UtcNow - model.FetchedUtc > Ttl) return null;
 
             var list = new List<StoreGame>(model.Games.Count);
             foreach (var e in model.Games)
@@ -282,24 +387,12 @@ public static class StoreCatalog
                 {
                     AppId = e.Id,
                     Name = e.Name,
-                    Developer = e.Dev,
-                    Publisher = e.Pub,
                     CoverUrl = $"https://cdn.cloudflare.steamstatic.com/steam/apps/{e.Id}/header.jpg",
                     HeaderUrl = $"https://cdn.cloudflare.steamstatic.com/steam/apps/{e.Id}/header.jpg",
-                    FinalPrice = e.Price,
-                    OriginalPrice = e.Old,
-                    DiscountPercent = e.Disc,
-                    Currency = "USD",
-                    Free = e.Price == 0,
-                    OwnersLow = e.Owners,
-                    Ccu = e.Ccu,
                 };
 
                 game.Genres = e.G;
                 game.Sections.Add("all");
-                if (e.Owners >= 200000) game.Sections.Add("hits");
-                if (e.Disc > 0) game.Sections.Add("discount");
-                if (e.Price == 0 && e.Ccu > 0) game.Sections.Add("free");
 
                 var cover = Path.Combine(StoreFeed.CoversDir, $"{e.Id}.jpg");
                 if (File.Exists(cover)) game.CoverPath = cover;
@@ -307,7 +400,6 @@ public static class StoreCatalog
                 list.Add(game);
             }
 
-            FetchedUtc = model.FetchedUtc;
             AppPaths.Log($"StoreCatalog: из кэша {list.Count} игр");
             return list;
         }
@@ -323,34 +415,21 @@ public static class StoreCatalog
         try
         {
             var model = new CacheFileModel { FetchedUtc = DateTime.UtcNow };
-            foreach (var g in games.OrderByDescending(x => x.OwnersLow))
+            foreach (var g in games)
             {
                 model.Games.Add(new CacheEntry
                 {
                     Id = g.AppId,
                     Name = g.Name,
-                    Dev = g.Developer,
-                    Pub = g.Publisher,
                     G = g.Genres,
-                    Price = (int)g.FinalPrice,
-                    Old = (int)g.OriginalPrice,
-                    Disc = g.DiscountPercent,
-                    Owners = (int)Math.Min(g.OwnersLow, int.MaxValue),
-                    Ccu = g.Ccu,
                 });
             }
 
             File.WriteAllText(CacheFile, JsonSerializer.Serialize(model));
-            AppPaths.Log($"StoreCatalog: кэш записан ({model.Games.Count})");
         }
         catch (Exception ex)
         {
             AppPaths.Log("StoreCatalog cache write: " + ex.Message);
         }
-    }
-
-    private static void TryDelete(string path)
-    {
-        try { if (File.Exists(path)) File.Delete(path); } catch { /* ignore */ }
     }
 }

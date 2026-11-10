@@ -24,12 +24,14 @@ public sealed class SettingsPanel : Border
     private TextBox _keyBox = null!;
     private TextBox _ignoreBox = null!;
     private Dropdown _langCombo = null!;
+    private Dropdown _engineCombo = null!;
     private Toggle _autoScan = null!;
     private Toggle _autoStart = null!;
     private Toggle _autoUpdate = null!;
     private TextBlock _folderCount = null!;
 
     private string _language;
+    private string _searchEngine;
     private string _theme;
     private string _keyText;
     private string _ignoreText;
@@ -56,6 +58,7 @@ public sealed class SettingsPanel : Border
         _original = settings;
         _folders = new List<string>(settings.Folders);
         _language = settings.Language;
+        _searchEngine = settings.SearchEngine;
         _theme = settings.Theme;
         _keyText = settings.SteamGridDbKey ?? "";
         _ignoreText = string.Join(", ", settings.ExtraIgnoreExe);
@@ -168,6 +171,22 @@ public sealed class SettingsPanel : Border
 
         body.Children.Add(lookRow);
         body.Children.Add(Ui.T(Loc.T("settings.customizeHint"), 11, Skin.TextDim, wrap: TextWrapping.Wrap));
+
+        // ---- поиск в браузере
+        var searchRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
+        var searchLabel = Ui.T(Loc.T("settings.webSearch"), 13, Skin.TextMuted);
+        searchLabel.VerticalAlignment = VerticalAlignment.Center;
+        searchRow.Children.Add(searchLabel);
+
+        _engineCombo = new Dropdown(new[]
+        {
+            Loc.T("settings.engineGoogle"), Loc.T("settings.engineYandex"), Loc.T("settings.engineDdg"),
+        }, _searchEngine switch { "yandex" => 1, "ddg" => 2, _ => 0 }, 170, 34, 13);
+        _engineCombo.SelectionChanged += index => _searchEngine = index switch { 1 => "yandex", 2 => "ddg", _ => "google" };
+        searchRow.Children.Add(_engineCombo);
+
+        body.Children.Add(searchRow);
+        body.Children.Add(Ui.T(Loc.T("settings.webSearchHint"), 11, Skin.TextDim, wrap: TextWrapping.Wrap));
 
         // ---- ключ SteamGridDB
         body.Children.Add(Ui.T(Loc.T("settings.sgdb"), 13, Skin.Text, FontWeight.SemiBold));
@@ -409,6 +428,7 @@ public sealed class SettingsPanel : Border
     {
         _original.Folders = new List<string>(_folders);
         _original.Language = _language;
+        _original.SearchEngine = _searchEngine;
         _original.Theme = _theme;
         _original.SteamGridDbKey = string.IsNullOrWhiteSpace(_keyBox.Text) ? null : _keyBox.Text.Trim();
         _original.AutoScanOnStartup = _autoScan.Value;

@@ -54,6 +54,8 @@ public sealed class AppSettings
     public double WindowHeight { get; set; } = 820;
     public bool WindowMaximized { get; set; }
     public string LastSearch { get; set; } = "";
+    /// <summary>google | yandex | ddg — куда уходит запрос «название игры скачать»</summary>
+    public string SearchEngine { get; set; } = "google";
 }
 
 public sealed class LibraryFile

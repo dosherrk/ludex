@@ -15,8 +15,8 @@ public sealed class StoreGame
 {
     public int AppId { get; init; }
     public string Name { get; init; } = "";
-    public string Developer { get; init; } = "";
-    public string Publisher { get; init; } = "";
+    public string Developer { get; set; } = "";
+    public string Publisher { get; set; } = "";
     public string CoverUrl { get; init; } = "";
     public string HeaderUrl { get; init; } = "";
     public int DiscountPercent { get; init; }
@@ -284,6 +284,9 @@ public static class StoreFeed
                 if (data.TryGetProperty("short_description", out var sd))
                     item.Description = sd.GetString();
 
+                item.Developer = FirstOf(data, "developers");
+                item.Publisher = FirstOf(data, "publishers");
+
                 lock (meta) meta[id] = item;
             }
             catch (Exception ex)
@@ -310,6 +313,8 @@ public static class StoreFeed
             g.ReleaseDate ??= m.ReleaseDate;
             g.ComingSoon = g.ComingSoon || m.ComingSoon;
             if (!string.IsNullOrWhiteSpace(m.Description)) g.Description ??= m.Description;
+            if (string.IsNullOrEmpty(g.Developer) && !string.IsNullOrWhiteSpace(m.Developer)) g.Developer = m.Developer!;
+            if (string.IsNullOrEmpty(g.Publisher) && !string.IsNullOrWhiteSpace(m.Publisher)) g.Publisher = m.Publisher!;
         }
     }
 
@@ -412,6 +417,8 @@ public static class StoreFeed
     private sealed class MetaEntry
     {
         public string[] Genres { get; set; } = Array.Empty<string>();
+        public string? Developer { get; set; }
+        public string? Publisher { get; set; }
         public string? ReleaseDate { get; set; }
         public string? Description { get; set; }
         public bool ComingSoon { get; set; }
@@ -447,6 +454,21 @@ public static class StoreFeed
     {
         try { File.WriteAllText(FeedFile, json); }
         catch (Exception ex) { AppPaths.Log("StoreFeed cache write: " + ex.Message); }
+    }
+
+    /// <summary>Первый элемент массива строк из ответа магазина (разработчик, издатель).</summary>
+    private static string? FirstOf(JsonElement data, string name)
+    {
+        if (!data.TryGetProperty(name, out var arr) || arr.ValueKind != JsonValueKind.Array) return null;
+
+        foreach (var item in arr.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.String) continue;
+            var text = item.GetString();
+            if (!string.IsNullOrWhiteSpace(text)) return text;
+        }
+
+        return null;
     }
 
     private static Dictionary<int, MetaEntry> ReadMetaCache()

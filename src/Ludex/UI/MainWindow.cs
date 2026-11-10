@@ -251,7 +251,8 @@ public sealed class MainWindow : Window
             {
                 _recsFound = count;
                 if (_recsVisible) ShowRecsCount();
-            });
+            },
+            () => _settings.SearchEngine);
         _recsHost.Children.Add(_recsView);
         Grid.SetRow(_recsHost, 1);
         content.Children.Add(_recsHost);
