@@ -207,6 +207,10 @@ public static class Ui
         "c-0.83,0-1.5-0.67-1.5-1.5S16.67,8,17.5,8S19,8.67,19,9.5S18.33,11,17.5,11z";
 
     /// <summary>Сетка (Material «grid_view») — пункт «Все игры».</summary>
+    /// <summary>Звено цепи — интеграции с лаунчерами.</summary>
+    public const string LinkGeometry =
+        "M7.5,12.5 L12.5,7.5 M8.6,4.6 L10.4,2.8 A3.9,3.9 0 0 1 15.9,8.3 L14.1,10.1 M5.9,9.9 L4.1,11.7 A3.9,3.9 0 0 0 9.6,17.2 L11.4,15.4";
+
     public const string GridGeometry = "M0,0 H8.4 V8.4 H0 Z M11.6,0 H20 V8.4 H11.6 Z M0,11.6 H8.4 V20 H0 Z M11.6,11.6 H20 V20 H11.6 Z";
 
     /// <summary>Искра (4-луч) — пункт «Рекомендации».</summary>

@@ -76,6 +76,7 @@ public sealed class MainWindow : Window
     private bool _splashClosed;
     private DateTime _splashStarted = DateTime.UtcNow;
     private SettingsPanel? _settingsPanel;
+    private IntegrationsPanel? _integrationsPanel;
     private AvaloniaPath? _maximizePath;
 
     private Grid _wallpaperLayer = null!;
@@ -93,6 +94,23 @@ public sealed class MainWindow : Window
         Skin.Apply(_settings.Theme, _settings.Accent, _settings.Transparent);
         _games = Storage.LoadGames();
         _search = _settings.LastSearch ?? "";
+
+        // при первом запуске Steam подключается сам, если нашлась его библиотека
+        if (!_settings.LaunchersInitialized)
+        {
+            _settings.LaunchersInitialized = true;
+            try
+            {
+                var steam = Launchers.ScanOne("steam");
+                if (steam.Installed && steam.Count > 0) _settings.Launchers.Add("steam");
+            }
+            catch (Exception ex)
+            {
+                AppPaths.Log("Steam autodetect: " + ex.Message);
+            }
+
+            Storage.SaveSettings(_settings);
+        }
 
         Title = "Ludex";
         Width = Math.Max(900, _settings.WindowWidth);
@@ -373,6 +391,10 @@ public sealed class MainWindow : Window
         var (settingsItem, _) = SidebarItem(Loc.T("btn.settings"),
             Ui.Icon(Ui.GearGeometry, Skin.TextMuted, 16, 16), ShowSettings);
         bottom.Children.Add(settingsItem);
+
+        var (integrationsItem, _) = SidebarItem(Loc.T("btn.integrations"),
+            Ui.Icon(Ui.LinkGeometry, Skin.TextMuted, 16, 16), ShowIntegrations);
+        bottom.Children.Add(integrationsItem);
 
         var version = Ui.T("v" + Updater.CurrentVersionText, 11, Skin.TextDim);
         version.Margin = new Thickness(14, 6, 0, 0);
@@ -1071,9 +1093,10 @@ public sealed class MainWindow : Window
 
     private string Subtitle(GameEntry game)
     {
-        if (!game.ExeExists) return Loc.T("lbl.unknown");
+        var source = game.Source != null ? Loc.T("launcher." + game.Source) : null;
+        if (!game.ExeExists) return source ?? Loc.T("lbl.unknown");
         if (game.LastPlayedUtc.HasValue) return game.LastPlayedUtc.Value.ToLocalTime().ToString("dd.MM.yyyy");
-        return Loc.T("lbl.never");
+        return source ?? Loc.T("lbl.never");
     }
 
     private Menu BuildContextMenu(GameEntry game)
@@ -1270,6 +1293,7 @@ public sealed class MainWindow : Window
         Row(Loc.T("lbl.path"), game.FolderPath);
         Row(Loc.T("lbl.exe"), string.IsNullOrEmpty(game.ExePath) ? "—" : Path.GetFileName(game.ExePath));
         Row(Loc.T("lbl.size"), game.SizeBytes > 0 ? Scanner.FormatSize(game.SizeBytes) : Loc.T("lbl.calculating"));
+        if (game.Source != null) Row(Loc.T("lbl.source"), Loc.T("launcher." + game.Source));
         Row(Loc.T("lbl.added"), game.AddedUtc.ToLocalTime().ToString("dd.MM.yyyy"));
         Row(Loc.T("lbl.lastplayed"), game.LastPlayedUtc.HasValue
             ? game.LastPlayedUtc.Value.ToLocalTime().ToString("dd.MM.yyyy HH:mm")
@@ -1663,17 +1687,46 @@ public sealed class MainWindow : Window
         });
     }
 
+    /// <summary>«Интеграции»: подключение лаунчеров, из которых забираем игры.</summary>
+    private void ShowIntegrations()
+    {
+        _integrationsPanel = new IntegrationsPanel(_settings);
+        _integrationsPanel.Closed += CloseSettings;
+        _integrationsPanel.Changed += () =>
+        {
+            Storage.SaveSettings(_settings);
+            _ = ImportLaunchersAsync();
+        };
+
+        _integrationsPanel.HorizontalAlignment = HorizontalAlignment.Center;
+        _integrationsPanel.VerticalAlignment = VerticalAlignment.Center;
+        _integrationsPanel.Margin = new Thickness(24);
+
+        _settingsLayer.Child = _integrationsPanel;
+        _settingsLayer.Opacity = 0;
+        _settingsLayer.IsVisible = true;
+
+        _integrationsPanel.RenderTransform = new ScaleTransform(0.965, 0.965);
+        Dispatcher.UIThread.Post(() =>
+        {
+            _settingsLayer.Opacity = 1;
+            _integrationsPanel.RenderTransform = new ScaleTransform(1, 1);
+        });
+    }
+
     private void CloseSettings()
     {
         if (!_settingsLayer.IsVisible) return;
 
         _settingsLayer.Opacity = 0;
-        _settingsPanel.RenderTransform = new ScaleTransform(0.98, 0.98);
+        if (_settingsPanel != null) _settingsPanel.RenderTransform = new ScaleTransform(0.98, 0.98);
+        if (_integrationsPanel != null) _integrationsPanel.RenderTransform = new ScaleTransform(0.98, 0.98);
         DispatcherTimer.RunOnce(() =>
         {
             _settingsLayer.IsVisible = false;
             _settingsLayer.Child = null;
             _settingsPanel = null;
+            _integrationsPanel = null;
 
             // кастомизация применяется сразу: перекрашиваем окно после закрытия панели
             if (_appearanceDirty)
@@ -1927,6 +1980,8 @@ public sealed class MainWindow : Window
         Task library = Task.CompletedTask;
         if (_settings.Folders.Count > 0 && (_settings.AutoScanOnStartup || _games.Count == 0))
             library = StartScanAsync();
+        else if (_settings.Launchers.Count > 0)
+            library = ImportLaunchersAsync(quiet: true);
 
         // ждём каталог и библиотеку, но заставку не держим дольше 25 секунд:
         // остаток догрузится в фоне, вкладка обновится сама
@@ -2177,7 +2232,7 @@ public sealed class MainWindow : Window
     {
         if (_scanning) return;
 
-        if (_settings.Folders.Count == 0)
+        if (_settings.Folders.Count == 0 && _settings.Launchers.Count == 0)
         {
             SetStatus(Loc.T("status.noFolders"));
             ShowSettings();
@@ -2200,19 +2255,25 @@ public sealed class MainWindow : Window
             var folders = _settings.Folders.ToList();
             var extra = _settings.ExtraIgnoreExe.ToList();
 
-            var hits = await Task.Run(() => Scanner.Scan(
-                folders,
-                message => Dispatcher.UIThread.Post(() => SetStatus(message)),
-                extra,
-                null,
-                () => ct.IsCancellationRequested), ct);
+            var hits = folders.Count > 0
+                ? await Task.Run(() => Scanner.Scan(
+                    folders,
+                    message => Dispatcher.UIThread.Post(() => SetStatus(message)),
+                    extra,
+                    null,
+                    () => ct.IsCancellationRequested), ct)
+                : new List<ScanHit>();
 
             if (ct.IsCancellationRequested) return;
 
             var added = MergeHits(hits);
+            var imported = await ImportLaunchersAsync(quiet: true);
             Storage.SaveGames(_games);
             RenderGrid();
-            SetStatus(Loc.F("status.found", hits.Count) + (added > 0 ? $"  (+{added})" : ""));
+
+            var message = folders.Count > 0 ? Loc.F("status.found", hits.Count) : "";
+            if (imported > 0) message = (message + "  " + Loc.F("status.launchers", imported)).Trim();
+            SetStatus(message.Length > 0 ? message : Loc.T("status.ready"));
 
             await FetchArtworkForAsync(_games.Where(g => string.IsNullOrEmpty(g.CoverFile) || !File.Exists(g.CoverFile)).ToList());
             Storage.SaveGames(_games);
@@ -2235,6 +2296,113 @@ public sealed class MainWindow : Window
             _scanButton.Opacity = 1;
             _scanButton.IsEnabled = true;
         }
+    }
+
+    /// <summary>
+    /// Забирает игры из подключённых лаунчеров и подмешивает их в библиотеку.
+    /// Возвращает число импортированных игр.
+    /// </summary>
+    private async Task<int> ImportLaunchersAsync(bool quiet = false)
+    {
+        var enabled = _settings.Launchers.ToList();
+        if (enabled.Count == 0 && _games.All(g => g.Source == null)) return 0;
+
+        List<LauncherGame> found;
+        try
+        {
+            found = enabled.Count == 0
+                ? new List<LauncherGame>()
+                : await Task.Run(() => Launchers.Import(enabled));
+        }
+        catch (Exception ex)
+        {
+            AppPaths.Log("Import launchers failed: " + ex.Message);
+            return 0;
+        }
+
+        var added = MergeImported(found);
+        Storage.SaveGames(_games);
+
+        if (!quiet)
+        {
+            RenderGrid();
+            SetStatus(Loc.F("status.launchers", found.Count));
+        }
+
+        var needArt = _games
+            .Where(g => found_contains(g) && (string.IsNullOrEmpty(g.CoverFile) || !System.IO.File.Exists(g.CoverFile)))
+            .ToList();
+        if (needArt.Count > 0) await FetchArtworkForAsync(needArt);
+
+        return found.Count;
+
+        bool found_contains(GameEntry g) =>
+            found.Any(f => string.Equals(f.Folder, g.FolderPath, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Слияние импортированных игр с библиотекой: сначала по папке установки,
+    /// затем по названию (чтобы не появилось второй карточки той же игры).
+    /// </summary>
+    private int MergeImported(List<LauncherGame> found)
+    {
+        int added = 0;
+
+        var byFolder = new Dictionary<string, GameEntry>(StringComparer.OrdinalIgnoreCase);
+        foreach (var game in _games)
+            if (!string.IsNullOrWhiteSpace(game.FolderPath) && !byFolder.ContainsKey(game.FolderPath))
+                byFolder[game.FolderPath] = game;
+
+        var byTitle = new Dictionary<string, GameEntry>(StringComparer.OrdinalIgnoreCase);
+        foreach (var game in _games)
+            if (game.Source == null && !game.FromLauncher)
+                byTitle.TryAdd(Normalize(game.Title), game);
+
+        foreach (var item in found)
+        {
+            if (byFolder.TryGetValue(item.Folder, out var entry))
+            {
+                entry.Source = item.Launcher;
+                if (string.IsNullOrEmpty(entry.ExePath)) entry.ExePath = item.Exe;
+                if (!entry.Locked && string.IsNullOrWhiteSpace(entry.Title)) entry.Title = item.Title;
+                continue;
+            }
+
+            // та же игра уже есть в библиотеке из своей папки — просто помечаем источник
+            if (byTitle.TryGetValue(Normalize(item.Title), out var same))
+            {
+                if (same.Source == null) same.Source = item.Launcher;
+                continue;
+            }
+
+            var created = new GameEntry
+            {
+                Title = item.Title,
+                FolderPath = item.Folder,
+                ExePath = item.Exe,
+                Source = item.Launcher,
+                FromLauncher = true,
+                AddedUtc = DateTime.UtcNow,
+            };
+            _games.Add(created);
+            byFolder[item.Folder] = created;
+            added++;
+        }
+
+        // игры отключённых лаунчеров убираем; у своих папок снимаем только метку
+        var keep = new HashSet<string>(found.Select(f => f.Folder), StringComparer.OrdinalIgnoreCase);
+        _games.RemoveAll(g => g.FromLauncher && !keep.Contains(g.FolderPath));
+        foreach (var game in _games.Where(g => !g.FromLauncher && g.Source != null && !keep.Contains(g.FolderPath)))
+            game.Source = null;
+
+        return added;
+    }
+
+    /// <summary>Название без регистра и знаков — для сравнения игр между лаунчерами.</summary>
+    private static string Normalize(string title)
+    {
+        var chars = title.ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray();
+        return new string(chars);
     }
 
     private int MergeHits(List<ScanHit> hits)

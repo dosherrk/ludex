@@ -14,7 +14,7 @@
 [![macOS](https://img.shields.io/badge/macOS-Apple%20Silicon%20%2F%20Intel-000000?logo=apple&logoColor=white)](#macos)
 [![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet&logoColor=white)](#сборка-из-исходников)
 [![Avalonia](https://img.shields.io/badge/Avalonia-11-8B44AC)](https://avaloniaui.net)
-[![Version](https://img.shields.io/badge/version-1.13.2-3B9EFF)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.14.0-3B9EFF)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-35C48A)](LICENSE)
 [![Website](https://img.shields.io/badge/сайт-ludex--one.vercel.app-3B9EFF)](https://ludex-one.vercel.app)
 
@@ -81,6 +81,10 @@
 | Настройки | Обои на фоне |
 |---|---|
 | ![Настройки](screenshots/settings.png) | ![Обои](screenshots/library-wallpaper.png) |
+
+| Интеграции с лаунчерами | Библиотека с источниками |
+|---|---|
+| ![Интеграции](screenshots/integrations.png) | ![Источники](screenshots/library-integrations.png) |
 
 ## Сайт
 

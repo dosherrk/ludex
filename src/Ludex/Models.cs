@@ -23,6 +23,12 @@ public sealed class GameEntry
 
     public bool Favorite { get; set; }
 
+    /// <summary>Лаунчер, из которого игра импортирована (steam, epic, gog...). null — своя папка.</summary>
+    public string? Source { get; set; }
+
+    /// <summary>Запись создана импортом из лаунчера: при отключении лаунчера её можно убрать.</summary>
+    public bool FromLauncher { get; set; }
+
     /// <summary>True when the user picked the title/artwork manually: a rescan will not overwrite it.</summary>
     public bool Locked { get; set; }
 
@@ -56,6 +62,12 @@ public sealed class AppSettings
     public string LastSearch { get; set; } = "";
     /// <summary>google | yandex | ddg — куда уходит запрос «название игры скачать»</summary>
     public string SearchEngine { get; set; } = "google";
+
+    /// <summary>Включённые интеграции: steam, epic, gog, ubisoft, ea, battlenet, heroic, lutris.</summary>
+    public List<string> Launchers { get; set; } = new();
+
+    /// <summary>Первый запуск с интеграциями: Steam подключается сам, если библиотека найдена.</summary>
+    public bool LaunchersInitialized { get; set; }
 }
 
 public sealed class LibraryFile
