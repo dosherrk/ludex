@@ -19,6 +19,8 @@
 
 <img src="screenshots/library.png" width="900" alt="Библиотека Ludex">
 
+**English version:** [README.en.md](README.en.md)
+
 </div>
 
 ---
@@ -30,7 +32,7 @@ Ludex бесплатный: без аккаунтов, подписки и ре�
 
 **[donationalerts.com/r/c04hbiu](https://www.donationalerts.com/r/c04hbiu)** — страница «C04HbIU»
 
-[![Поддержать на DonationAlerts](https://img.shields.io/badge/DonationAlerts-поддержать%20автора-FF5C5C?logo=data:image/svg%2Bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZD0iTTEyIDIxcy04LTQuOS04LTEwLjVBNC41IDQuNSAwIDAgMSAxMiA3YTQuNSA0LjUgMCAwIDEgOCAzLjVDMjAgMTYuMSAxMiAyMSAxMiAyMXoiIGZpbGw9IndoaXRlIi8+PC9zdmctPg==)](https://www.donationalerts.com/r/c04hbiu)
+[![Поддержать на DonationAlerts](https://img.shields.io/badge/DonationAlerts-поддержать%20автора-FF5C5C?logo=data:image/svg%2Bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZD0iTTEyIDIxcy04LTQuOS04LTEwLjVBNC41IDQuNSAwIDAgMSAxMiA3YTQuNSA0LjUgMCAwIDEgOCAzLjVDMjAgMTYuMSAxMiAyMSAxMiAyMXoiIGZpbGw9IndoaXRlIi8+PC9zdmc+)](https://www.donationalerts.com/r/c04hbiu)
 
 ## Возможности
 
