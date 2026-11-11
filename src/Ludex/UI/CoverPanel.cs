@@ -1,419 +1,490 @@
-using System;
+using Avalonia.Animation.Easings;
+using Avalonia.Animation;
+using Avalonia.Collections;
+using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Shapes;
+using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Labs.Gif;
+using Avalonia.Layout;
+using Avalonia.Logging;
+using Avalonia.Media.Imaging;
+using Avalonia.Media;
+using Avalonia.Platform.Storage;
+using Avalonia.Platform;
+using Avalonia.Styling;
+using Avalonia.Themes.Fluent;
+using Avalonia.Threading;
+using Avalonia;
+using Ludex.Services;
+using Ludex.UI;
+using Microsoft.Win32;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.ComponentModel;
+using System.Diagnostics;
+using System.Globalization;
+using System.IO.Compression;
 using System.IO;
 using System.Linq;
-using System.Threading;
+using System.Net.Http.Headers;
+using System.Net.Http;
+using System.Net;
+using System.Reflection;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
+using System.Security.Cryptography;
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using System.Text.RegularExpressions;
+using System.Text;
 using System.Threading.Tasks;
-using Avalonia;
-using Avalonia.Controls;
-using Avalonia.Controls.Primitives;
-using Avalonia.Input;
-using Avalonia.Layout;
-using Avalonia.Media;
-using Avalonia.Media.Imaging;
-using Avalonia.Platform.Storage;
-using Avalonia.Threading;
-using Ludex.Services;
+using System.Threading;
+using System;
 
 namespace Ludex.UI;
 
-/// <summary>
-/// Выбор обложки: варианты с CDN Steam, поиск по названию, файл с диска или ссылка.
-/// Панель живёт внутри окна (как настройки): отдельные окна оставляли «залипшее»
-/// наведение после закрытия и лишнюю системную рамку.
-/// </summary>
 public sealed class CoverPanel : Border
 {
-    private readonly string _gameId;
-    private readonly string? _sgdbKey;
-    private readonly WrapPanel _results = new() { Margin = new Thickness(0, 12, 0, 0) };
-    private readonly TextBlock _status;
-    private readonly TextBox _query;
-    private TextBox _urlBox = null!;
-    private TextBox _appIdBox = null!;
-    private CancellationTokenSource? _cts;
+	private readonly string _gameId;
 
-    public string? ChosenCoverPath { get; private set; }
-    public bool ChosenIsPortrait { get; private set; }
-    public bool ResetRequested { get; private set; }
+	private readonly string? _sgdbKey;
 
-    /// <summary>Панель закрыта: применяем выбор или просто убираем её.</summary>
-    public event Action? Closed;
+	private readonly WrapPanel _results = new WrapPanel
+	{
+		Margin = new Thickness(0.0, 12.0, 0.0, 0.0)
+	};
 
-    private int? _appId;
+	private readonly TextBlock _status;
 
-    public CoverPanel(string gameTitle, string? sgdbKey, string gameId, int? appId = null)
-    {
-        _gameId = gameId;
-        _sgdbKey = sgdbKey;
-        _appId = appId;
+	private readonly TextBox _query;
 
-        MaxWidth = 980;
-        MaxHeight = 760;
-        Background = Skin.Panel;
-        CornerRadius = new CornerRadius(14);
-        BoxShadow = new BoxShadows(new BoxShadow
-        {
-            OffsetX = 0,
-            OffsetY = 14,
-            Blur = 44,
-            Color = Color.Parse("#AA000000"),
-        });
+	private TextBox _urlBox;
 
-        _query = new TextBox
-        {
-            Text = gameTitle,
-            FontSize = 14,
-            Height = 38,
-            Background = Skin.PanelAlt,
-            Foreground = Skin.Text,
-            BorderBrush = Skin.Border,
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(6),
-            Padding = new Thickness(10, 0, 10, 0),
-            VerticalContentAlignment = VerticalAlignment.Center,
-        };
-        Ui.AnimateTextBox(_query);
-        _query.KeyDown += (_, e) =>
-        {
-            if (e.Key == Key.Enter) _ = SearchAsync();
-        };
+	private TextBox _appIdBox;
 
-        _status = Ui.T("", 12, Skin.TextMuted, wrap: TextWrapping.Wrap);
+	private CancellationTokenSource? _cts;
 
-        var header = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto") };
-        header.Children.Add(_query);
-        var searchButton = Ui.PrimaryButton(Loc.T("cover.searchBtn"), () => _ = SearchAsync());
-        searchButton.Margin = new Thickness(10, 0, 0, 0);
-        Grid.SetColumn(searchButton, 1);
-        header.Children.Add(searchButton);
+	private int? _appId;
 
-        var pickFile = Ui.GhostButton(Loc.T("btn.browseFile"), () => _ = PickFileAsync());
-        pickFile.Margin = new Thickness(10, 0, 0, 0);
-        Grid.SetColumn(pickFile, 2);
-        header.Children.Add(pickFile);
+	public string? ChosenCoverPath { get; private set; }
 
-        // ссылка на картинку: когда поиск ничего не нашёл, обложку можно вставить руками
-        var urlRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 10,
-            Margin = new Thickness(0, 10, 0, 0),
-        };
-        _urlBox = new TextBox
-        {
-            Watermark = Loc.T("cover.urlWatermark"),
-            FontSize = 12.5,
-            Height = 34,
-            Background = Skin.PanelAlt,
-            Foreground = Skin.Text,
-            BorderBrush = Skin.Border,
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(6),
-            Padding = new Thickness(10, 0, 10, 0),
-            VerticalContentAlignment = VerticalAlignment.Center,
-            Width = 420,
-        };
-        Ui.AnimateTextBox(_urlBox);
-        urlRow.Children.Add(_urlBox);
-        urlRow.Children.Add(Ui.GhostButton(Loc.T("cover.urlApply"), () => _ = UseUrlAsync()));
+	public bool ChosenIsPortrait { get; private set; }
 
-        // Steam AppId вручную: когда поиск по названию не находит игру (переименования, DLC)
-        _appIdBox = new TextBox
-        {
-            Watermark = Loc.T("cover.appIdWatermark"),
-            FontSize = 12.5,
-            Height = 34,
-            Width = 150,
-            Background = Skin.PanelAlt,
-            Foreground = Skin.Text,
-            BorderBrush = Skin.Border,
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(6),
-            Padding = new Thickness(10, 0, 10, 0),
-            VerticalContentAlignment = VerticalAlignment.Center,
-        };
-        Ui.AnimateTextBox(_appIdBox);
-        if (_appId.HasValue) _appIdBox.Text = _appId.Value.ToString();
-        urlRow.Children.Add(_appIdBox);
-        urlRow.Children.Add(Ui.GhostButton(Loc.T("cover.appIdApply"), () =>
-        {
-            if (!int.TryParse(_appIdBox.Text?.Trim(), out var id) || id <= 0) return;
-            _appId = id;
-            _ = SearchAsync();
-        }));
+	public bool ResetRequested { get; private set; }
 
-        var scroll = new ScrollViewer
-        {
-            Content = _results,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            Margin = new Thickness(0, 8, 0, 0),
-        };
-        Ui.SmoothScroll(scroll, 120);
+	public event Action? Closed;
 
-        var bottom = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 10,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 12, 0, 0),
-        };
-        bottom.Children.Add(Ui.GhostButton(Loc.T("btn.resetCover"), () =>
-        {
-            ResetRequested = true;
-            Close();
-        }));
-        bottom.Children.Add(Ui.GhostButton(Loc.T("btn.cancel"), Close));
+	public CoverPanel(string gameTitle, string? sgdbKey, string gameId, int? appId = null)
+	{
+		_gameId = gameId;
+		_sgdbKey = sgdbKey;
+		_appId = appId;
+		((Layoutable)this).MaxWidth = 980.0;
+		((Layoutable)this).MaxHeight = 760.0;
+		((Border)this).Background = Skin.Panel;
+		((Border)this).CornerRadius = new CornerRadius(14.0);
+		BoxShadow val = new BoxShadow
+		{
+			OffsetX = 0.0,
+			OffsetY = 14.0,
+			Blur = 44.0,
+			Color = Color.Parse("#AA000000")
+		};
+		((Border)this).BoxShadow = new BoxShadows(val);
+		_query = new TextBox
+		{
+			Text = gameTitle,
+			FontSize = 14.0,
+			Height = 38.0,
+			Background = Skin.PanelAlt,
+			Foreground = Skin.Text,
+			BorderBrush = Skin.Border,
+			BorderThickness = new Thickness(1.0),
+			CornerRadius = new CornerRadius(6.0),
+			Padding = new Thickness(10.0, 0.0, 10.0, 0.0),
+			VerticalContentAlignment = (VerticalAlignment)2
+		};
+		Ui.AnimateTextBox(_query);
+		((InputElement)_query).KeyDown += delegate(object? _, KeyEventArgs e)
+		{
+			if ((int)e.Key == 6)
+			{
+				_ = SearchAsync();
+			}
+		};
+		_status = Ui.T("", 12.0, Skin.TextMuted, null, (TextWrapping)1);
+		Grid val2 = new Grid
+		{
+			ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto")
+		};
+		((AvaloniaList<Control>)(object)((Panel)val2).Children).Add((Control)(object)_query);
+		Border val3 = Ui.PrimaryButton(Loc.T("cover.searchBtn"), delegate
+		{
+			SearchAsync();
+		});
+		((Layoutable)val3).Margin = new Thickness(10.0, 0.0, 0.0, 0.0);
+		Grid.SetColumn((Control)(object)val3, 1);
+		((AvaloniaList<Control>)(object)((Panel)val2).Children).Add((Control)(object)val3);
+		Border val4 = Ui.GhostButton(Loc.T("btn.browseFile"), delegate
+		{
+			PickFileAsync();
+		});
+		((Layoutable)val4).Margin = new Thickness(10.0, 0.0, 0.0, 0.0);
+		Grid.SetColumn((Control)(object)val4, 2);
+		((AvaloniaList<Control>)(object)((Panel)val2).Children).Add((Control)(object)val4);
+		StackPanel val5 = new StackPanel
+		{
+			Orientation = (Orientation)0,
+			Spacing = 10.0,
+			Margin = new Thickness(0.0, 10.0, 0.0, 0.0)
+		};
+		_urlBox = new TextBox
+		{
+			Watermark = Loc.T("cover.urlWatermark"),
+			FontSize = 12.5,
+			Height = 34.0,
+			Background = Skin.PanelAlt,
+			Foreground = Skin.Text,
+			BorderBrush = Skin.Border,
+			BorderThickness = new Thickness(1.0),
+			CornerRadius = new CornerRadius(6.0),
+			Padding = new Thickness(10.0, 0.0, 10.0, 0.0),
+			VerticalContentAlignment = (VerticalAlignment)2,
+			Width = 420.0
+		};
+		Ui.AnimateTextBox(_urlBox);
+		((AvaloniaList<Control>)(object)((Panel)val5).Children).Add((Control)(object)_urlBox);
+		((AvaloniaList<Control>)(object)((Panel)val5).Children).Add((Control)(object)Ui.GhostButton(Loc.T("cover.urlApply"), delegate
+		{
+			UseUrlAsync();
+		}));
+		_appIdBox = new TextBox
+		{
+			Watermark = Loc.T("cover.appIdWatermark"),
+			FontSize = 12.5,
+			Height = 34.0,
+			Width = 150.0,
+			Background = Skin.PanelAlt,
+			Foreground = Skin.Text,
+			BorderBrush = Skin.Border,
+			BorderThickness = new Thickness(1.0),
+			CornerRadius = new CornerRadius(6.0),
+			Padding = new Thickness(10.0, 0.0, 10.0, 0.0),
+			VerticalContentAlignment = (VerticalAlignment)2
+		};
+		Ui.AnimateTextBox(_appIdBox);
+		if (_appId.HasValue)
+		{
+			_appIdBox.Text = _appId.Value.ToString();
+		}
+		((AvaloniaList<Control>)(object)((Panel)val5).Children).Add((Control)(object)_appIdBox);
+		((AvaloniaList<Control>)(object)((Panel)val5).Children).Add((Control)(object)Ui.GhostButton(Loc.T("cover.appIdApply"), delegate
+		{
+			if (int.TryParse(_appIdBox.Text?.Trim(), out var result) && result > 0)
+			{
+				_appId = result;
+				SearchAsync();
+			}
+		}));
+		ScrollViewer val6 = new ScrollViewer
+		{
+			Content = _results,
+			VerticalScrollBarVisibility = (ScrollBarVisibility)1,
+			Margin = new Thickness(0.0, 8.0, 0.0, 0.0)
+		};
+		Ui.SmoothScroll(val6, 120.0);
+		StackPanel val7 = new StackPanel
+		{
+			Orientation = (Orientation)0,
+			Spacing = 10.0,
+			HorizontalAlignment = (HorizontalAlignment)3,
+			Margin = new Thickness(0.0, 12.0, 0.0, 0.0)
+		};
+		((AvaloniaList<Control>)(object)((Panel)val7).Children).Add((Control)(object)Ui.GhostButton(Loc.T("btn.resetCover"), delegate
+		{
+			ResetRequested = true;
+			Close();
+		}));
+		((AvaloniaList<Control>)(object)((Panel)val7).Children).Add((Control)(object)Ui.GhostButton(Loc.T("btn.cancel"), Close));
+		DockPanel root = new DockPanel
+		{
+			Margin = new Thickness(22.0)
+		};
+		StackPanel val8 = new StackPanel();
+		((AvaloniaList<Control>)(object)((Panel)val8).Children).Add((Control)(object)val2);
+		((AvaloniaList<Control>)(object)((Panel)val8).Children).Add((Control)(object)val5);
+		StackPanel val9 = val8;
+		DockPanel.SetDock((Control)(object)val9, (Dock)3);
+		((AvaloniaList<Control>)(object)((Panel)root).Children).Add((Control)(object)val9);
+		DockPanel.SetDock((Control)(object)_status, (Dock)3);
+		((Layoutable)_status).Margin = new Thickness(0.0, 12.0, 0.0, 0.0);
+		((AvaloniaList<Control>)(object)((Panel)root).Children).Add((Control)(object)_status);
+		DockPanel.SetDock((Control)(object)val7, (Dock)1);
+		((AvaloniaList<Control>)(object)((Panel)root).Children).Add((Control)(object)val7);
+		((AvaloniaList<Control>)(object)((Panel)root).Children).Add((Control)(object)val6);
+		((Decorator)this).Child = (Control)(object)root;
+		this.AttachedToVisualTree += delegate
+		{
+			Ui.FadeSlideIn((Visual)(object)root);
+			((InputElement)_query).Focus((NavigationMethod)0, (KeyModifiers)0);
+			SearchAsync();
+		};
+		((InputElement)this).KeyDown += delegate(object? _, KeyEventArgs e)
+		{
+			if ((int)e.Key == 13)
+			{
+				((RoutedEventArgs)e).Handled = true;
+				Close();
+			}
+		};
+	}
 
-        var root = new DockPanel { Margin = new Thickness(22) };
+	public void Cancel()
+	{
+		Close();
+	}
 
-        var topStack = new StackPanel();
-        topStack.Children.Add(header);
-        topStack.Children.Add(urlRow);
-        DockPanel.SetDock(topStack, Dock.Top);
-        root.Children.Add(topStack);
-        DockPanel.SetDock(_status, Dock.Top);
-        _status.Margin = new Thickness(0, 12, 0, 0);
-        root.Children.Add(_status);
-        DockPanel.SetDock(bottom, Dock.Bottom);
-        root.Children.Add(bottom);
-        root.Children.Add(scroll);
+	private void Close()
+	{
+		_cts?.Cancel();
+		this.Closed?.Invoke();
+	}
 
-        Child = root;
+	private async Task PickFileAsync()
+	{
+		TopLevel topLevel = TopLevel.GetTopLevel((Visual)(object)this);
+		if (topLevel == null)
+		{
+			return;
+		}
+		IStorageProvider storageProvider = topLevel.StorageProvider;
+		FilePickerOpenOptions val = new FilePickerOpenOptions();
+		((PickerOptions)val).Title = Loc.T("cover.title");
+		val.AllowMultiple = false;
+		FilePickerFileType[] array = new FilePickerFileType[1];
+		FilePickerFileType val2 = new FilePickerFileType("Images");
+		val2.Patterns = new string[5] { "*.jpg", "*.jpeg", "*.png", "*.webp", "*.bmp" };
+		array[0] = val2;
+		val.FileTypeFilter = (IReadOnlyList<FilePickerFileType>)(object)array;
+		IStorageFile val3 = (await storageProvider.OpenFilePickerAsync(val)).FirstOrDefault();
+		if (val3 == null)
+		{
+			return;
+		}
+		string text = StorageProviderExtensions.TryGetLocalPath((IStorageItem)(object)val3);
+		if (!string.IsNullOrEmpty(text))
+		{
+			(int w, int h) tuple = ImageSize(text);
+			int item = tuple.w;
+			int item2 = tuple.h;
+			string text2 = Artwork.SaveLocalCover(_gameId, text, item2 >= item);
+			if (text2 != null)
+			{
+				ChosenCoverPath = text2;
+				ChosenIsPortrait = item2 >= item;
+				Close();
+			}
+			else
+			{
+				_status.Text = Loc.T("cover.noresults");
+			}
+		}
+	}
 
-        AttachedToVisualTree += (_, _) =>
-        {
-            Ui.FadeSlideIn(root, 0, 220, 10);
-            _query.Focus();
-            _ = SearchAsync();
-        };
+	private static (int w, int h) ImageSize(string path)
+	{
+		try
+		{
+			Bitmap val = new Bitmap(path);
+			try
+			{
+				Size size = val.Size;
+				int item = (int)((Size)size).Width;
+				size = val.Size;
+				return (w: item, h: (int)((Size)size).Height);
+			}
+			finally
+			{
+				((IDisposable)val)?.Dispose();
+			}
+		}
+		catch
+		{
+			return (w: 600, h: 900);
+		}
+	}
 
-        KeyDown += (_, e) =>
-        {
-            if (e.Key != Key.Escape) return;
-            e.Handled = true;
-            Close();
-        };
-    }
+	private async Task UseUrlAsync()
+	{
+		string text = _urlBox.Text?.Trim();
+		if (string.IsNullOrWhiteSpace(text))
+		{
+			return;
+		}
+		if (!text.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+		{
+			text = "https://" + text;
+		}
+		_status.Text = Loc.T("cover.searching");
+		byte[] array = await Artwork.FetchBytesAsync(text);
+		if (array == null)
+		{
+			_status.Text = Loc.T("cover.badUrl");
+			return;
+		}
+		bool flag;
+		try
+		{
+			Bitmap val = new Bitmap((Stream)new MemoryStream(array));
+			try
+			{
+				Size size = val.Size;
+				double height = ((Size)size).Height;
+				size = val.Size;
+				flag = height >= ((Size)size).Width;
+			}
+			finally
+			{
+				((IDisposable)val)?.Dispose();
+			}
+		}
+		catch
+		{
+			_status.Text = Loc.T("cover.badUrl");
+			return;
+		}
+		string text2 = Artwork.SaveCover(_gameId, array, flag);
+		if (text2 == null)
+		{
+			_status.Text = Loc.T("cover.badUrl");
+			return;
+		}
+		ChosenCoverPath = text2;
+		ChosenIsPortrait = flag;
+		Close();
+	}
 
-    /// <summary>Закрыть без применения выбора (клик по затемнению, Esc).</summary>
-    public void Cancel() => Close();
-
-    private void Close()
-    {
-        _cts?.Cancel();
-        Closed?.Invoke();
-    }
-
-    private async Task PickFileAsync()
-    {
-        var top = TopLevel.GetTopLevel(this);
-        if (top == null) return;
-
-        var files = await top.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            Title = Loc.T("cover.title"),
-            AllowMultiple = false,
-            FileTypeFilter = new[]
-            {
-                new FilePickerFileType("Images")
-                {
-                    Patterns = new[] { "*.jpg", "*.jpeg", "*.png", "*.webp", "*.bmp" },
-                },
-            },
-        });
-
-        var file = files.FirstOrDefault();
-        if (file == null) return;
-
-        var local = file.TryGetLocalPath();
-        if (string.IsNullOrEmpty(local)) return;
-
-        var (w, h) = ImageSize(local);
-        var path = Artwork.SaveLocalCover(_gameId, local, h >= w);
-        if (path != null)
-        {
-            ChosenCoverPath = path;
-            ChosenIsPortrait = h >= w;
-            Close();
-            return;
-        }
-
-        _status.Text = Loc.T("cover.noresults");
-    }
-
-    private static (int w, int h) ImageSize(string path)
-    {
-        try
-        {
-            using var bmp = new Bitmap(path);
-            return ((int)bmp.Size.Width, (int)bmp.Size.Height);
-        }
-        catch
-        {
-            return (600, 900);
-        }
-    }
-
-    /// <summary>Обложка по ссылке: качаем байты и сохраняем как выбранную.</summary>
-    private async Task UseUrlAsync()
-    {
-        var url = _urlBox.Text?.Trim();
-        if (string.IsNullOrWhiteSpace(url)) return;
-
-        if (!url.StartsWith("http", StringComparison.OrdinalIgnoreCase)) url = "https://" + url;
-
-        _status.Text = Loc.T("cover.searching");
-        var bytes = await Artwork.FetchBytesAsync(url);
-        if (bytes == null)
-        {
-            _status.Text = Loc.T("cover.badUrl");
-            return;
-        }
-
-        bool portrait;
-        try
-        {
-            using var bmp = new Bitmap(new MemoryStream(bytes));
-            portrait = bmp.Size.Height >= bmp.Size.Width;
-        }
-        catch
-        {
-            _status.Text = Loc.T("cover.badUrl");
-            return;
-        }
-
-        var path = Artwork.SaveCover(_gameId, bytes, portrait);
-        if (path == null)
-        {
-            _status.Text = Loc.T("cover.badUrl");
-            return;
-        }
-
-        ChosenCoverPath = path;
-        ChosenIsPortrait = portrait;
-        Close();
-    }
-
-    private async Task SearchAsync()
-    {
-        _cts?.Cancel();
-        _cts = new CancellationTokenSource();
-        var ct = _cts.Token;
-
-        _results.Children.Clear();
-
-        var query = _query.Text?.Trim();
-        if (string.IsNullOrWhiteSpace(query) && !_appId.HasValue) return;
-
-        _status.Text = Loc.T("cover.searching");
-
-        var candidates = new List<ArtCandidate>();
-
-        // 1) appId известен — варианты с CDN Steam есть всегда, без поиска и ключей
-        if (_appId.HasValue)
-            candidates.AddRange(await Artwork.SteamCandidatesAsync(_appId.Value, query ?? "", ct));
-
-        // 2) поиск по названию (Steam + SteamGridDB, если задан ключ)
-        if (!string.IsNullOrWhiteSpace(query))
-        {
-            try
-            {
-                candidates.AddRange(await Artwork.SearchAsync(query, _sgdbKey, ct));
-            }
-            catch
-            {
-                // поиск не удался — остаются варианты по appId
-            }
-        }
-
-        if (ct.IsCancellationRequested) return;
-
-        candidates = candidates
-            .Where(c => !string.IsNullOrWhiteSpace(c.Url))
-            .GroupBy(c => c.Url)
-            .Select(g => g.First())
-            .OrderByDescending(c => c.Portrait)
-            .ToList();
-
-        if (candidates.Count == 0)
-        {
-            _status.Text = Loc.T("cover.noresults");
-            return;
-        }
-
-        _status.Text = Loc.F("cover.tipPortrait") + " · " + Loc.T("cover.tipWide");
-        var semaphore = new SemaphoreSlim(4);
-        int shown = 0;
-
-        var tasks = candidates.Take(14).Select(async candidate =>
-        {
-            await semaphore.WaitAsync(ct);
-            try
-            {
-                var bytes = await Artwork.FetchBytesAsync(candidate.Url, ct);
-                if (bytes == null || ct.IsCancellationRequested) return;
-
-                await Dispatcher.UIThread.InvokeAsync(() =>
-                {
-                    if (ct.IsCancellationRequested) return;
-                    Bitmap bmp;
-                    try
-                    {
-                        bmp = new Bitmap(new MemoryStream(bytes));
-                    }
-                    catch
-                    {
-                        return;
-                    }
-
-                    double boxW = 150;
-                    double boxH = 225;
-                    var image = new Image
-                    {
-                        Source = bmp,
-                        Stretch = Stretch.UniformToFill,
-                        Width = boxW,
-                        Height = boxH,
-                    };
-
-                    var frame = Ui.Clickable(image, () =>
-                    {
-                        var path = Artwork.SaveCover(_gameId, bytes, candidate.Portrait);
-                        if (path == null) return;
-                        ChosenCoverPath = path;
-                        ChosenIsPortrait = candidate.Portrait;
-                        Close();
-                    }, Skin.Card, Skin.Accent, new CornerRadius(6), new Thickness(0));
-
-                    frame.Margin = new Thickness(0, 0, 12, 12);
-                    frame.Width = boxW;
-                    frame.Height = boxH;
-                    frame.ClipToBounds = true;
-
-                    var source = candidate.Source == "steamgriddb" ? "SteamGridDB" : "Steam";
-                    var caption = Ui.T($"{source} · {candidate.Width}×{candidate.Height}", 10, Skin.TextDim);
-                    caption.Margin = new Thickness(0, 4, 12, 12);
-
-                    var cell = new StackPanel { Width = boxW };
-                    cell.Children.Add(frame);
-                    cell.Children.Add(caption);
-                    cell.Margin = new Thickness(0, 0, 12, 12);
-
-                    _results.Children.Add(cell);
-                    shown++;
-                    _status.Text = string.Format("{0} · {1}", Loc.T("cover.tipPortrait"), shown);
-                }, DispatcherPriority.Background);
-            }
-            finally
-            {
-                semaphore.Release();
-            }
-        });
-
-        await Task.WhenAll(tasks);
-
-        if (shown == 0 && !ct.IsCancellationRequested)
-            _status.Text = Loc.T("cover.noresults");
-    }
+	private async Task SearchAsync()
+	{
+		_cts?.Cancel();
+		_cts = new CancellationTokenSource();
+		CancellationToken ct = _cts.Token;
+		((AvaloniaList<Control>)(object)((Panel)_results).Children).Clear();
+		string query = _query.Text?.Trim();
+		if (string.IsNullOrWhiteSpace(query) && !_appId.HasValue)
+		{
+			return;
+		}
+		_status.Text = Loc.T("cover.searching");
+		List<ArtCandidate> candidates3 = new List<ArtCandidate>();
+		if (_appId.HasValue)
+		{
+			List<ArtCandidate> list = candidates3;
+			list.AddRange(await Artwork.SteamCandidatesAsync(_appId.Value, query ?? "", ct));
+		}
+		if (!string.IsNullOrWhiteSpace(query))
+		{
+			try
+			{
+				List<ArtCandidate> list = candidates3;
+				list.AddRange(await Artwork.SearchAsync(query, _sgdbKey, ct));
+			}
+			catch
+			{
+			}
+		}
+		if (ct.IsCancellationRequested)
+		{
+			return;
+		}
+		candidates3 = (from c in candidates3
+			where !string.IsNullOrWhiteSpace(c.Url)
+			group c by c.Url into g
+			select g.First() into c
+			orderby c.Portrait descending
+			select c).ToList();
+		if (candidates3.Count == 0)
+		{
+			_status.Text = Loc.T("cover.noresults");
+			return;
+		}
+		_status.Text = Loc.F("cover.tipPortrait") + " · " + Loc.T("cover.tipWide");
+		SemaphoreSlim semaphore = new SemaphoreSlim(4);
+		int shown = 0;
+		await Task.WhenAll(candidates3.Take(14).Select((Func<ArtCandidate, Task>)async delegate(ArtCandidate candidate)
+		{
+			ArtCandidate candidate2 = candidate;
+			await semaphore.WaitAsync(ct);
+			try
+			{
+				byte[] bytes = await Artwork.FetchBytesAsync(candidate2.Url, ct);
+				if (bytes != null && !ct.IsCancellationRequested)
+				{
+					await Dispatcher.UIThread.InvokeAsync((Action)delegate
+					{
+						if (!ct.IsCancellationRequested)
+						{
+							Bitmap source;
+							try
+							{
+								source = new Bitmap((Stream)new MemoryStream(bytes));
+							}
+							catch
+							{
+								return;
+							}
+							double width = 150.0;
+							double height = 225.0;
+							Border val = Ui.Clickable((Control)new Image
+							{
+								Source = (IImage)(object)source,
+								Stretch = (Stretch)3,
+								Width = width,
+								Height = height
+							}, (Action?)delegate
+							{
+								string text = Artwork.SaveCover(_gameId, bytes, candidate2.Portrait);
+								if (text != null)
+								{
+									ChosenCoverPath = text;
+									ChosenIsPortrait = candidate2.Portrait;
+									Close();
+								}
+							}, Skin.Card, Skin.Accent, (CornerRadius?)new CornerRadius(6.0), (Thickness?)new Thickness(0.0), (IBrush?)null, (Thickness?)null);
+							((Layoutable)val).Margin = new Thickness(0.0, 0.0, 12.0, 12.0);
+							((Layoutable)val).Width = width;
+							((Layoutable)val).Height = height;
+							val.ClipToBounds = true;
+							string value = ((candidate2.Source == "steamgriddb") ? "SteamGridDB" : "Steam");
+							TextBlock val2 = Ui.T($"{value} · {candidate2.Width}×{candidate2.Height}", 10.0, Skin.TextDim, null, (TextWrapping)0);
+							((Layoutable)val2).Margin = new Thickness(0.0, 4.0, 12.0, 12.0);
+							StackPanel val3 = new StackPanel
+							{
+								Width = width
+							};
+							((AvaloniaList<Control>)(object)((Panel)val3).Children).Add((Control)(object)val);
+							((AvaloniaList<Control>)(object)((Panel)val3).Children).Add((Control)(object)val2);
+							((Layoutable)val3).Margin = new Thickness(0.0, 0.0, 12.0, 12.0);
+							((AvaloniaList<Control>)(object)((Panel)_results).Children).Add((Control)(object)val3);
+							int num = shown;
+							shown = num + 1;
+							_status.Text = string.Format("{0} · {1}", Loc.T("cover.tipPortrait"), shown);
+						}
+					}, DispatcherPriority.Background);
+				}
+			}
+			finally
+			{
+				semaphore.Release();
+			}
+		}));
+		if (shown == 0 && !ct.IsCancellationRequested)
+		{
+			_status.Text = Loc.T("cover.noresults");
+		}
+	}
 }

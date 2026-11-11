@@ -1,105 +1,168 @@
-using System;
-using Avalonia;
-using Avalonia.Controls;
+using Avalonia.Animation.Easings;
+using Avalonia.Animation;
+using Avalonia.Collections;
+using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Shapes;
+using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Labs.Gif;
+using Avalonia.Layout;
+using Avalonia.Logging;
+using Avalonia.Media.Imaging;
 using Avalonia.Media;
+using Avalonia.Platform.Storage;
+using Avalonia.Platform;
+using Avalonia.Styling;
+using Avalonia.Themes.Fluent;
+using Avalonia.Threading;
+using Avalonia;
+using Ludex.Services;
+using Ludex.UI;
+using Microsoft.Win32;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Diagnostics;
+using System.Globalization;
+using System.IO.Compression;
+using System.IO;
+using System.Linq;
+using System.Net.Http.Headers;
+using System.Net.Http;
+using System.Net;
+using System.Reflection;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
+using System.Security.Cryptography;
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using System.Text.RegularExpressions;
+using System.Text;
+using System.Threading.Tasks;
+using System.Threading;
+using System;
 
 namespace Ludex.UI;
 
-/// <summary>
-/// Панель поверх содержимого окна (выпадающий список, контекстное меню).
-/// Рисуется внутри окна приложения, а не отдельным всплывающим окном ОС:
-/// у таких окон бывает своя светлая подложка, из-за которой вокруг скруглённой
-/// панели видна белая рамка. Здесь подложки нет — панель лежит прямо на интерфейсе.
-/// </summary>
 public sealed class OverlayPanel
 {
-    private readonly OverlayLayer _layer;
-    private readonly Border _shield;
-    private readonly Control _panel;
-    private bool _closed;
+	private readonly OverlayLayer _layer;
 
-    public event Action? Closed;
+	private readonly Border _shield;
 
-    private OverlayPanel(OverlayLayer layer, Control panel, Border shield)
-    {
-        _layer = layer;
-        _panel = panel;
-        _shield = shield;
-    }
+	private readonly Control _panel;
 
-    /// <summary>Показать панель в точке <paramref name="position"/> (координаты якоря).</summary>
-    public static OverlayPanel? Show(Control anchor, Control panel, Point position)
-    {
-        var layer = OverlayLayer.GetOverlayLayer(anchor);
-        if (layer == null) return null;
+	private bool _closed;
 
-        var origin = anchor.TranslatePoint(position, layer);
-        if (origin == null) return null;
+	public event Action? Closed;
 
-        panel.Measure(Size.Infinity);
-        var size = panel.DesiredSize;
+	private OverlayPanel(OverlayLayer layer, Control panel, Border shield)
+	{
+		_layer = layer;
+		_panel = panel;
+		_shield = shield;
+	}
 
-        var areaWidth = layer.Bounds.Width > 1 ? layer.Bounds.Width : 1280;
-        var areaHeight = layer.Bounds.Height > 1 ? layer.Bounds.Height : 800;
+	public static OverlayPanel? Show(Control anchor, Control panel, Point position)
+	{
+		OverlayLayer layer = OverlayLayer.GetOverlayLayer((Visual)(object)anchor);
+		if (layer == null)
+		{
+			return null;
+		}
+		Point? val = VisualExtensions.TranslatePoint((Visual)(object)anchor, position, (Visual)(object)layer);
+		if (!val.HasValue)
+		{
+			return null;
+		}
+		((Layoutable)panel).Measure(Size.Infinity);
+		Size desiredSize = ((Layoutable)panel).DesiredSize;
+		Rect bounds = layer.Bounds;
+		double num;
+		if (!(((Rect)bounds).Width > 1.0))
+		{
+			num = 1280.0;
+		}
+		else
+		{
+			bounds = layer.Bounds;
+			num = ((Rect)bounds).Width;
+		}
+		double num2 = num;
+		bounds = layer.Bounds;
+		double num3;
+		if (!(((Rect)bounds).Height > 1.0))
+		{
+			num3 = 800.0;
+		}
+		else
+		{
+			bounds = layer.Bounds;
+			num3 = ((Rect)bounds).Height;
+		}
+		double num4 = num3;
+		Point value = val.Value;
+		double num5 = Math.Max(6.0, Math.Min(((Point)value).X, num2 - ((Size)desiredSize).Width - 6.0));
+		value = val.Value;
+		double num6 = Math.Max(6.0, Math.Min(((Point)value).Y, num4 - ((Size)desiredSize).Height - 6.0));
+		Border val2 = new Border
+		{
+			Background = (IBrush)(object)Brushes.Transparent,
+			Width = num2,
+			Height = num4,
+			Focusable = true
+		};
+		Canvas.SetLeft((AvaloniaObject)(object)val2, 0.0);
+		Canvas.SetTop((AvaloniaObject)(object)val2, 0.0);
+		Canvas.SetLeft((AvaloniaObject)(object)panel, num5);
+		Canvas.SetTop((AvaloniaObject)(object)panel, num6);
+		((AvaloniaList<Control>)(object)((Panel)layer).Children).Add((Control)(object)val2);
+		((AvaloniaList<Control>)(object)((Panel)layer).Children).Add(panel);
+		OverlayPanel handle = new OverlayPanel(layer, panel, val2);
+		((InputElement)val2).PointerPressed += delegate(object? _, PointerPressedEventArgs e)
+		{
+			((RoutedEventArgs)e).Handled = true;
+			handle.Close();
+		};
+		((InputElement)val2).KeyDown += delegate(object? _, KeyEventArgs e)
+		{
+			if ((int)e.Key == 13)
+			{
+				((RoutedEventArgs)e).Handled = true;
+				handle.Close();
+			}
+		};
+		DispatcherTimer.RunOnce((Action)delegate
+		{
+			((Control)layer).SizeChanged += handle.OnLayerResized;
+		}, TimeSpan.FromMilliseconds(400.0), default(DispatcherPriority));
+		((InputElement)val2).Focus((NavigationMethod)0, (KeyModifiers)0);
+		return handle;
+	}
 
-        var x = Math.Max(6, Math.Min(origin.Value.X, areaWidth - size.Width - 6));
-        var y = Math.Max(6, Math.Min(origin.Value.Y, areaHeight - size.Height - 6));
+	private void OnLayerResized(object? sender, SizeChangedEventArgs e)
+	{
+		Close();
+	}
 
-        var shield = new Border
-        {
-            Background = Brushes.Transparent,
-            Width = areaWidth,
-            Height = areaHeight,
-            Focusable = true,
-        };
-        Canvas.SetLeft(shield, 0);
-        Canvas.SetTop(shield, 0);
-
-        Canvas.SetLeft(panel, x);
-        Canvas.SetTop(panel, y);
-
-        layer.Children.Add(shield);
-        layer.Children.Add(panel);
-
-        var handle = new OverlayPanel(layer, panel, shield);
-
-        shield.PointerPressed += (_, e) =>
-        {
-            e.Handled = true;
-            handle.Close();
-        };
-        shield.KeyDown += (_, e) =>
-        {
-            if (e.Key != Key.Escape) return;
-            e.Handled = true;
-            handle.Close();
-        };
-
-        // подписываемся на изменение размера не сразу: при первом показе слой
-        // может пересчитаться и «закрыть» панель в тот же кадр
-        Avalonia.Threading.DispatcherTimer.RunOnce(
-            () => layer.SizeChanged += handle.OnLayerResized,
-            TimeSpan.FromMilliseconds(400));
-
-        shield.Focus();
-        return handle;
-    }
-
-    private void OnLayerResized(object? sender, SizeChangedEventArgs e) => Close();
-
-    public void Close()
-    {
-        if (_closed) return;
-        _closed = true;
-
-        _layer.SizeChanged -= OnLayerResized;
-
-        if (_layer.Children.Contains(_panel)) _layer.Children.Remove(_panel);
-        if (_layer.Children.Contains(_shield)) _layer.Children.Remove(_shield);
-
-        Closed?.Invoke();
-    }
+	public void Close()
+	{
+		if (!_closed)
+		{
+			_closed = true;
+			((Control)_layer).SizeChanged -= OnLayerResized;
+			if (((AvaloniaList<Control>)(object)((Panel)_layer).Children).Contains(_panel))
+			{
+				((AvaloniaList<Control>)(object)((Panel)_layer).Children).Remove(_panel);
+			}
+			if (((AvaloniaList<Control>)(object)((Panel)_layer).Children).Contains((Control)(object)_shield))
+			{
+				((AvaloniaList<Control>)(object)((Panel)_layer).Children).Remove((Control)(object)_shield);
+			}
+			this.Closed?.Invoke();
+		}
+	}
 }

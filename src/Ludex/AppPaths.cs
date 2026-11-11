@@ -1,81 +1,131 @@
-using System;
+using Avalonia.Animation.Easings;
+using Avalonia.Animation;
+using Avalonia.Collections;
+using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Shapes;
+using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Labs.Gif;
+using Avalonia.Layout;
+using Avalonia.Logging;
+using Avalonia.Media.Imaging;
+using Avalonia.Media;
+using Avalonia.Platform.Storage;
+using Avalonia.Platform;
+using Avalonia.Styling;
+using Avalonia.Themes.Fluent;
+using Avalonia.Threading;
+using Avalonia;
+using Ludex.Services;
+using Ludex.UI;
+using Microsoft.Win32;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Diagnostics;
+using System.Globalization;
+using System.IO.Compression;
 using System.IO;
+using System.Linq;
+using System.Net.Http.Headers;
+using System.Net.Http;
+using System.Net;
+using System.Reflection;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
+using System.Security.Cryptography;
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using System.Text.RegularExpressions;
+using System.Text;
+using System.Threading.Tasks;
+using System.Threading;
+using System;
 
 namespace Ludex;
 
 public static class AppPaths
 {
-    private static string? _root;
+	private static string? _root;
 
-    public static string Root
-    {
-        get
-        {
-            if (_root != null) return _root;
+	public static string Root
+	{
+		get
+		{
+			if (_root != null)
+			{
+				return _root;
+			}
+			string text = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+			if (string.IsNullOrWhiteSpace(text))
+			{
+				text = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), ".local", "share");
+			}
+			_root = System.IO.Path.Combine(text, "Ludex");
+			if (!Directory.Exists(_root))
+			{
+				string text2 = System.IO.Path.Combine(text, "GameVault");
+				if (Directory.Exists(text2))
+				{
+					try
+					{
+						CopyDirectory(text2, _root);
+						Log("Migrated data from " + text2);
+					}
+					catch (Exception ex)
+					{
+						Log("Migration failed: " + ex.Message);
+					}
+				}
+			}
+			Directory.CreateDirectory(_root);
+			return _root;
+		}
+	}
 
-            string baseDir = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            if (string.IsNullOrWhiteSpace(baseDir))
-                baseDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Personal), ".local", "share");
+	public static string SettingsFile => System.IO.Path.Combine(Root, "settings.json");
 
-            _root = Path.Combine(baseDir, "Ludex");
+	public static string LibraryFile => System.IO.Path.Combine(Root, "library.json");
 
-            // перенос данных из прежней версии (GameVault): настройки, библиотека, обложки
-            if (!Directory.Exists(_root))
-            {
-                var legacy = Path.Combine(baseDir, "GameVault");
-                if (Directory.Exists(legacy))
-                {
-                    try
-                    {
-                        CopyDirectory(legacy, _root);
-                        Log("Migrated data from " + legacy);
-                    }
-                    catch (Exception ex)
-                    {
-                        Log("Migration failed: " + ex.Message);
-                    }
-                }
-            }
+	public static string CoversDir
+	{
+		get
+		{
+			string text = System.IO.Path.Combine(Root, "covers");
+			Directory.CreateDirectory(text);
+			return text;
+		}
+	}
 
-            Directory.CreateDirectory(_root);
-            return _root;
-        }
-    }
+	public static string LogFile => System.IO.Path.Combine(Root, "log.txt");
 
-    private static void CopyDirectory(string from, string to)
-    {
-        Directory.CreateDirectory(to);
+	private static void CopyDirectory(string from, string to)
+	{
+		Directory.CreateDirectory(to);
+		string[] directories = Directory.GetDirectories(from, "*", SearchOption.AllDirectories);
+		for (int i = 0; i < directories.Length; i++)
+		{
+			Directory.CreateDirectory(directories[i].Replace(from, to));
+		}
+		directories = Directory.GetFiles(from, "*", SearchOption.AllDirectories);
+		string[] array = directories;
+		foreach (string obj in array)
+		{
+			File.Copy(obj, obj.Replace(from, to), overwrite: true);
+		}
+	}
 
-        foreach (var dir in Directory.GetDirectories(from, "*", SearchOption.AllDirectories))
-            Directory.CreateDirectory(dir.Replace(from, to));
-
-        foreach (var file in Directory.GetFiles(from, "*", SearchOption.AllDirectories))
-            File.Copy(file, file.Replace(from, to), true);
-    }
-
-    public static string SettingsFile => Path.Combine(Root, "settings.json");
-    public static string LibraryFile => Path.Combine(Root, "library.json");
-    public static string CoversDir
-    {
-        get
-        {
-            var d = Path.Combine(Root, "covers");
-            Directory.CreateDirectory(d);
-            return d;
-        }
-    }
-
-    public static string LogFile => Path.Combine(Root, "log.txt");
-
-    public static void Log(string message)
-    {
-        try
-        {
-            File.AppendAllText(LogFile, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss}  {message}{Environment.NewLine}");
-        }
-        catch
-        {
-            // ignored
-        }
-    }
+	public static void Log(string message)
+	{
+		try
+		{
+			File.AppendAllText(LogFile, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss}  {message}{Environment.NewLine}");
+		}
+		catch
+		{
+		}
+	}
 }

@@ -39,6 +39,62 @@ SEARCH = (
     "&category1=998&category2=2"          # только игры, только одиночные
 )
 
+# Темы — самые заметные теги Steam. Из них строятся фильтры каталога («зомби», «выживание»,
+# «постапокалипсис» и т.д.) и блок «ваши любимые категории». Список намеренно короткий:
+# каждая тема — это байт на игру в файле каталога.
+THEME_TAGS = [
+    ("122", "RPG"),
+    ("21", "Adventure"),
+    ("492", "Indie"),
+    ("599", "Simulation"),
+    ("597", "Casual"),
+    ("9", "Strategy"),
+    ("19", "Action"),
+    ("699", "Racing"),
+    ("701", "Sports"),
+    ("493", "Early Access"),
+    ("113", "Free to Play"),
+    ("1682", "Zombies"),
+    ("1662", "Post-apocalyptic"),
+    ("1702", "Survival"),
+    ("1664", "Open World"),
+    ("1654", "Sci-fi"),
+    ("1684", "Fantasy"),
+    ("3833", "Horror"),
+    ("1697", "Roguelike"),
+    ("1717", "Sandbox"),
+    ("1699", "Crafting"),
+    ("1742", "Story Rich"),
+    ("1708", "Stealth"),
+    ("1667", "Shooter"),
+    ("3993", "Combat"),
+    ("1774", "FPS"),
+    ("4102", "Singleplayer"),
+    ("3839", "Difficult"),
+    ("3834", "Exploration"),
+    ("1741", "Funny"),
+    ("3871", "Atmospheric"),
+    ("4166", "Mystery"),
+    ("1700", "Turn-Based"),
+    ("1643", "Building"),
+    ("1659", "Great Soundtrack"),
+    ("21978", "VR"),
+    ("4291", "Co-op"),
+    ("3843", "Puzzle"),
+    ("1645", "Space"),
+    ("1743", "Detective"),
+    ("1666", "Music"),
+    ("3879", "Survival Horror"),
+    ("4325", "Action-Adventure"),
+    ("1625", "Platformer"),
+    ("1738", "Metroidvania"),
+    ("5776", "1990s"),
+    ("4695", "Farming Sim"),
+    ("3859", "Tactical"),
+    ("4155", "Cats"),
+    ("11014", "Mystery Dungeon"),
+]
+
 # Теги Steam → подписи жанров в приложении (совпадают с Loc.cs)
 GENRE_TAGS = [
     ("19", "Экшен"),
@@ -52,6 +108,9 @@ GENRE_TAGS = [
     ("701", "Спорт"),
     ("493", "Ранний доступ"),
 ]
+
+# заполняется в main(): тег → номер бита в маске тем
+THEME_BITS: dict = {}
 
 ROW = re.compile(r'data-ds-appid="(\d+)"[^>]*?data-ds-tagids="\[([^\]]*)\]".*?</a>', re.S)
 ROW_NO_TAGS = re.compile(r'data-ds-appid="(\d+)".*?</a>', re.S)
@@ -334,6 +393,9 @@ def main():
     tag_to_genre = dict(GENRE_TAGS)
     labels = [g for _, g in GENRE_TAGS]
 
+    THEME_BITS.clear()
+    THEME_BITS.update({tag: i for i, (tag, _) in enumerate(THEME_TAGS)})
+
     # порядок — как в магазине (по релевантности), а не по номеру приложения
     ordered = sorted(games.items(), key=lambda kv: kv[1][0])
 
@@ -342,11 +404,20 @@ def main():
         if app_id in free or app_id in mmo:
             continue
         idx = sorted({labels.index(tag_to_genre[t]) for t in tags if t in tag_to_genre})
-        out.append([app_id, name, " ".join(str(i) for i in idx)])
+
+        # темы — битовой маской в hex: «1f3» вместо списка строк, что вдвое короче
+        mask = 0
+        for tag in tags:
+            bit = THEME_BITS.get(tag)
+            if bit:
+                mask |= 1 << bit
+        themes = format(mask, "x") if mask else ""
+
+        out.append([app_id, name, " ".join(str(i) for i in idx), themes])
 
     # базовый файл обхода — чтобы второй язык не обходил магазин заново
     if args.base and not base_ready:
-        base_payload = {"rows": [[r[0], r[1], games[r[0]][2]] for r in out]}
+        base_payload = {"rows": [[r[0], r[1], games[r[0]][2], r[3]] for r in out]}
         tmp = args.base + ".tmp"
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(base_payload, f, ensure_ascii=False, separators=(",", ":"))
@@ -368,12 +439,13 @@ def main():
             details_count += 1
 
     payload = {
-        "v": 2,
+        "v": 3,
         "lang": "ru" if args.lang.startswith("rus") else "en",
         "details": details_count,
         "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "count": len(out),
         "genres": labels,
+        "themes": [name for _, name in THEME_TAGS],
         "games": out,
     }
 

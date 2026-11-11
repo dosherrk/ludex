@@ -1,404 +1,461 @@
-using System;
+using Avalonia.Animation.Easings;
+using Avalonia.Animation;
+using Avalonia.Collections;
+using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Shapes;
+using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Labs.Gif;
+using Avalonia.Layout;
+using Avalonia.Logging;
+using Avalonia.Media.Imaging;
+using Avalonia.Media;
+using Avalonia.Platform.Storage;
+using Avalonia.Platform;
+using Avalonia.Styling;
+using Avalonia.Themes.Fluent;
+using Avalonia.Threading;
+using Avalonia;
+using Ludex.Services;
+using Ludex.UI;
+using Microsoft.Win32;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.ComponentModel;
+using System.Diagnostics;
+using System.Globalization;
+using System.IO.Compression;
 using System.IO;
 using System.Linq;
+using System.Net.Http.Headers;
+using System.Net.Http;
+using System.Net;
+using System.Reflection;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
+using System.Security.Cryptography;
+using System.Text.Encodings.Web;
+using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Text;
+using System.Threading.Tasks;
+using System.Threading;
+using System;
 
 namespace Ludex.Services;
 
 public sealed class ScanHit
 {
-    public string FolderPath = "";
-    public string ExePath = "";
-    public string Title = "";
+	public string FolderPath = "";
+
+	public string ExePath = "";
+
+	public string Title = "";
 }
 
-/// <summary>
-/// Walks the configured folders and tries to figure out where the games are.
-/// A folder counts as a game folder when it contains at least one "plausible" .exe.
-/// </summary>
 public static class Scanner
 {
-    private const int MaxDepth = 6;
+	private const int MaxDepth = 6;
 
-    /// <summary>Executables that are never a game.</summary>
-    private static readonly string[] HardIgnore =
-    {
-        "unins", "uninstall", "unwise", "setup", "install", "installer", "vcredist", "vc_redist", "vcsetup",
-        "dxsetup", "dxwebsetup", "dxsetup", "directx", "dotnetfx", "ndp4", "oalinst", "physx", "ue4prereq",
-        "ue5prereq", "prereq", "redist", "_redist", "crashreport", "crashpad", "crashhandler", "crashsender",
-        "unitycrashhandler", "steamerrorreporter", "steamsetup", "steamservice", "notification_helper",
-        "7za", "7z", "ffmpeg", "ffplay", "python", "pythonw", "qt5", "qt6", "qtwebengineprocess",
-        "epicwebhelper", "eossdk", "eac", "eulauncher", "launcher_installer", "update", "updater", "patcher",
-        "unpack", "extract", "report", "help", "manual", "readme", "webview", "helper",
-    };
+	private static readonly string[] HardIgnore = new string[56]
+	{
+		"unins", "uninstall", "unwise", "setup", "install", "installer", "vcredist", "vc_redist", "vcsetup", "dxsetup",
+		"dxwebsetup", "dxsetup", "directx", "dotnetfx", "ndp4", "oalinst", "physx", "ue4prereq", "ue5prereq", "prereq",
+		"redist", "_redist", "crashreport", "crashpad", "crashhandler", "crashsender", "unitycrashhandler", "steamerrorreporter", "steamsetup", "steamservice",
+		"notification_helper", "7za", "7z", "ffmpeg", "ffplay", "python", "pythonw", "qt5", "qt6", "qtwebengineprocess",
+		"epicwebhelper", "eossdk", "eac", "eulauncher", "launcher_installer", "update", "updater", "patcher", "unpack", "extract",
+		"report", "help", "manual", "readme", "webview", "helper"
+	};
 
-    /// <summary>Executables that exist but are rarely the thing you want to launch.</summary>
-    private static readonly string[] SoftIgnore =
-    {
-        "config", "configuration", "settings", "benchmark", "server", "dedicated", "test", "editor",
-        "launcher", "bootstrapper", "download", "repair", "swiftshader", "gpu", "diagnostics",
-    };
+	private static readonly string[] SoftIgnore = new string[15]
+	{
+		"config", "configuration", "settings", "benchmark", "server", "dedicated", "test", "editor", "launcher", "bootstrapper",
+		"download", "repair", "swiftshader", "gpu", "diagnostics"
+	};
 
-    private static readonly HashSet<string> SkipFolders = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "commonredist", "_commonredist", "redist", "redistributables", "directx", "dotnet", "vcredist",
-        "support", "docs", "documentation", "manuals", "manual", "soundtrack", "ost", "artbook", "bonus",
-        "system volume information", "$recycle.bin", "recycler", "windows", "temp", "tmp", "cache",
-        "$windows.~bt", "$windows.~ws", "node_modules", ".git", "saves", "savegame", "savegames", "profiles",
-        "lib", "lib32", "lib64", "plugins", "redist", "redistributable", "locales", "steamapps", "compatdata", "pkg",
-    };
+	private static readonly HashSet<string> SkipFolders = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+	{
+		"commonredist", "_commonredist", "redist", "redistributables", "directx", "dotnet", "vcredist", "support", "docs", "documentation",
+		"manuals", "manual", "soundtrack", "ost", "artbook", "bonus", "system volume information", "$recycle.bin", "recycler", "windows",
+		"temp", "tmp", "cache", "$windows.~bt", "$windows.~ws", "node_modules", ".git", "saves", "savegame", "savegames",
+		"profiles", "lib", "lib32", "lib64", "plugins", "redist", "redistributable", "locales", "steamapps", "compatdata",
+		"pkg"
+	};
 
-    /// <summary>Folder names that do not describe a game, so we take the name from a parent folder.</summary>
-    private static readonly HashSet<string> GenericFolders = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "bin", "binaries", "binary", "x64", "x86", "win64", "win32", "win", "windows", "game", "games",
-        "data", "build", "release", "retail", "system", "engine", "client", "app", "application", "content",
-        "exe", "runtime", "platform", "linux", "macos", "shipping", "gamedata", "gamefiles",
-    };
+	private static readonly HashSet<string> GenericFolders = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+	{
+		"bin", "binaries", "binary", "x64", "x86", "win64", "win32", "win", "windows", "game",
+		"games", "data", "build", "release", "retail", "system", "engine", "client", "app", "application",
+		"content", "exe", "runtime", "platform", "linux", "macos", "shipping", "gamedata", "gamefiles"
+	};
 
-    public static List<ScanHit> Scan(IReadOnlyList<string> roots, Action<string>? onFolder = null,
-        IReadOnlyCollection<string>? extraIgnore = null, Action? onCancelledCheck = null,
-        Func<bool>? isCancelled = null)
-    {
-        var hits = new List<ScanHit>();
-        var seenExe = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        int visited = 0;
+	private static readonly string[] ProgramWords = new string[115]
+	{
+		"wallpaperengine", "wallpaper", "livelywallpaper", "обои", "soundpad", "soundpad", "voicemod", "crosshair", "прицел", "aimlab",
+		"aimtrainer", "aimbot", "trainer", "тренер", "cheatengine", "cheat", "чит", "obsstudio", "obs64", "streamlabs",
+		"prismlive", "xsplit", "discord", "teamspeak", "mumble", "mumble", "skype", "zoom", "teams", "slack",
+		"telegram", "whatsapp", "spotify", "foobar", "winamp", "vlc", "mpc", "mediaplayer", "potplayer", "kmplayer",
+		"itunes", "fraps", "rtss", "rivatuner", "afterburner", "cpuz", "gpuz", "hwinfo", "aida64", "speccy",
+		"benchmark", "cinebench", "furmark", "unigine", "3dmark", "novabench", "userbenchmark", "драйвер", "realtek", "nvidia",
+		"geforce", "amdsoftware", "radeon", "armoury", "icue", "razer", "logitech", "corsair", "steelseries", "bloody",
+		"a4tech", "antivirus", "kaspersky", "eset", "avast", "avg", "malwarebytes", "defender", "ccleaner", "cleaner",
+		"winrar", "winzip", "7zip", "bandizip", "notepad", "putty", "winscp", "photoshop", "gimp", "krita",
+		"blender", "audacity", "reaper", "flstudio", "obsidian", "chrome", "firefox", "opera", "browser", "браузер",
+		"utorrent", "qbit", "anydesk", "teamviewer", "rustdesk", "parsec", "sunshine", "moonlight", "editor", "редактор",
+		"visualstudio", "rider", "pycharm", "intellij", "netbeans"
+	};
 
-        var ignore = new List<string>(HardIgnore);
-        if (extraIgnore != null)
-            foreach (var x in extraIgnore)
-                if (!string.IsNullOrWhiteSpace(x))
-                    ignore.Add(x.Trim().ToLowerInvariant());
+	private static readonly string[] ProgramWordsExact = new string[6] { "aim", "obs", "cheat", "чит", "vpn", "proxifier" };
 
-        foreach (var root in roots)
-        {
-            if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root)) continue;
-            try
-            {
-                var rootDir = new DirectoryInfo(root);
-                Walk(rootDir, 0, true, rootDir);
-            }
-            catch (Exception ex)
-            {
-                AppPaths.Log("Scan root failed " + root + ": " + ex.Message);
-            }
-        }
+	private static readonly HashSet<string> JunkTokens = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+	{
+		"repack", "rip", "portable", "preinstalled", "pre", "installed", "crack", "cracked", "crackfix", "gog",
+		"steam", "epic", "fitgirl", "dodi", "xatab", "igruha", "mechaniks", "mechanics", "rune", "codex",
+		"plaza", "skidrow", "reloaded", "prophet", "empress", "tenoke", "elamigos", "razor1911", "goldberg", "online",
+		"multi", "multiplayer", "update", "dlc", "patch", "fix", "rus", "eng", "ger", "fre",
+		"ita", "spa", "pol", "jpn", "chi", "multi12", "multi10", "byte", "torrent", "rutracker",
+		"nnm", "club", "by", "rg", "r", "g", "mechanics", "kaos", "tbl", "br",
+		"nocd", "drm", "free", "full", "iso", "pc", "version", "ver", "final"
+	};
 
-        return hits;
+	public static List<ScanHit> Scan(IReadOnlyList<string> roots, Action<string>? onFolder = null, IReadOnlyCollection<string>? extraIgnore = null, Action? onCancelledCheck = null, Func<bool>? isCancelled = null)
+	{
+		Func<bool> isCancelled2 = isCancelled;
+		Action<string> onFolder2 = onFolder;
+		List<ScanHit> hits = new List<ScanHit>();
+		HashSet<string> seenExe = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		int visited = 0;
+		List<string> ignore = new List<string>(HardIgnore);
+		if (extraIgnore != null)
+		{
+			foreach (string item in extraIgnore)
+			{
+				if (!string.IsNullOrWhiteSpace(item))
+				{
+					ignore.Add(item.Trim().ToLowerInvariant());
+				}
+			}
+		}
+		foreach (string root in roots)
+		{
+			if (!string.IsNullOrWhiteSpace(root) && Directory.Exists(root))
+			{
+				try
+				{
+					DirectoryInfo directoryInfo = new DirectoryInfo(root);
+					Walk(directoryInfo, 0, isRoot: true, directoryInfo);
+				}
+				catch (Exception ex)
+				{
+					AppPaths.Log("Scan root failed " + root + ": " + ex.Message);
+				}
+			}
+		}
+		return hits;
+		void Walk(DirectoryInfo dir, int depth, bool isRoot, DirectoryInfo rootDir)
+		{
+			if ((isCancelled2 == null || !isCancelled2()) && hits.Count <= 4000)
+			{
+				visited++;
+				if (onFolder2 != null && visited % 25 == 0)
+				{
+					onFolder2(Loc.F("scan.progress", visited));
+				}
+				DirectoryInfo[] array;
+				try
+				{
+					array = (from d in dir.GetDirectories()
+						where (d.Attributes & (FileAttributes.Hidden | FileAttributes.System)) == 0
+						where !SkipFolders.Contains(d.Name)
+						where !Platform.IsMac || !d.Name.EndsWith(".app", StringComparison.OrdinalIgnoreCase)
+						select d).OrderBy<DirectoryInfo, string>((DirectoryInfo d) => d.Name, StringComparer.OrdinalIgnoreCase).ToArray();
+				}
+				catch
+				{
+					return;
+				}
+				if (!isRoot)
+				{
+					if (Platform.IsMac)
+					{
+						DirectoryInfo directoryInfo2 = Platform.MacBundles(dir).FirstOrDefault((DirectoryInfo d) => !IsIgnored(d.Name, ignore));
+						if (directoryInfo2 != null && seenExe.Add(directoryInfo2.FullName))
+						{
+							hits.Add(new ScanHit
+							{
+								FolderPath = dir.FullName,
+								ExePath = directoryInfo2.FullName,
+								Title = CleanTitle(System.IO.Path.GetFileNameWithoutExtension(directoryInfo2.Name))
+							});
+							return;
+						}
+					}
+					List<FileInfo> list = (from f in Platform.GameFiles(dir).ToArray()
+						where !IsIgnored(f.Name, ignore)
+						select f).ToList();
+					if (list.Count > 0)
+					{
+						FileInfo fileInfo = PickBest(list, dir.Name);
+						if (fileInfo != null && seenExe.Add(fileInfo.FullName))
+						{
+							var (raw, folderPath) = BestTitleSource(dir, fileInfo, rootDir);
+							hits.Add(new ScanHit
+							{
+								FolderPath = folderPath,
+								ExePath = fileInfo.FullName,
+								Title = CleanTitle(raw)
+							});
+						}
+						return;
+					}
+				}
+				else
+				{
+					try
+					{
+						List<FileInfo> list2 = (from f in Platform.GameFiles(dir)
+							where !IsIgnored(f.Name, ignore)
+							select f).ToList();
+						if (list2.Count > 0 && array.Length == 0)
+						{
+							FileInfo fileInfo2 = PickBest(list2, dir.Name);
+							if (fileInfo2 != null && seenExe.Add(fileInfo2.FullName))
+							{
+								hits.Add(new ScanHit
+								{
+									FolderPath = dir.FullName,
+									ExePath = fileInfo2.FullName,
+									Title = CleanTitle(dir.Name)
+								});
+							}
+							return;
+						}
+					}
+					catch
+					{
+					}
+				}
+				if (depth < 6)
+				{
+					DirectoryInfo[] array2 = array;
+					foreach (DirectoryInfo dir2 in array2)
+					{
+						if (isCancelled2 != null && isCancelled2())
+						{
+							break;
+						}
+						Walk(dir2, depth + 1, isRoot: false, rootDir);
+					}
+				}
+			}
+		}
+	}
 
-        void Walk(DirectoryInfo dir, int depth, bool isRoot, DirectoryInfo rootDir)
-        {
-            if (isCancelled != null && isCancelled()) return;
-            if (hits.Count > 4000) return;
+	private static bool IsIgnored(string fileName, List<string> ignore)
+	{
+		string text = System.IO.Path.GetFileNameWithoutExtension(fileName).ToLowerInvariant();
+		foreach (string item in ignore)
+		{
+			if (text.Contains(item, StringComparison.Ordinal))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
 
-            visited++;
-            if (onFolder != null && visited % 25 == 0) onFolder(Loc.F("scan.progress", visited));
+	private static FileInfo? PickBest(List<FileInfo> exes, string folderName)
+	{
+		FileInfo result = null;
+		double num = double.MinValue;
+		string text = Normalize(folderName);
+		foreach (FileInfo ex in exes)
+		{
+			double num2 = 0.0;
+			string text2 = Normalize(System.IO.Path.GetFileNameWithoutExtension(ex.Name));
+			double val = (double)ex.Length / 1024.0 / 1024.0;
+			num2 += Math.Min(12.0, Math.Log10(Math.Max(val, 1.0) + 1.0) * 4.0);
+			if (text2 == text)
+			{
+				num2 += 14.0;
+			}
+			else if (text.Length > 2 && (text2.Contains(text) || text.Contains(text2)))
+			{
+				num2 += 7.0;
+			}
+			string[] softIgnore = SoftIgnore;
+			foreach (string text3 in softIgnore)
+			{
+				if (text2.Contains(text3, StringComparison.Ordinal))
+				{
+					double num3 = num2;
+					bool flag;
+					switch (text3)
+					{
+					case "launcher":
+					case "config":
+					case "settings":
+						flag = true;
+						break;
+					default:
+						flag = false;
+						break;
+					}
+					num2 = num3 - (double)(flag ? 8 : 6);
+				}
+			}
+			if (text2.StartsWith("unins", StringComparison.Ordinal))
+			{
+				num2 -= 100.0;
+			}
+			if (num2 > num)
+			{
+				num = num2;
+				result = ex;
+			}
+		}
+		return result;
+	}
 
-            DirectoryInfo[] subdirs;
-            try
-            {
-                subdirs = dir.GetDirectories()
-                    .Where(d => (d.Attributes & (FileAttributes.Hidden | FileAttributes.System)) == 0)
-                    .Where(d => !SkipFolders.Contains(d.Name))
-                    .Where(d => !(Platform.IsMac && d.Name.EndsWith(".app", StringComparison.OrdinalIgnoreCase)))
-                    .OrderBy(d => d.Name, StringComparer.OrdinalIgnoreCase)
-                    .ToArray();
-            }
-            catch
-            {
-                return;
-            }
+	private static (string title, string folder) BestTitleSource(DirectoryInfo dir, FileInfo exe, DirectoryInfo root)
+	{
+		DirectoryInfo directoryInfo = dir;
+		int num = 0;
+		while (directoryInfo != null && num++ < 4 && GenericFolders.Contains(directoryInfo.Name) && directoryInfo.Parent != null && !PathsEqual(directoryInfo.FullName, root.FullName))
+		{
+			directoryInfo = directoryInfo.Parent;
+		}
+		string text = directoryInfo?.Name ?? dir.Name;
+		string item = directoryInfo?.FullName ?? dir.FullName;
+		if (string.IsNullOrWhiteSpace(text) || GenericFolders.Contains(text))
+		{
+			text = System.IO.Path.GetFileNameWithoutExtension(exe.Name);
+		}
+		return (title: text, folder: item);
+	}
 
-            if (!isRoot)
-            {
-                if (Platform.IsMac)
-                {
-                    var bundle = Platform.MacBundles(dir)
-                        .FirstOrDefault(d => !IsIgnored(d.Name, ignore));
+	private static bool PathsEqual(string a, string b)
+	{
+		return string.Equals(a.TrimEnd('\\', '/'), b.TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase);
+	}
 
-                    if (bundle != null && seenExe.Add(bundle.FullName))
-                    {
-                        hits.Add(new ScanHit
-                        {
-                            FolderPath = dir.FullName,
-                            ExePath = bundle.FullName,
-                            Title = CleanTitle(Path.GetFileNameWithoutExtension(bundle.Name)),
-                        });
-                        return;
-                    }
-                }
+	public static bool LooksLikeProgram(string title, string exePath)
+	{
+		string text = Normalize(title) + "|" + Normalize(System.IO.Path.GetFileNameWithoutExtension(exePath ?? "")) + "|" + Normalize(System.IO.Path.GetFileName(System.IO.Path.GetDirectoryName(exePath ?? "") ?? ""));
+		if (text.Trim('|').Length == 0)
+		{
+			return false;
+		}
+		string[] programWords = ProgramWords;
+		foreach (string value in programWords)
+		{
+			if (text.Contains(value, StringComparison.Ordinal))
+			{
+				return true;
+			}
+		}
+		programWords = text.Split(new char[8] { '|', ' ', '-', '_', '.', ',', '(', ')' }, StringSplitOptions.RemoveEmptyEntries);
+		foreach (string value2 in programWords)
+		{
+			if (ProgramWordsExact.Contains<string>(value2, StringComparer.Ordinal))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
 
-                FileInfo[] exes = Platform.GameFiles(dir).ToArray();
-                var candidates = exes.Where(f => !IsIgnored(f.Name, ignore)).ToList();
-                if (candidates.Count > 0)
-                {
-                    var best = PickBest(candidates, dir.Name);
-                    if (best != null && seenExe.Add(best.FullName))
-                    {
-                        var (title, folder) = BestTitleSource(dir, best, rootDir);
-                        hits.Add(new ScanHit
-                        {
-                            FolderPath = folder,
-                            ExePath = best.FullName,
-                            Title = CleanTitle(title),
-                        });
-                    }
-                    return; // do not descend into a game folder
-                }
-            }
-            else
-            {
-                // The library root itself may hold a single game.
-                try
-                {
-                    var rootExes = Platform.GameFiles(dir)
-                        .Where(f => !IsIgnored(f.Name, ignore)).ToList();
+	public static string Normalize(string s)
+	{
+		return Regex.Replace(s.ToLowerInvariant(), "[^a-z0-9а-яё]+", "");
+	}
 
-                    if (rootExes.Count > 0 && subdirs.Length == 0)
-                    {
-                        var best = PickBest(rootExes, dir.Name);
-                        if (best != null && seenExe.Add(best.FullName))
-                        {
-                            hits.Add(new ScanHit
-                            {
-                                FolderPath = dir.FullName,
-                                ExePath = best.FullName,
-                                Title = CleanTitle(dir.Name),
-                            });
-                        }
-                        return;
-                    }
-                }
-                catch
-                {
-                    // ignored
-                }
-            }
+	public static string CleanTitle(string raw)
+	{
+		if (string.IsNullOrWhiteSpace(raw))
+		{
+			return raw;
+		}
+		string[] array = Regex.Replace(Regex.Replace(Regex.Replace(Regex.Replace(Regex.Replace(Regex.Replace(Regex.Replace(Regex.Replace(raw, "\\.(exe|lnk|url|bat)$", "", RegexOptions.IgnoreCase), "\\[[^\\]]{0,80}\\]", " "), "\\{[^}]{0,80}\\}", " "), "\\([^)]{0,80}\\)", " "), "\\b(v|ver|version|build)\\s*\\d+(\\.\\d+){0,4}\\b", " ", RegexOptions.IgnoreCase), "\\b\\d+(\\.\\d+){2,4}\\b", " "), "[_.]+", " "), "\\s*-\\s*", " ").Split(new char[5] { ' ', '\t', '-', '+', ',' }, StringSplitOptions.RemoveEmptyEntries);
+		List<string> list = new List<string>();
+		string[] array2 = array;
+		for (int i = 0; i < array2.Length; i++)
+		{
+			string text = array2[i].Trim();
+			if (text.Length != 0 && !JunkTokens.Contains(text))
+			{
+				list.Add(text);
+			}
+		}
+		string input = string.Join(" ", list).Trim();
+		input = Regex.Replace(input, "\\s{2,}", " ");
+		if (input.Length < 2)
+		{
+			return Regex.Replace(raw, "[_.]+", " ").Trim();
+		}
+		return input;
+	}
 
-            if (depth >= MaxDepth) return;
+	public static long DirectorySize(string path)
+	{
+		long num = 0L;
+		try
+		{
+			Stack<string> stack = new Stack<string>();
+			stack.Push(path);
+			int num2 = 0;
+			while (stack.Count > 0 && num2++ < 400000)
+			{
+				string path2 = stack.Pop();
+				try
+				{
+					foreach (string item in Directory.EnumerateDirectories(path2))
+					{
+						stack.Push(item);
+					}
+					foreach (string item2 in Directory.EnumerateFiles(path2))
+					{
+						try
+						{
+							num += new FileInfo(item2).Length;
+						}
+						catch
+						{
+						}
+					}
+				}
+				catch
+				{
+				}
+			}
+		}
+		catch
+		{
+		}
+		return num;
+	}
 
-            foreach (var sub in subdirs)
-            {
-                if (isCancelled != null && isCancelled()) return;
-                Walk(sub, depth + 1, false, rootDir);
-            }
-        }
-    }
-
-    private static bool IsIgnored(string fileName, List<string> ignore)
-    {
-        var name = Path.GetFileNameWithoutExtension(fileName).ToLowerInvariant();
-        foreach (var bad in ignore)
-            if (name.Contains(bad, StringComparison.Ordinal))
-                return true;
-        return false;
-    }
-
-    private static FileInfo? PickBest(List<FileInfo> exes, string folderName)
-    {
-        FileInfo? best = null;
-        double bestScore = double.MinValue;
-
-        var folderNorm = Normalize(folderName);
-
-        foreach (var exe in exes)
-        {
-            double score = 0;
-            var name = Path.GetFileNameWithoutExtension(exe.Name);
-            var norm = Normalize(name);
-
-            // bigger files are usually the real game binary
-            var mb = exe.Length / 1024.0 / 1024.0;
-            score += Math.Min(12, Math.Log10(Math.Max(mb, 1) + 1) * 4);
-
-            if (norm == folderNorm) score += 14;
-            else if (folderNorm.Length > 2 && (norm.Contains(folderNorm) || folderNorm.Contains(norm))) score += 7;
-
-            foreach (var soft in SoftIgnore)
-            {
-                if (norm.Contains(soft, StringComparison.Ordinal))
-                {
-                    score -= soft is "launcher" or "config" or "settings" ? 8 : 6;
-                }
-            }
-
-            if (norm.StartsWith("unins", StringComparison.Ordinal)) score -= 100;
-
-            if (score > bestScore)
-            {
-                bestScore = score;
-                best = exe;
-            }
-        }
-
-        return best;
-    }
-
-    private static (string title, string folder) BestTitleSource(DirectoryInfo dir, FileInfo exe, DirectoryInfo root)
-    {
-        // For "Game\bin\x64\game.exe" the real name lives higher up the tree.
-        var current = dir;
-        int guard = 0;
-        while (current != null && guard++ < 4 && GenericFolders.Contains(current.Name)
-               && current.Parent != null && !PathsEqual(current.FullName, root.FullName))
-        {
-            current = current.Parent;
-        }
-
-        var folderName = current?.Name ?? dir.Name;
-        var folderPath = current?.FullName ?? dir.FullName;
-
-        if (string.IsNullOrWhiteSpace(folderName) || GenericFolders.Contains(folderName))
-        {
-            folderName = Path.GetFileNameWithoutExtension(exe.Name);
-        }
-
-        return (folderName, folderPath);
-    }
-
-    private static bool PathsEqual(string a, string b) =>
-        string.Equals(a.TrimEnd('\\', '/'), b.TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase);
-
-    /// <summary>
-    /// Признаки программы, а не игры: обои, саундпад, прицел, тренер, драйвер, плеер.
-    /// Сравниваем название и имя исполняемого файла в «сплющенном» виде (только буквы и цифры).
-    /// </summary>
-    private static readonly string[] ProgramWords =
-    {
-        "wallpaperengine", "wallpaper", "livelywallpaper", "обои", "soundpad", "soundpad", "voicemod",
-        "crosshair", "прицел", "aimlab", "aimtrainer", "aimbot", "trainer", "тренер", "cheatengine",
-        "cheat", "чит", "obsstudio", "obs64", "streamlabs", "prismlive", "xsplit",
-        "discord", "teamspeak", "mumble", "mumble", "skype", "zoom", "teams", "slack", "telegram", "whatsapp",
-        "spotify", "foobar", "winamp", "vlc", "mpc", "mediaplayer", "potplayer", "kmplayer", "itunes",
-        "fraps", "rtss", "rivatuner", "afterburner", "cpuz", "gpuz", "hwinfo", "aida64", "speccy",
-        "benchmark", "cinebench", "furmark", "unigine", "3dmark", "novabench", "userbenchmark",
-        "драйвер", "realtek", "nvidia", "geforce", "amdsoftware", "radeon", "armoury", "icue",
-        "razer", "logitech", "corsair", "steelseries", "bloody", "a4tech",
-        "antivirus", "kaspersky", "eset", "avast", "avg", "malwarebytes", "defender", "ccleaner",
-        "cleaner", "winrar", "winzip", "7zip", "bandizip", "notepad", "putty", "winscp",
-        "photoshop", "gimp", "krita", "blender", "audacity", "reaper", "flstudio", "obsidian",
-        "chrome", "firefox", "opera", "browser", "браузер", "utorrent", "qbit",
-        "anydesk", "teamviewer", "rustdesk", "parsec", "sunshine", "moonlight",
-        "editor", "редактор", "visualstudio", "rider", "pycharm", "intellij", "netbeans",
-    };
-
-    /// <summary>Короткие слова ищем только как отдельное слово: иначе «aim» ловит названия игр.</summary>
-    private static readonly string[] ProgramWordsExact = { "aim", "obs", "cheat", "чит", "vpn", "proxifier" };
-
-    /// <summary>Похоже ли найденное на программу, а не на игру.</summary>
-    public static bool LooksLikeProgram(string title, string exePath)
-    {
-        var haystack = Normalize(title) + "|" + Normalize(Path.GetFileNameWithoutExtension(exePath ?? "")) +
-                       "|" + Normalize(Path.GetFileName(Path.GetDirectoryName(exePath ?? "") ?? ""));
-        if (haystack.Trim('|').Length == 0) return false;
-
-        foreach (var word in ProgramWords)
-            if (haystack.Contains(word, StringComparison.Ordinal)) return true;
-
-        var parts = haystack.Split(new[] { '|', ' ', '-', '_', '.', ',', '(', ')' },
-            StringSplitOptions.RemoveEmptyEntries);
-        foreach (var part in parts)
-            if (ProgramWordsExact.Contains(part, StringComparer.Ordinal)) return true;
-
-        return false;
-    }
-
-    public static string Normalize(string s)
-    {
-        return Regex.Replace(s.ToLowerInvariant(), "[^a-z0-9а-яё]+", "");
-    }
-
-    private static readonly HashSet<string> JunkTokens = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "repack", "rip", "portable", "preinstalled", "pre", "installed", "crack", "cracked",
-        "crackfix", "gog", "steam", "epic", "fitgirl", "dodi", "xatab", "igruha", "mechaniks", "mechanics",
-        "rune", "codex", "plaza", "skidrow", "reloaded", "prophet", "empress", "tenoke", "elamigos",
-        "razor1911", "goldberg", "online", "multi", "multiplayer", "update", "dlc", "patch", "fix",
-        "rus", "eng", "ger", "fre", "ita", "spa", "pol", "jpn", "chi", "multi12", "multi10", "byte",
-        "torrent", "rutracker", "nnm", "club", "by", "rg", "r", "g", "mechanics", "kaos", "tbl",
-        "br", "nocd", "drm", "free", "full", "iso", "pc", "version", "ver", "final"
-    };
-
-    /// <summary>Turns a messy folder name into something close to the real game title.</summary>
-    public static string CleanTitle(string raw)
-    {
-        if (string.IsNullOrWhiteSpace(raw)) return raw;
-
-        var s = raw;
-
-        // cut off file extensions and typical trailing junk
-        s = Regex.Replace(s, @"\.(exe|lnk|url|bat)$", "", RegexOptions.IgnoreCase);
-
-        // [FitGirl Repack], (2015), {GOTY}
-        s = Regex.Replace(s, @"\[[^\]]{0,80}\]", " ");
-        s = Regex.Replace(s, @"\{[^}]{0,80}\}", " ");
-        s = Regex.Replace(s, @"\([^)]{0,80}\)", " ");
-
-        // version tags: v1.2.3, 1.0.0.5, "build 1234" (before we split by separators!)
-        s = Regex.Replace(s, @"\b(v|ver|version|build)\s*\d+(\.\d+){0,4}\b", " ", RegexOptions.IgnoreCase);
-        s = Regex.Replace(s, @"\b\d+(\.\d+){2,4}\b", " ");
-
-        // separators -> space
-        s = Regex.Replace(s, @"[_.]+", " ");
-        s = Regex.Replace(s, @"\s*-\s*", " ");
-
-        var tokens = s.Split(new[] { ' ', '\t', '-', '+', ',' }, StringSplitOptions.RemoveEmptyEntries);
-        var kept = new List<string>();
-        foreach (var t in tokens)
-        {
-            var trimmed = t.Trim();
-            if (trimmed.Length == 0) continue;
-            if (JunkTokens.Contains(trimmed)) continue;
-            kept.Add(trimmed);
-        }
-
-        var result = string.Join(" ", kept).Trim();
-        result = Regex.Replace(result, @"\s{2,}", " ");
-
-        // if we stripped everything, fall back to the original
-        if (result.Length < 2) return Regex.Replace(raw, @"[_.]+", " ").Trim();
-
-        return result;
-    }
-
-    public static long DirectorySize(string path)
-    {
-        long total = 0;
-        try
-        {
-            var stack = new Stack<string>();
-            stack.Push(path);
-            int guard = 0;
-            while (stack.Count > 0 && guard++ < 400000)
-            {
-                var dir = stack.Pop();
-                try
-                {
-                    foreach (var sub in Directory.EnumerateDirectories(dir)) stack.Push(sub);
-                    foreach (var f in Directory.EnumerateFiles(dir))
-                    {
-                        try { total += new FileInfo(f).Length; } catch { }
-                    }
-                }
-                catch { }
-            }
-        }
-        catch { }
-        return total;
-    }
-
-    public static string FormatSize(long bytes)
-    {
-        if (bytes <= 0) return "—";
-        string[] units = { "Б", "КБ", "МБ", "ГБ", "ТБ" };
-        double size = bytes;
-        int unit = 0;
-        while (size >= 1024 && unit < units.Length - 1)
-        {
-            size /= 1024;
-            unit++;
-        }
-        return unit <= 1 ? $"{size:0} {units[unit]}" : $"{size:0.0} {units[unit]}";
-    }
+	public static string FormatSize(long bytes)
+	{
+		if (bytes <= 0)
+		{
+			return "—";
+		}
+		string[] array = new string[5] { "Б", "КБ", "МБ", "ГБ", "ТБ" };
+		double num = bytes;
+		int num2 = 0;
+		while (num >= 1024.0 && num2 < array.Length - 1)
+		{
+			num /= 1024.0;
+			num2++;
+		}
+		if (num2 > 1)
+		{
+			return $"{num:0.0} {array[num2]}";
+		}
+		return $"{num:0} {array[num2]}";
+	}
 }

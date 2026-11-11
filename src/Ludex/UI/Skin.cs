@@ -1,356 +1,453 @@
-using Avalonia;
+using Avalonia.Animation.Easings;
+using Avalonia.Animation;
+using Avalonia.Collections;
+using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Shapes;
+using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Labs.Gif;
+using Avalonia.Layout;
+using Avalonia.Logging;
+using Avalonia.Media.Imaging;
 using Avalonia.Media;
+using Avalonia.Platform.Storage;
+using Avalonia.Platform;
 using Avalonia.Styling;
+using Avalonia.Themes.Fluent;
+using Avalonia.Threading;
+using Avalonia;
+using Ludex.Services;
+using Ludex.UI;
+using Microsoft.Win32;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Diagnostics;
+using System.Globalization;
+using System.IO.Compression;
+using System.IO;
+using System.Linq;
+using System.Net.Http.Headers;
+using System.Net.Http;
+using System.Net;
+using System.Reflection;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
+using System.Security.Cryptography;
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using System.Text.RegularExpressions;
+using System.Text;
+using System.Threading.Tasks;
+using System.Threading;
+using System;
 
 namespace Ludex.UI;
 
-/// <summary>Палитра приложения: тема (тёмная/светлая), акцентный цвет и режим полупрозрачности.</summary>
 public static class Skin
 {
-    public static string ThemeName { get; private set; } = "dark";
-    public static string AccentName { get; private set; } = "white";
-    public static bool Transparent { get; private set; } = true;
+	public static Color BgColor;
 
-    public static bool IsLight => ThemeName == "light";
+	public static Color PanelColor;
 
-    public static Color BgColor = Color.Parse("#121215");
-    public static Color PanelColor = Color.Parse("#1A1A1F");
-    public static Color CardColor = Color.Parse("#1A1A1F");
-    public static Color AccentColor = Color.Parse("#3B9EFF");
+	public static Color CardColor;
 
-    public static IBrush Bg = Brushes.Transparent;
-    public static IBrush BgDeep = Brushes.Transparent;
-    public static IBrush Panel = Brushes.Transparent;
-    public static IBrush PanelAlt = Brushes.Transparent;
-    public static IBrush Card = Brushes.Transparent;
-    public static IBrush CardHover = Brushes.Transparent;
-    /// <summary>Плашка с названием под обложкой — в стеклянном режиме полупрозрачная.</summary>
-    public static IBrush CardFooter = Brushes.Transparent;
+	public static Color AccentColor;
 
-    /// <summary>Плашка под названием игры — непрозрачная, в цвет фона приложения.</summary>
-    public static IBrush CardPlate = Brushes.Transparent;
-    public static IBrush CardFooterEdge = Brushes.Transparent;
-    public static IBrush Accent = Brushes.Transparent;
-    public static IBrush AccentHover = Brushes.Transparent;
-    public static IBrush AccentSoft = Brushes.Transparent;
-    public static IBrush Text = Brushes.Transparent;
-    public static IBrush TextMuted = Brushes.Transparent;
-    public static IBrush TextDim = Brushes.Transparent;
-    public static IBrush Danger = Brushes.Transparent;
-    public static IBrush DangerSoft = Brushes.Transparent;
-    public static IBrush Border = Brushes.Transparent;
-    public static IBrush Overlay = Brushes.Transparent;
-    public static IBrush Shadow = Brushes.Transparent;
-    /// <summary>Светлая грань панелей/карточек — даёт ощущение матового стекла.</summary>
-    public static IBrush GlassEdge = Brushes.Transparent;
-    /// <summary>Мягкий блик по верхней кромке стеклянной панели.</summary>
-    public static IBrush GlassSheen = Brushes.Transparent;
-    public static IBrush OnAccent = Brushes.White;
-    /// <summary>Цвет текста на акцентной кнопке (для белого акцента — тёмный).</summary>
-    private static void UpdateOnAccent()
-    {
-        var lum = (0.2126 * AccentColor.R + 0.7152 * AccentColor.G + 0.0722 * AccentColor.B) / 255.0;
-        OnAccent = new SolidColorBrush(lum > 0.6 ? Color.Parse("#0B0B0D") : Colors.White);
-    }
-    public static IBrush PlaceholderText = Brushes.Transparent;
-    public static IBrush PlaceholderTextDim = Brushes.Transparent;
-    public static IBrush PlaceholderGradientA = Brushes.Transparent;
-    public static BoxShadows CardShadow = default;
-    /// <summary>Фон всплывающего уведомления (строка состояния) — «стеклянная» плашка.</summary>
-    public static IBrush ToastBg = Brushes.Transparent;
-    /// <summary>Кромка всплывающего уведомления.</summary>
-    public static IBrush ToastEdge = Brushes.Transparent;
+	public static IBrush Bg;
 
-    /// <summary>
-    /// Быстрая смена только акцентных кистей — для живого предпросмотра при перетаскивании
-    /// маркера в палитре. Полный <see cref="Apply"/> перекраивает всю тему и вызывает
-    /// пересчёт разметки, из-за чего панель «дёргалась» под курсором.
-    /// </summary>
-    public static void ApplyAccent(string? accent)
-    {
-        if (string.IsNullOrWhiteSpace(accent)) return;
+	public static IBrush BgDeep;
 
-        var name = accent.Trim().ToLowerInvariant();
-        Color color;
+	public static IBrush Panel;
 
-        if (name.StartsWith("#") && Color.TryParse(name, out var custom))
-        {
-            color = IsLight ? FitForLightTheme(custom) : EnsureReadable(custom);
-        }
-        else
-        {
-            var pair = System.Array.Find(Accents, a => a.Id == name);
-            if (pair.Id == null) return;
-            color = Color.Parse(IsLight ? pair.Light : pair.Dark);
-        }
+	public static IBrush PanelAlt;
 
-        AccentColor = color;
-        Accent = new SolidColorBrush(color);
-        AccentHover = new SolidColorBrush(Lighten(color, 0.14));
-        AccentSoft = new SolidColorBrush(Alpha(color, 0x38));
-    }
+	public static IBrush Card;
 
-    /// <summary>Доступные акцентные палитры: имя -> (тёмная тема, светлая тема).</summary>
-    public static readonly (string Id, string Ru, string En, string Dark, string Light)[] Accents =
-    {
-        ("white", "Белый", "White", "#FFFFFF", "#111114"),
-        ("blue", "Синий", "Blue", "#3B9EFF", "#1F7FD6"),
-        ("violet", "Фиолетовый", "Violet", "#9B6BFF", "#7C4DFF"),
-        ("green", "Зелёный", "Green", "#35C48A", "#1FA472"),
-        ("orange", "Оранжевый", "Orange", "#FF9A4D", "#E07B1F"),
-        ("pink", "Розовый", "Pink", "#F06292", "#D64A7B"),
-        ("red", "Красный", "Red", "#E2574C", "#C8443A"),
-        ("turquoise", "Бирюзовый", "Teal", "#2ECFD3", "#12A0A6"),
-    };
+	public static IBrush CardHover;
 
-    static Skin()
-    {
-        Apply("dark", "white", true);
-    }
+	public static IBrush CardFooter;
 
-    private static Color Alpha(Color color, byte alpha) => Color.FromArgb(alpha, color.R, color.G, color.B);
+	public static IBrush CardPlate;
 
-    public static void Apply(string? theme, string? accent = null, bool? transparent = null)
-    {
-        ThemeName = string.Equals(theme, "light", System.StringComparison.OrdinalIgnoreCase) ? "light" : "dark";
-        AccentName = string.IsNullOrWhiteSpace(accent) ? "white" : accent!.Trim().ToLowerInvariant();
-        if (transparent.HasValue) Transparent = transparent.Value;
+	public static IBrush CardFooterEdge;
 
-        if (Application.Current is { } app)
-        {
-            var variant = IsLight ? ThemeVariant.Light : ThemeVariant.Dark;
-            if (app.RequestedThemeVariant != variant) app.RequestedThemeVariant = variant;
-        }
+	public static IBrush Accent;
 
-        // акцент: либо готовый пресет ("blue", "violet", …), либо свой цвет "#RRGGBB" из круга палитры
-        if (AccentName.StartsWith("#") && Color.TryParse(AccentName, out var custom))
-        {
-            var dark = EnsureReadable(custom);
-            // на светлой теме акцент-заливка должна быть достаточно тёмной,
-            // иначе белая кнопка сливается с панелями
-            var light = FitForLightTheme(custom);
-            AccentColor = IsLight ? light : dark;
-        }
-        else
-        {
-            var accentPair = System.Array.Find(Accents, a => a.Id == AccentName);
-            if (accentPair.Id == null)
-            {
-                AccentName = "white";
-                accentPair = Accents[0];
-            }
+	public static IBrush AccentHover;
 
-            AccentColor = Color.Parse(IsLight ? accentPair.Light : accentPair.Dark);
-        }
+	public static IBrush AccentSoft;
 
-        // «немного стеклянный» режим: фон и панели почти плотные,
-        // сквозь них едва заметно проступает рабочий стол / обои
-        byte bgA = Transparent ? (byte)0xEE : (byte)0xFF;
-        byte barA = Transparent ? (byte)0xF2 : (byte)0xFF;
-        byte panelA = Transparent ? (byte)0xF4 : (byte)0xFF;
-        byte altA = Transparent ? (byte)0xEA : (byte)0xFF;
-        // подложка под обложкой почти не видна (её закрывает картинка),
-        // а плашка с названием снизу — полупрозрачное стекло
-        byte cardA = Transparent ? (byte)0x1A : (byte)0xFF;
-        byte footerA = Transparent ? (byte)0xD8 : (byte)0xFF;
-        byte hoverA = Transparent ? (byte)0x5C : (byte)0xFF;
+	public static IBrush Text;
 
-        if (IsLight)
-        {
-            BgColor = Color.Parse("#EDF1F6");
-            PanelColor = Color.Parse("#FFFFFF");
-            CardColor = Color.Parse("#FFFFFF");
+	public static IBrush TextMuted;
 
-            Bg = new SolidColorBrush(Alpha(BgColor, bgA));
-            BgDeep = new SolidColorBrush(Alpha(Color.Parse("#FFFFFF"), barA));
-            Panel = new SolidColorBrush(Alpha(PanelColor, panelA));
-            PanelAlt = new SolidColorBrush(Alpha(Color.Parse("#E7EDF4"), altA));
-            Card = new SolidColorBrush(Alpha(CardColor, cardA));
-            CardHover = new SolidColorBrush(Alpha(Color.Parse("#F3F8FD"), Transparent ? (byte)0x99 : (byte)0xF4));
-            // плашка-подпись: стекло — мягкий градиент полупрозрачного белого и светлая грань сверху
-            CardFooter = Transparent
-                ? new LinearGradientBrush
-                {
-                    StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
-                    EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
-                    GradientStops =
-                    {
-                        new GradientStop(Alpha(Color.Parse("#FFFFFF"), 0xE4), 0),
-                        new GradientStop(Alpha(Color.Parse("#EDF3FA"), 0xC6), 1),
-                    },
-                }
-                : new SolidColorBrush(Color.Parse("#FFFFFF"));
-            CardFooterEdge = new SolidColorBrush(Transparent
-                ? Color.Parse("#B3FFFFFF")
-                : Color.Parse("#E7EDF4"));
-            CardPlate = new SolidColorBrush(Color.Parse("#FFFFFF"));
-            GlassEdge = new SolidColorBrush(Color.Parse("#8CFFFFFF"));
-            GlassSheen = new LinearGradientBrush
-            {
-                StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
-                EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
-                GradientStops =
-                {
-                    new GradientStop(Color.Parse("#59FFFFFF"), 0),
-                    new GradientStop(Color.Parse("#00FFFFFF"), 0.45),
-                },
-            };
-            Accent = new SolidColorBrush(AccentColor);
-            AccentHover = new SolidColorBrush(Lighten(AccentColor, 0.14));
-            AccentSoft = new SolidColorBrush(Alpha(AccentColor, 0x38));
-            Text = new SolidColorBrush(Color.Parse("#16202B"));
-            TextMuted = new SolidColorBrush(Color.Parse("#4E6072"));
-            TextDim = new SolidColorBrush(Color.Parse("#7C8C9C"));
-            Danger = new SolidColorBrush(Color.Parse("#C8443A"));
-            DangerSoft = new SolidColorBrush(Color.Parse("#2EC8443A"));
-            Border = new SolidColorBrush(Color.Parse("#D5DEE8"));
-            Overlay = new SolidColorBrush(Color.Parse("#CCF1F5FA"));
-            Shadow = new SolidColorBrush(Color.Parse("#2E000000"));
-            PlaceholderText = new SolidColorBrush(Color.Parse("#8FA6BC"));
-            PlaceholderTextDim = new SolidColorBrush(Color.Parse("#7C8C9C"));
-            PlaceholderGradientA = new LinearGradientBrush
-            {
-                StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
-                EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative),
-                GradientStops =
-                {
-                    new GradientStop(Color.Parse("#DCE7F2"), 0),
-                    new GradientStop(Color.Parse("#C2D3E6"), 1),
-                },
-            };
-            CardShadow = new BoxShadows(new BoxShadow
-            {
-                OffsetX = 0,
-                OffsetY = 2,
-                Blur = 10,
-                Color = Color.Parse("#22000000"),
-            });
-            ToastBg = new SolidColorBrush(Alpha(Color.Parse("#FFFFFF"), Transparent ? (byte)0xF2 : (byte)0xFF));
-            ToastEdge = new SolidColorBrush(Color.Parse("#28202A33"));
-        }
-        else
-        {
-            // «чёрная» тема: почти чистый чёрный с еле заметным холодным оттенком,
-            // чтобы совпадать с новой иконкой (чёрный квадрат + белый знак)
-            BgColor = Color.Parse("#08090C");
-            PanelColor = Color.Parse("#101319");
-            CardColor = Color.Parse("#12151B");
+	public static IBrush TextDim;
 
-            Bg = new SolidColorBrush(Alpha(BgColor, bgA));
-            BgDeep = new SolidColorBrush(Alpha(Color.Parse("#0C0C0F"), barA));
-            Panel = new SolidColorBrush(Alpha(PanelColor, panelA));
-            PanelAlt = new SolidColorBrush(Alpha(Color.Parse("#232329"), altA));
-            Card = new SolidColorBrush(Alpha(CardColor, cardA));
-            CardHover = new SolidColorBrush(Alpha(Color.Parse("#2C2C34"), Transparent ? (byte)0x70 : (byte)0xF5));
-            CardFooter = Transparent
-                ? new LinearGradientBrush
-                {
-                    StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
-                    EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
-                    GradientStops =
-                    {
-                        new GradientStop(Alpha(Color.Parse("#1B1B21"), 0xC2), 0),
-                        new GradientStop(Alpha(Color.Parse("#0F0F12"), 0xA0), 1),
-                    },
-                }
-                : new SolidColorBrush(Color.Parse("#0C0E13"));
-            CardFooterEdge = new SolidColorBrush(Transparent
-                ? Color.Parse("#26FFFFFF")
-                : Color.Parse("#1C2029"));
-            CardPlate = new SolidColorBrush(Color.Parse("#121215"));
-            GlassSheen = new LinearGradientBrush
-            {
-                StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
-                EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
-                GradientStops =
-                {
-                    new GradientStop(Color.Parse("#14FFFFFF"), 0),
-                    new GradientStop(Color.Parse("#00FFFFFF"), 0.45),
-                },
-            };
-            GlassEdge = new SolidColorBrush(Color.Parse("#17FFFFFF"));
-            Accent = new SolidColorBrush(AccentColor);
-            AccentHover = new SolidColorBrush(Lighten(AccentColor, 0.16));
-            AccentSoft = new SolidColorBrush(Alpha(AccentColor, 0x40));
-            Text = new SolidColorBrush(Color.Parse("#F7F7F8"));
-            TextMuted = new SolidColorBrush(Color.Parse("#A9A9B2"));
-            TextDim = new SolidColorBrush(Color.Parse("#76767F"));
-            Danger = new SolidColorBrush(Color.Parse("#E2574C"));
-            DangerSoft = new SolidColorBrush(Color.Parse("#28E2574C"));
-            Border = new SolidColorBrush(Color.Parse("#26262C"));
-            Overlay = new SolidColorBrush(Color.Parse("#D9030407"));
-            Shadow = new SolidColorBrush(Color.Parse("#7A000000"));
-            PlaceholderText = new SolidColorBrush(Color.Parse("#3E3E46"));
-            PlaceholderTextDim = new SolidColorBrush(Color.Parse("#85858E"));
-            PlaceholderGradientA = new LinearGradientBrush
-            {
-                StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
-                EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative),
-                GradientStops =
-                {
-                    new GradientStop(Color.Parse("#232329"), 0),
-                    new GradientStop(Color.Parse("#121215"), 1),
-                },
-            };
-            CardShadow = new BoxShadows(new BoxShadow
-            {
-                OffsetX = 0,
-                OffsetY = 3,
-                Blur = 12,
-                Color = Color.Parse("#66000000"),
-            });
-            ToastBg = new SolidColorBrush(Alpha(Color.Parse("#171A21"), Transparent ? (byte)0xF7 : (byte)0xFF));
-            ToastEdge = new SolidColorBrush(Color.Parse("#26FFFFFF"));
-        }
+	public static IBrush Danger;
 
-        UpdateOnAccent();
-    }
+	public static IBrush DangerSoft;
 
-    /// <summary>Притемняет акцент, пока он не станет читаемым на светлой теме.</summary>
-    private static Color FitForLightTheme(Color color)
-    {
-        var current = Darken(color, 0.16);
-        var k = 0.16;
-        while (Lum(current) > 0.30 && k < 1.2)
-        {
-            k += 0.04;
-            current = Darken(color, k);
-        }
+	public static IBrush Border;
 
-        return current;
-    }
+	public static IBrush Overlay;
 
-    private static double Lum(Color c) =>
-        (0.2126 * c.R + 0.7152 * c.G + 0.0722 * c.B) / 255.0;
+	public static IBrush Shadow;
 
-    private static Color Darken(Color color, double amount)
-    {
-        byte D(byte v) => (byte)System.Math.Clamp(v - 255 * amount, 0, 255);
-        return Color.FromArgb(color.A, D(color.R), D(color.G), D(color.B));
-    }
+	public static IBrush GlassEdge;
 
-    /// <summary>Слишком тёмный свой цвет на тёмной теме не читается — осветляем до разумного минимума.</summary>
-    private static Color EnsureReadable(Color color)
-    {
-        var lum = (0.2126 * color.R + 0.7152 * color.G + 0.0722 * color.B) / 255.0;
-        return lum >= 0.42 ? color : Lighten(color, 0.42 - lum);
-    }
+	public static IBrush GlassSheen;
 
-    /// <summary>«#RRGGBB» для показа пользователю.</summary>
-    public static string ColorHex(Color color) => $"#{color.R:X2}{color.G:X2}{color.B:X2}".ToLowerInvariant();
+	public static IBrush OnAccent;
 
-    private static Color Lighten(Color color, double amount)
-    {
-        byte L(byte v) => (byte)System.Math.Clamp(v + 255 * amount, 0, 255);
-        return Color.FromArgb(color.A, L(color.R), L(color.G), L(color.B));
-    }
+	public static IBrush PlaceholderText;
 
-    public static string AccentLabel(string id)
-    {
-        if (id.StartsWith("#")) return id.ToUpperInvariant();
+	public static IBrush PlaceholderTextDim;
 
-        var pair = System.Array.Find(Accents, a => a.Id == id);
-        if (pair.Id == null) pair = Accents[0];
-        return Loc.IsRu ? pair.Ru : pair.En;
-    }
+	public static IBrush PlaceholderGradientA;
+
+	public static BoxShadows CardShadow;
+
+	public static IBrush ToastBg;
+
+	public static IBrush ToastEdge;
+
+	public static readonly (string Id, string Ru, string En, string Dark, string Light)[] Accents;
+
+	public static string ThemeName { get; private set; }
+
+	public static string AccentName { get; private set; }
+
+	public static bool Transparent { get; private set; }
+
+	public static bool IsLight => ThemeName == "light";
+
+	private static void UpdateOnAccent()
+	{
+		OnAccent = (IBrush)new SolidColorBrush(((0.2126 * (double)(int)((Color)AccentColor).R + 0.7152 * (double)(int)((Color)AccentColor).G + 0.0722 * (double)(int)((Color)AccentColor).B) / 255.0 > 0.6) ? Color.Parse("#0B0B0D") : Colors.White, 1.0);
+	}
+
+	public static void ApplyAccent(string? accent)
+	{
+		if (string.IsNullOrWhiteSpace(accent))
+		{
+			return;
+		}
+		string name = accent.Trim().ToLowerInvariant();
+		Color color = default(Color);
+		Color val;
+		if (name.StartsWith("#") && Color.TryParse(name, out color))
+		{
+			val = (IsLight ? FitForLightTheme(color) : EnsureReadable(color));
+		}
+		else
+		{
+			(string, string, string, string, string) tuple = Array.Find(Accents, ((string Id, string Ru, string En, string Dark, string Light) a) => a.Id == name);
+			if (tuple.Item1 == null)
+			{
+				return;
+			}
+			val = Color.Parse(IsLight ? tuple.Item5 : tuple.Item4);
+		}
+		AccentColor = val;
+		Accent = (IBrush)new SolidColorBrush(val, 1.0);
+		AccentHover = (IBrush)new SolidColorBrush(Lighten(val, 0.14), 1.0);
+		AccentSoft = (IBrush)new SolidColorBrush(Alpha(val, 56), 1.0);
+	}
+
+	static Skin()
+	{
+		ThemeName = "dark";
+		AccentName = "white";
+		Transparent = true;
+		BgColor = Color.Parse("#121215");
+		PanelColor = Color.Parse("#1A1A1F");
+		CardColor = Color.Parse("#1A1A1F");
+		AccentColor = Color.Parse("#3B9EFF");
+		Bg = (IBrush)(object)Brushes.Transparent;
+		BgDeep = (IBrush)(object)Brushes.Transparent;
+		Panel = (IBrush)(object)Brushes.Transparent;
+		PanelAlt = (IBrush)(object)Brushes.Transparent;
+		Card = (IBrush)(object)Brushes.Transparent;
+		CardHover = (IBrush)(object)Brushes.Transparent;
+		CardFooter = (IBrush)(object)Brushes.Transparent;
+		CardPlate = (IBrush)(object)Brushes.Transparent;
+		CardFooterEdge = (IBrush)(object)Brushes.Transparent;
+		Accent = (IBrush)(object)Brushes.Transparent;
+		AccentHover = (IBrush)(object)Brushes.Transparent;
+		AccentSoft = (IBrush)(object)Brushes.Transparent;
+		Text = (IBrush)(object)Brushes.Transparent;
+		TextMuted = (IBrush)(object)Brushes.Transparent;
+		TextDim = (IBrush)(object)Brushes.Transparent;
+		Danger = (IBrush)(object)Brushes.Transparent;
+		DangerSoft = (IBrush)(object)Brushes.Transparent;
+		Border = (IBrush)(object)Brushes.Transparent;
+		Overlay = (IBrush)(object)Brushes.Transparent;
+		Shadow = (IBrush)(object)Brushes.Transparent;
+		GlassEdge = (IBrush)(object)Brushes.Transparent;
+		GlassSheen = (IBrush)(object)Brushes.Transparent;
+		OnAccent = (IBrush)(object)Brushes.White;
+		PlaceholderText = (IBrush)(object)Brushes.Transparent;
+		PlaceholderTextDim = (IBrush)(object)Brushes.Transparent;
+		PlaceholderGradientA = (IBrush)(object)Brushes.Transparent;
+		CardShadow = default(BoxShadows);
+		ToastBg = (IBrush)(object)Brushes.Transparent;
+		ToastEdge = (IBrush)(object)Brushes.Transparent;
+		Accents = new(string, string, string, string, string)[8]
+		{
+			("white", "Белый", "White", "#FFFFFF", "#111114"),
+			("blue", "Синий", "Blue", "#3B9EFF", "#1F7FD6"),
+			("violet", "Фиолетовый", "Violet", "#9B6BFF", "#7C4DFF"),
+			("green", "Зелёный", "Green", "#35C48A", "#1FA472"),
+			("orange", "Оранжевый", "Orange", "#FF9A4D", "#E07B1F"),
+			("pink", "Розовый", "Pink", "#F06292", "#D64A7B"),
+			("red", "Красный", "Red", "#E2574C", "#C8443A"),
+			("turquoise", "Бирюзовый", "Teal", "#2ECFD3", "#12A0A6")
+		};
+		Apply("dark", "white", true);
+	}
+
+	private static Color Alpha(Color color, byte alpha)
+	{
+		return Color.FromArgb(alpha, ((Color)color).R, ((Color)color).G, ((Color)color).B);
+	}
+
+	public static void Apply(string? theme, string? accent = null, bool? transparent = null)
+	{
+		ThemeName = (string.Equals(theme, "light", StringComparison.OrdinalIgnoreCase) ? "light" : "dark");
+		AccentName = (string.IsNullOrWhiteSpace(accent) ? "white" : accent.Trim().ToLowerInvariant());
+		if (transparent.HasValue)
+		{
+			Transparent = transparent.Value;
+		}
+		Application current = Application.Current;
+		if (current != null)
+		{
+			ThemeVariant val = (IsLight ? ThemeVariant.Light : ThemeVariant.Dark);
+			if (current.RequestedThemeVariant != val)
+			{
+				current.RequestedThemeVariant = val;
+			}
+		}
+		Color color = default(Color);
+		if (AccentName.StartsWith("#") && Color.TryParse(AccentName, out color))
+		{
+			Color val2 = EnsureReadable(color);
+			Color val3 = FitForLightTheme(color);
+			AccentColor = (IsLight ? val3 : val2);
+		}
+		else
+		{
+			(string, string, string, string, string) tuple = Array.Find(Accents, ((string Id, string Ru, string En, string Dark, string Light) a) => a.Id == AccentName);
+			if (tuple.Item1 == null)
+			{
+				AccentName = "white";
+				tuple = Accents[0];
+			}
+			AccentColor = Color.Parse(IsLight ? tuple.Item5 : tuple.Item4);
+		}
+		byte alpha = (byte)(Transparent ? 238u : 255u);
+		byte alpha2 = (byte)(Transparent ? 242u : 255u);
+		byte alpha3 = (byte)(Transparent ? 244u : 255u);
+		byte alpha4 = (byte)(Transparent ? 234u : 255u);
+		byte alpha5 = (byte)(Transparent ? 26u : 255u);
+		_ = Transparent;
+		_ = Transparent;
+		if (IsLight)
+		{
+			BgColor = Color.Parse("#EDF1F6");
+			PanelColor = Color.Parse("#FFFFFF");
+			CardColor = Color.Parse("#FFFFFF");
+			Bg = (IBrush)new SolidColorBrush(Alpha(BgColor, alpha), 1.0);
+			BgDeep = (IBrush)new SolidColorBrush(Alpha(Color.Parse("#FFFFFF"), alpha2), 1.0);
+			Panel = (IBrush)new SolidColorBrush(Alpha(PanelColor, alpha3), 1.0);
+			PanelAlt = (IBrush)new SolidColorBrush(Alpha(Color.Parse("#E7EDF4"), alpha4), 1.0);
+			Card = (IBrush)new SolidColorBrush(Alpha(CardColor, alpha5), 1.0);
+			CardHover = (IBrush)new SolidColorBrush(Alpha(Color.Parse("#F3F8FD"), (byte)(Transparent ? 153u : 244u)), 1.0);
+			IBrush cardFooter;
+			if (!Transparent)
+			{
+				cardFooter = (IBrush)new SolidColorBrush(Color.Parse("#FFFFFF"), 1.0);
+			}
+			else
+			{
+				LinearGradientBrush val4 = new LinearGradientBrush
+				{
+					StartPoint = new RelativePoint(0.0, 0.0, (RelativeUnit)0),
+					EndPoint = new RelativePoint(0.0, 1.0, (RelativeUnit)0)
+				};
+				((AvaloniaList<GradientStop>)(object)((GradientBrush)val4).GradientStops).Add(new GradientStop(Alpha(Color.Parse("#FFFFFF"), 228), 0.0));
+				((AvaloniaList<GradientStop>)(object)((GradientBrush)val4).GradientStops).Add(new GradientStop(Alpha(Color.Parse("#EDF3FA"), 198), 1.0));
+				cardFooter = (IBrush)val4;
+			}
+			CardFooter = cardFooter;
+			CardFooterEdge = (IBrush)new SolidColorBrush(Transparent ? Color.Parse("#B3FFFFFF") : Color.Parse("#E7EDF4"), 1.0);
+			CardPlate = (IBrush)new SolidColorBrush(Color.Parse("#FFFFFF"), 1.0);
+			GlassEdge = (IBrush)new SolidColorBrush(Color.Parse("#8CFFFFFF"), 1.0);
+			LinearGradientBrush val5 = new LinearGradientBrush
+			{
+				StartPoint = new RelativePoint(0.0, 0.0, (RelativeUnit)0),
+				EndPoint = new RelativePoint(0.0, 1.0, (RelativeUnit)0)
+			};
+			((AvaloniaList<GradientStop>)(object)((GradientBrush)val5).GradientStops).Add(new GradientStop(Color.Parse("#59FFFFFF"), 0.0));
+			((AvaloniaList<GradientStop>)(object)((GradientBrush)val5).GradientStops).Add(new GradientStop(Color.Parse("#00FFFFFF"), 0.45));
+			GlassSheen = (IBrush)val5;
+			Accent = (IBrush)new SolidColorBrush(AccentColor, 1.0);
+			AccentHover = (IBrush)new SolidColorBrush(Lighten(AccentColor, 0.14), 1.0);
+			AccentSoft = (IBrush)new SolidColorBrush(Alpha(AccentColor, 56), 1.0);
+			Text = (IBrush)new SolidColorBrush(Color.Parse("#16202B"), 1.0);
+			TextMuted = (IBrush)new SolidColorBrush(Color.Parse("#4E6072"), 1.0);
+			TextDim = (IBrush)new SolidColorBrush(Color.Parse("#7C8C9C"), 1.0);
+			Danger = (IBrush)new SolidColorBrush(Color.Parse("#C8443A"), 1.0);
+			DangerSoft = (IBrush)new SolidColorBrush(Color.Parse("#2EC8443A"), 1.0);
+			Border = (IBrush)new SolidColorBrush(Color.Parse("#D5DEE8"), 1.0);
+			Overlay = (IBrush)new SolidColorBrush(Color.Parse("#CCF1F5FA"), 1.0);
+			Shadow = (IBrush)new SolidColorBrush(Color.Parse("#2E000000"), 1.0);
+			PlaceholderText = (IBrush)new SolidColorBrush(Color.Parse("#8FA6BC"), 1.0);
+			PlaceholderTextDim = (IBrush)new SolidColorBrush(Color.Parse("#7C8C9C"), 1.0);
+			LinearGradientBrush val6 = new LinearGradientBrush
+			{
+				StartPoint = new RelativePoint(0.0, 0.0, (RelativeUnit)0),
+				EndPoint = new RelativePoint(1.0, 1.0, (RelativeUnit)0)
+			};
+			((AvaloniaList<GradientStop>)(object)((GradientBrush)val6).GradientStops).Add(new GradientStop(Color.Parse("#DCE7F2"), 0.0));
+			((AvaloniaList<GradientStop>)(object)((GradientBrush)val6).GradientStops).Add(new GradientStop(Color.Parse("#C2D3E6"), 1.0));
+			PlaceholderGradientA = (IBrush)val6;
+			BoxShadow val7 = new BoxShadow
+			{
+				OffsetX = 0.0,
+				OffsetY = 2.0,
+				Blur = 10.0,
+				Color = Color.Parse("#22000000"),
+			};
+			CardShadow = new BoxShadows(val7);
+			ToastBg = (IBrush)new SolidColorBrush(Alpha(Color.Parse("#FFFFFF"), (byte)(Transparent ? 242u : 255u)), 1.0);
+			ToastEdge = (IBrush)new SolidColorBrush(Color.Parse("#28202A33"), 1.0);
+		}
+		else
+		{
+			BgColor = Color.Parse("#08090C");
+			PanelColor = Color.Parse("#101319");
+			CardColor = Color.Parse("#12151B");
+			Bg = (IBrush)new SolidColorBrush(Alpha(BgColor, alpha), 1.0);
+			BgDeep = (IBrush)new SolidColorBrush(Alpha(Color.Parse("#0C0C0F"), alpha2), 1.0);
+			Panel = (IBrush)new SolidColorBrush(Alpha(PanelColor, alpha3), 1.0);
+			PanelAlt = (IBrush)new SolidColorBrush(Alpha(Color.Parse("#232329"), alpha4), 1.0);
+			Card = (IBrush)new SolidColorBrush(Alpha(CardColor, alpha5), 1.0);
+			CardHover = (IBrush)new SolidColorBrush(Alpha(Color.Parse("#2C2C34"), (byte)(Transparent ? 112u : 245u)), 1.0);
+			IBrush cardFooter2;
+			if (!Transparent)
+			{
+				cardFooter2 = (IBrush)new SolidColorBrush(Color.Parse("#0C0E13"), 1.0);
+			}
+			else
+			{
+				LinearGradientBrush val8 = new LinearGradientBrush
+				{
+					StartPoint = new RelativePoint(0.0, 0.0, (RelativeUnit)0),
+					EndPoint = new RelativePoint(0.0, 1.0, (RelativeUnit)0)
+				};
+				((AvaloniaList<GradientStop>)(object)((GradientBrush)val8).GradientStops).Add(new GradientStop(Alpha(Color.Parse("#1B1B21"), 194), 0.0));
+				((AvaloniaList<GradientStop>)(object)((GradientBrush)val8).GradientStops).Add(new GradientStop(Alpha(Color.Parse("#0F0F12"), 160), 1.0));
+				cardFooter2 = (IBrush)val8;
+			}
+			CardFooter = cardFooter2;
+			CardFooterEdge = (IBrush)new SolidColorBrush(Transparent ? Color.Parse("#26FFFFFF") : Color.Parse("#1C2029"), 1.0);
+			CardPlate = (IBrush)new SolidColorBrush(Color.Parse("#121215"), 1.0);
+			LinearGradientBrush val9 = new LinearGradientBrush
+			{
+				StartPoint = new RelativePoint(0.0, 0.0, (RelativeUnit)0),
+				EndPoint = new RelativePoint(0.0, 1.0, (RelativeUnit)0)
+			};
+			((AvaloniaList<GradientStop>)(object)((GradientBrush)val9).GradientStops).Add(new GradientStop(Color.Parse("#14FFFFFF"), 0.0));
+			((AvaloniaList<GradientStop>)(object)((GradientBrush)val9).GradientStops).Add(new GradientStop(Color.Parse("#00FFFFFF"), 0.45));
+			GlassSheen = (IBrush)val9;
+			GlassEdge = (IBrush)new SolidColorBrush(Color.Parse("#17FFFFFF"), 1.0);
+			Accent = (IBrush)new SolidColorBrush(AccentColor, 1.0);
+			AccentHover = (IBrush)new SolidColorBrush(Lighten(AccentColor, 0.16), 1.0);
+			AccentSoft = (IBrush)new SolidColorBrush(Alpha(AccentColor, 64), 1.0);
+			Text = (IBrush)new SolidColorBrush(Color.Parse("#F7F7F8"), 1.0);
+			TextMuted = (IBrush)new SolidColorBrush(Color.Parse("#A9A9B2"), 1.0);
+			TextDim = (IBrush)new SolidColorBrush(Color.Parse("#76767F"), 1.0);
+			Danger = (IBrush)new SolidColorBrush(Color.Parse("#E2574C"), 1.0);
+			DangerSoft = (IBrush)new SolidColorBrush(Color.Parse("#28E2574C"), 1.0);
+			Border = (IBrush)new SolidColorBrush(Color.Parse("#26262C"), 1.0);
+			Overlay = (IBrush)new SolidColorBrush(Color.Parse("#D9030407"), 1.0);
+			Shadow = (IBrush)new SolidColorBrush(Color.Parse("#7A000000"), 1.0);
+			PlaceholderText = (IBrush)new SolidColorBrush(Color.Parse("#3E3E46"), 1.0);
+			PlaceholderTextDim = (IBrush)new SolidColorBrush(Color.Parse("#85858E"), 1.0);
+			LinearGradientBrush val10 = new LinearGradientBrush
+			{
+				StartPoint = new RelativePoint(0.0, 0.0, (RelativeUnit)0),
+				EndPoint = new RelativePoint(1.0, 1.0, (RelativeUnit)0)
+			};
+			((AvaloniaList<GradientStop>)(object)((GradientBrush)val10).GradientStops).Add(new GradientStop(Color.Parse("#232329"), 0.0));
+			((AvaloniaList<GradientStop>)(object)((GradientBrush)val10).GradientStops).Add(new GradientStop(Color.Parse("#121215"), 1.0));
+			PlaceholderGradientA = (IBrush)val10;
+			BoxShadow val11 = new BoxShadow
+			{
+				OffsetX = 0.0,
+				OffsetY = 3.0,
+				Blur = 12.0,
+				Color = Color.Parse("#66000000"),
+			};
+			CardShadow = new BoxShadows(val11);
+			ToastBg = (IBrush)new SolidColorBrush(Alpha(Color.Parse("#171A21"), (byte)(Transparent ? 247u : 255u)), 1.0);
+			ToastEdge = (IBrush)new SolidColorBrush(Color.Parse("#26FFFFFF"), 1.0);
+		}
+		UpdateOnAccent();
+	}
+
+	private static Color FitForLightTheme(Color color)
+	{
+		Color val = Darken(color, 0.16);
+		double num = 0.16;
+		while (Lum(val) > 0.3 && num < 1.2)
+		{
+			num += 0.04;
+			val = Darken(color, num);
+		}
+		return val;
+	}
+
+	private static double Lum(Color c)
+	{
+		return (0.2126 * (double)(int)((Color)c).R + 0.7152 * (double)(int)((Color)c).G + 0.0722 * (double)(int)((Color)c).B) / 255.0;
+	}
+
+	private static Color Darken(Color color, double amount)
+	{
+		return Color.FromArgb(((Color)color).A, D(((Color)color).R), D(((Color)color).G), D(((Color)color).B));
+		byte D(byte v)
+		{
+			return (byte)Math.Clamp((double)(int)v - 255.0 * amount, 0.0, 255.0);
+		}
+	}
+
+	private static Color EnsureReadable(Color color)
+	{
+		double num = (0.2126 * (double)(int)((Color)color).R + 0.7152 * (double)(int)((Color)color).G + 0.0722 * (double)(int)((Color)color).B) / 255.0;
+		if (!(num >= 0.42))
+		{
+			return Lighten(color, 0.42 - num);
+		}
+		return color;
+	}
+
+	public static string ColorHex(Color color)
+	{
+		return $"#{((Color)color).R:X2}{((Color)color).G:X2}{((Color)color).B:X2}".ToLowerInvariant();
+	}
+
+	private static Color Lighten(Color color, double amount)
+	{
+		return Color.FromArgb(((Color)color).A, L(((Color)color).R), L(((Color)color).G), L(((Color)color).B));
+		byte L(byte v)
+		{
+			return (byte)Math.Clamp((double)(int)v + 255.0 * amount, 0.0, 255.0);
+		}
+	}
 }

@@ -1,255 +1,302 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using Avalonia;
+using Avalonia.Animation.Easings;
+using Avalonia.Animation;
+using Avalonia.Collections;
+using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Shapes;
 using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Labs.Gif;
 using Avalonia.Layout;
+using Avalonia.Logging;
+using Avalonia.Media.Imaging;
 using Avalonia.Media;
+using Avalonia.Platform.Storage;
+using Avalonia.Platform;
+using Avalonia.Styling;
+using Avalonia.Themes.Fluent;
 using Avalonia.Threading;
+using Avalonia;
 using Ludex.Services;
+using Ludex.UI;
+using Microsoft.Win32;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Diagnostics;
+using System.Globalization;
+using System.IO.Compression;
+using System.IO;
+using System.Linq;
+using System.Net.Http.Headers;
+using System.Net.Http;
+using System.Net;
+using System.Reflection;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
+using System.Security.Cryptography;
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using System.Text.RegularExpressions;
+using System.Text;
+using System.Threading.Tasks;
+using System.Threading;
+using System;
 
 namespace Ludex.UI;
 
-/// <summary>
-/// Панель «Интеграции»: список лаунчеров с найденными играми и переключателями.
-/// Открывается из боковой панели под «Настройками».
-/// </summary>
 public sealed class IntegrationsPanel : Border
 {
-    private readonly AppSettings _settings;
-    private readonly List<string> _enabled;
+	private readonly AppSettings _settings;
 
-    private readonly Dictionary<string, TextBlock> _statusTexts = new();
-    private readonly Dictionary<string, Toggle> _toggles = new();
-    private List<LauncherState> _states = new();
+	private readonly List<string> _enabled;
 
-    private StackPanel _rows = null!;
-    private TextBlock _summary = null!;
-    private Border _rescanButton = null!;
-    private bool _scanning;
+	private readonly Dictionary<string, TextBlock> _statusTexts = new Dictionary<string, TextBlock>();
 
-    /// <summary>Пользователь попросил закрыть панель.</summary>
-    public event Action? Closed;
+	private readonly Dictionary<string, Toggle> _toggles = new Dictionary<string, Toggle>();
 
-    /// <summary>Набор подключённых лаунчеров изменился — библиотеку нужно пересобрать.</summary>
-    public event Action? Changed;
+	private List<LauncherState> _states = new List<LauncherState>();
 
-    public IntegrationsPanel(AppSettings settings)
-    {
-        _settings = settings;
-        _enabled = new List<string>(settings.Launchers);
+	private StackPanel _rows;
 
-        MaxWidth = 720;
-        MaxHeight = 700;
-        Background = Skin.Panel;
-        CornerRadius = new CornerRadius(14);
-        RenderTransformOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative);
-        Transitions = new Avalonia.Animation.Transitions
-        {
-            new Avalonia.Animation.TransformOperationsTransition
-            {
-                Property = Visual.RenderTransformProperty,
-                Duration = TimeSpan.FromMilliseconds(190),
-                Easing = new Avalonia.Animation.Easings.CubicEaseOut(),
-            },
-        };
-        BoxShadow = new BoxShadows(new BoxShadow
-        {
-            OffsetX = 0,
-            OffsetY = 14,
-            Blur = 44,
-            Color = Color.Parse("#AA000000"),
-        });
+	private TextBlock _summary;
 
-        BuildContent();
-        _ = LoadAsync();
-    }
+	private Border _rescanButton;
 
-    private void BuildContent()
-    {
-        var header = new DockPanel { Margin = new Thickness(24, 20, 20, 0) };
-        var close = Ui.Clickable(Ui.Icon(Ui.CloseGeometry, Skin.TextMuted, 12, 12, true, 1.8),
-            () => Closed?.Invoke(), Skin.PanelAlt, Skin.CardHover, new CornerRadius(6), new Thickness(10, 10));
-        close.VerticalAlignment = VerticalAlignment.Top;
-        DockPanel.SetDock(close, Dock.Right);
-        header.Children.Add(close);
-        header.Children.Add(Ui.T(Loc.T("integrations.title"), 21, Skin.Text, FontWeight.Bold));
+	private bool _scanning;
 
-        var body = new StackPanel { Margin = new Thickness(24, 14, 24, 16), Spacing = 12 };
-        body.Children.Add(Ui.T(Loc.T("integrations.hint"), 11.5, Skin.TextDim, wrap: TextWrapping.Wrap));
+	public event Action? Closed;
 
-        _summary = Ui.T("", 11.5, Skin.Accent, FontWeight.Medium);
-        body.Children.Add(_summary);
+	public event Action? Changed;
 
-        _rows = new StackPanel { Spacing = 8 };
-        foreach (var descriptor in Launchers.All)
-        {
-            if (!Launchers.IsSupported(descriptor.Key)) continue;
-            _rows.Children.Add(BuildRow(descriptor.Key));
-        }
+	public IntegrationsPanel(AppSettings settings)
+	{
+		_settings = settings;
+		_enabled = new List<string>(settings.Launchers);
+		((Layoutable)this).MaxWidth = 720.0;
+		((Layoutable)this).MaxHeight = 700.0;
+		((Border)this).Background = Skin.Panel;
+		((Border)this).CornerRadius = new CornerRadius(14.0);
+		this.RenderTransformOrigin = new RelativePoint(0.5, 0.5, (RelativeUnit)0);
+		Transitions val = new Transitions();
+		((AvaloniaList<ITransition>)val).Add((ITransition)new TransformOperationsTransition
+		{
+			Property = (AvaloniaProperty)(object)Visual.RenderTransformProperty,
+			Duration = TimeSpan.FromMilliseconds(190.0),
+			Easing = (Easing)new CubicEaseOut()
+		});
+		((Animatable)this).Transitions = val;
+		BoxShadow val2 = new BoxShadow
+		{
+			OffsetX = 0.0,
+			OffsetY = 14.0,
+			Blur = 44.0,
+			Color = Color.Parse("#AA000000"),
+		};
+		((Border)this).BoxShadow = new BoxShadows(val2);
+		BuildContent();
+		LoadAsync();
+	}
 
-        // прокрутка одна — общая, на всю панель: вложенный ScrollViewer обрезал текст снизу
-        body.Children.Add(_rows);
+	private void BuildContent()
+	{
+		DockPanel val = new DockPanel
+		{
+			Margin = new Thickness(24.0, 20.0, 20.0, 0.0)
+		};
+		Border val2 = Ui.Clickable((Control)(object)Ui.Icon("M1,1 L11,11 M11,1 L1,11", Skin.TextMuted, 12.0, 12.0, stroke: true), (Action?)delegate
+		{
+			this.Closed?.Invoke();
+		}, Skin.PanelAlt, Skin.CardHover, (CornerRadius?)new CornerRadius(6.0), (Thickness?)new Thickness(10.0, 10.0), (IBrush?)null, (Thickness?)null);
+		((Layoutable)val2).VerticalAlignment = (VerticalAlignment)1;
+		DockPanel.SetDock((Control)(object)val2, (Dock)2);
+		((AvaloniaList<Control>)(object)((Panel)val).Children).Add((Control)(object)val2);
+		((AvaloniaList<Control>)(object)((Panel)val).Children).Add((Control)(object)Ui.T(Loc.T("integrations.title"), 21.0, Skin.Text, (FontWeight)700, (TextWrapping)0));
+		StackPanel val3 = new StackPanel
+		{
+			Margin = new Thickness(24.0, 14.0, 24.0, 16.0),
+			Spacing = 12.0
+		};
+		((AvaloniaList<Control>)(object)((Panel)val3).Children).Add((Control)(object)Ui.T(Loc.T("integrations.hint"), 11.5, Skin.TextDim, null, (TextWrapping)1));
+		_summary = Ui.T("", 11.5, Skin.Accent, (FontWeight)500, (TextWrapping)0);
+		((AvaloniaList<Control>)(object)((Panel)val3).Children).Add((Control)(object)_summary);
+		_rows = new StackPanel
+		{
+			Spacing = 8.0
+		};
+		Launchers.Descriptor[] all = Launchers.All;
+		foreach (Launchers.Descriptor descriptor in all)
+		{
+			if (Launchers.IsSupported(descriptor.Key))
+			{
+				((AvaloniaList<Control>)(object)((Panel)_rows).Children).Add(BuildRow(descriptor.Key));
+			}
+		}
+		((AvaloniaList<Control>)(object)((Panel)val3).Children).Add((Control)(object)_rows);
+		((AvaloniaList<Control>)(object)((Panel)val3).Children).Add((Control)(object)Ui.Divider());
+		((AvaloniaList<Control>)(object)((Panel)val3).Children).Add((Control)(object)Ui.T(Loc.T("integrations.how"), 12.5, Skin.Text, (FontWeight)600, (TextWrapping)0));
+		((AvaloniaList<Control>)(object)((Panel)val3).Children).Add((Control)(object)Ui.T(Loc.T("integrations.howHint"), 11.0, Skin.TextDim, null, (TextWrapping)1));
+		((AvaloniaList<Control>)(object)((Panel)val3).Children).Add((Control)(object)Ui.T(Loc.T("integrations.applyHint"), 11.0, Skin.TextDim, null, (TextWrapping)1));
+		StackPanel val4 = new StackPanel
+		{
+			Orientation = (Orientation)0,
+			Spacing = 10.0,
+			Margin = new Thickness(24.0, 14.0, 24.0, 20.0),
+			HorizontalAlignment = (HorizontalAlignment)3
+		};
+		_rescanButton = Ui.GhostButton(Loc.T("btn.rescanAll"), delegate
+		{
+			LoadAsync(force: true);
+		});
+		((AvaloniaList<Control>)(object)((Panel)val4).Children).Add((Control)(object)_rescanButton);
+		((AvaloniaList<Control>)(object)((Panel)val4).Children).Add((Control)(object)Ui.PrimaryButton(Loc.T("btn.close"), delegate
+		{
+			this.Closed?.Invoke();
+		}));
+		DockPanel val5 = new DockPanel
+		{
+			LastChildFill = true
+		};
+		DockPanel.SetDock((Control)(object)val, (Dock)3);
+		DockPanel.SetDock((Control)(object)val4, (Dock)1);
+		((AvaloniaList<Control>)(object)((Panel)val5).Children).Add((Control)(object)val);
+		((AvaloniaList<Control>)(object)((Panel)val5).Children).Add((Control)(object)val4);
+		((AvaloniaList<Control>)(object)((Panel)val5).Children).Add((Control)new ScrollViewer
+		{
+			Content = val3,
+			VerticalScrollBarVisibility = (ScrollBarVisibility)1,
+			Background = (IBrush)(object)Brushes.Transparent
+		});
+		((Decorator)this).Child = (Control)(object)val5;
+		RefreshSummary();
+	}
 
-        body.Children.Add(Ui.Divider());
+	private Control BuildRow(string key)
+	{
+		string key2 = key;
+		TextBlock val = Ui.T(Loc.T("launcher." + key2), 13.0, Skin.Text, (FontWeight)500, (TextWrapping)0);
+		TextBlock val2 = Ui.T(Loc.T("launcher." + key2 + ".hint"), 10.5, Skin.TextDim, null, (TextWrapping)1);
+		StackPanel val3 = new StackPanel
+		{
+			Spacing = 2.0,
+			VerticalAlignment = (VerticalAlignment)2
+		};
+		((AvaloniaList<Control>)(object)((Panel)val3).Children).Add((Control)(object)val);
+		((AvaloniaList<Control>)(object)((Panel)val3).Children).Add((Control)(object)val2);
+		Control child = LauncherLogo.Create(key2);
+		TextBlock val4 = Ui.T(Loc.T("integrations.checking"), 10.5, Skin.TextDim, null, (TextWrapping)0);
+		((Layoutable)val4).VerticalAlignment = (VerticalAlignment)2;
+		val4.TextAlignment = (TextAlignment)2;
+		_statusTexts[key2] = val4;
+		Toggle toggle = new Toggle("", _enabled.Contains<string>(key2, StringComparer.OrdinalIgnoreCase), delegate(bool on)
+		{
+			if (on)
+			{
+				if (!_enabled.Contains<string>(key2, StringComparer.OrdinalIgnoreCase))
+				{
+					_enabled.Add(key2);
+				}
+			}
+			else
+			{
+				_enabled.RemoveAll((string x) => string.Equals(x, key2, StringComparison.OrdinalIgnoreCase));
+			}
+			_settings.Launchers = new List<string>(_enabled);
+			RefreshSummary();
+			this.Changed?.Invoke();
+		});
+		((Layoutable)toggle).VerticalAlignment = (VerticalAlignment)2;
+		_toggles[key2] = toggle;
+		StackPanel val5 = new StackPanel
+		{
+			Orientation = (Orientation)0,
+			Spacing = 12.0,
+			VerticalAlignment = (VerticalAlignment)2,
+			HorizontalAlignment = (HorizontalAlignment)3
+		};
+		((AvaloniaList<Control>)(object)((Panel)val5).Children).Add((Control)(object)val4);
+		((AvaloniaList<Control>)(object)((Panel)val5).Children).Add((Control)(object)toggle);
+		Grid val6 = new Grid
+		{
+			ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto")
+		};
+		Decorator val7 = new Decorator
+		{
+			Child = child,
+			Margin = new Thickness(0.0, 0.0, 12.0, 0.0)
+		};
+		((AvaloniaList<Control>)(object)((Panel)val6).Children).Add((Control)(object)val7);
+		Grid.SetColumn((Control)(object)val3, 1);
+		((AvaloniaList<Control>)(object)((Panel)val6).Children).Add((Control)(object)val3);
+		Grid.SetColumn((Control)(object)val5, 2);
+		((AvaloniaList<Control>)(object)((Panel)val6).Children).Add((Control)(object)val5);
+		return (Control)new Border
+		{
+			Background = Skin.PanelAlt,
+			CornerRadius = new CornerRadius(8.0),
+			Padding = new Thickness(12.0, 10.0),
+			Child = (Control)(object)val6
+		};
+	}
 
-        body.Children.Add(Ui.T(Loc.T("integrations.how"), 12.5, Skin.Text, FontWeight.SemiBold));
-        body.Children.Add(Ui.T(Loc.T("integrations.howHint"), 11, Skin.TextDim, wrap: TextWrapping.Wrap));
-        body.Children.Add(Ui.T(Loc.T("integrations.applyHint"), 11, Skin.TextDim, wrap: TextWrapping.Wrap));
+	private async Task LoadAsync(bool force = false)
+	{
+		if (_scanning)
+		{
+			return;
+		}
+		_scanning = true;
+		bool flag = !force && Launchers.HasSessionCache;
+		if (!flag)
+		{
+			_rescanButton.Opacity = 0.55;
+			((InputElement)_rescanButton).IsEnabled = false;
+			foreach (string key in _statusTexts.Keys)
+			{
+				_statusTexts[key].Text = Loc.T("integrations.checking");
+			}
+		}
+		try
+		{
+			List<LauncherState> list = (flag ? Launchers.ScanAll(_enabled) : (await Task.Run(() => Launchers.RescanAll(_enabled))));
+			List<LauncherState> list2 = list;
+			List<LauncherState> states = list2;
+			_states = states;
+			await Dispatcher.UIThread.InvokeAsync((Action)delegate
+			{
+				foreach (LauncherState item in states)
+				{
+					if (_statusTexts.TryGetValue(item.Key, out TextBlock value))
+					{
+						value.Text = ((item.Error != null) ? Loc.T("integrations.error") : ((!item.Installed) ? Loc.T("integrations.notInstalled") : ((item.Count == 0) ? Loc.T("integrations.empty") : Loc.F("integrations.found", item.Count))));
+						value.Foreground = ((item.Installed && item.Count > 0) ? Skin.TextMuted : Skin.TextDim);
+						if (_toggles.TryGetValue(item.Key, out Toggle value2))
+						{
+							value2.Opacity = (item.Installed ? 1.0 : 0.5);
+						}
+					}
+				}
+				RefreshSummary();
+			});
+		}
+		catch (Exception ex)
+		{
+			AppPaths.Log("Integrations scan: " + ex.Message);
+		}
+		finally
+		{
+			_scanning = false;
+			_rescanButton.Opacity = 1.0;
+			((InputElement)_rescanButton).IsEnabled = true;
+		}
+	}
 
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 10,
-            Margin = new Thickness(24, 14, 24, 20),
-            HorizontalAlignment = HorizontalAlignment.Right,
-        };
-
-        _rescanButton = Ui.GhostButton(Loc.T("btn.rescanAll"), () => _ = LoadAsync(force: true));
-        buttons.Children.Add(_rescanButton);
-        buttons.Children.Add(Ui.PrimaryButton(Loc.T("btn.close"), () => Closed?.Invoke()));
-
-        var layout = new DockPanel { LastChildFill = true };
-        DockPanel.SetDock(header, Dock.Top);
-        DockPanel.SetDock(buttons, Dock.Bottom);
-        layout.Children.Add(header);
-        layout.Children.Add(buttons);
-        layout.Children.Add(new ScrollViewer
-        {
-            Content = body,
-            VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
-            Background = Brushes.Transparent,
-        });
-
-        Child = layout;
-        RefreshSummary();
-    }
-
-    private Control BuildRow(string key)
-    {
-        var name = Ui.T(Loc.T("launcher." + key), 13, Skin.Text, FontWeight.Medium);
-        var hint = Ui.T(Loc.T("launcher." + key + ".hint"), 10.5, Skin.TextDim, wrap: TextWrapping.Wrap);
-
-        var textColumn = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
-        textColumn.Children.Add(name);
-        textColumn.Children.Add(hint);
-
-        // фирменный знак лаунчера вместо двух букв
-        var badge = LauncherLogo.Create(key, 32);
-
-        var status = Ui.T(Loc.T("integrations.checking"), 10.5, Skin.TextDim);
-        status.VerticalAlignment = VerticalAlignment.Center;
-        status.TextAlignment = TextAlignment.Right;
-        _statusTexts[key] = status;
-
-        var toggle = new Toggle("", _enabled.Contains(key, StringComparer.OrdinalIgnoreCase), on =>
-        {
-            if (on)
-            {
-                if (!_enabled.Contains(key, StringComparer.OrdinalIgnoreCase)) _enabled.Add(key);
-            }
-            else
-            {
-                _enabled.RemoveAll(x => string.Equals(x, key, StringComparison.OrdinalIgnoreCase));
-            }
-
-            _settings.Launchers = new List<string>(_enabled);
-            RefreshSummary();
-            Changed?.Invoke();
-        }, true, 12.5);
-        toggle.VerticalAlignment = VerticalAlignment.Center;
-        _toggles[key] = toggle;
-
-        var right = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 12,
-            VerticalAlignment = VerticalAlignment.Center,
-            HorizontalAlignment = HorizontalAlignment.Right,
-        };
-        right.Children.Add(status);
-        right.Children.Add(toggle);
-
-        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
-        var badgeCell = new Decorator { Child = badge, Margin = new Thickness(0, 0, 12, 0) };
-        grid.Children.Add(badgeCell);
-        Grid.SetColumn(textColumn, 1);
-        grid.Children.Add(textColumn);
-        Grid.SetColumn(right, 2);
-        grid.Children.Add(right);
-
-        return new Border
-        {
-            Background = Skin.PanelAlt,
-            CornerRadius = new CornerRadius(8),
-            Padding = new Thickness(12, 10),
-            Child = grid,
-        };
-    }
-
-    private async Task LoadAsync(bool force = false)
-    {
-        if (_scanning) return;
-        _scanning = true;
-
-        // проверка выполняется один раз за запуск: повторно — только по кнопке «Обновить»
-        var cached = !force && Launchers.HasSessionCache;
-
-        if (!cached)
-        {
-            _rescanButton.Opacity = 0.55;
-            _rescanButton.IsEnabled = false;
-            foreach (var key in _statusTexts.Keys) _statusTexts[key].Text = Loc.T("integrations.checking");
-        }
-
-        try
-        {
-            var states = cached
-                ? Launchers.ScanAll(_enabled)
-                : await Task.Run(() => Launchers.RescanAll(_enabled));
-            _states = states;
-
-            await Dispatcher.UIThread.InvokeAsync(() =>
-            {
-                foreach (var state in states)
-                {
-                    if (!_statusTexts.TryGetValue(state.Key, out var status)) continue;
-
-                    status.Text = state.Error != null
-                        ? Loc.T("integrations.error")
-                        : !state.Installed
-                            ? Loc.T("integrations.notInstalled")
-                            : state.Count == 0
-                                ? Loc.T("integrations.empty")
-                                : Loc.F("integrations.found", state.Count);
-
-                    status.Foreground = state.Installed && state.Count > 0 ? Skin.TextMuted : Skin.TextDim;
-
-                    // нечего подключать — переключатель неактивен
-                    if (_toggles.TryGetValue(state.Key, out var toggle))
-                        toggle.Opacity = state.Installed ? 1 : 0.5;
-                }
-
-                RefreshSummary();
-            });
-        }
-        catch (Exception ex)
-        {
-            AppPaths.Log("Integrations scan: " + ex.Message);
-        }
-        finally
-        {
-            _scanning = false;
-            _rescanButton.Opacity = 1;
-            _rescanButton.IsEnabled = true;
-        }
-    }
-
-    private void RefreshSummary()
-    {
-        var connected = _states.Count(s => _enabled.Contains(s.Key, StringComparer.OrdinalIgnoreCase));
-        var games = _states.Where(s => _enabled.Contains(s.Key, StringComparer.OrdinalIgnoreCase)).Sum(s => s.Count);
-        _summary.Text = Loc.F("integrations.enabled", connected, games);
-    }
+	private void RefreshSummary()
+	{
+		int num = _states.Count((LauncherState s) => _enabled.Contains<string>(s.Key, StringComparer.OrdinalIgnoreCase));
+		int num2 = _states.Where((LauncherState s) => _enabled.Contains<string>(s.Key, StringComparer.OrdinalIgnoreCase)).Sum((LauncherState s) => s.Count);
+		_summary.Text = Loc.F("integrations.enabled", num, num2);
+	}
 }

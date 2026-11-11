@@ -1,352 +1,462 @@
-using System;
+using Avalonia.Animation.Easings;
+using Avalonia.Animation;
+using Avalonia.Collections;
+using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Shapes;
+using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Labs.Gif;
+using Avalonia.Layout;
+using Avalonia.Logging;
+using Avalonia.Media.Imaging;
+using Avalonia.Media;
+using Avalonia.Platform.Storage;
+using Avalonia.Platform;
+using Avalonia.Styling;
+using Avalonia.Themes.Fluent;
+using Avalonia.Threading;
+using Avalonia;
+using Ludex.Services;
+using Ludex.UI;
+using Microsoft.Win32;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.ComponentModel;
+using System.Diagnostics;
+using System.Globalization;
+using System.IO.Compression;
+using System.IO;
+using System.Linq;
+using System.Net.Http.Headers;
+using System.Net.Http;
+using System.Net;
+using System.Reflection;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
+using System.Security.Cryptography;
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using System.Text.RegularExpressions;
+using System.Text;
+using System.Threading.Tasks;
+using System.Threading;
+using System;
 
 namespace Ludex;
 
 public static class Loc
 {
-    private static string _lang = "ru";
+	private static string _lang;
 
-    public static string Lang
-    {
-        get => _lang;
-        set
-        {
-            if (value != "ru" && value != "en") value = "ru";
-            _lang = value;
-            Changed?.Invoke();
-        }
-    }
+	private static readonly Dictionary<string, (string ru, string en)> Map;
 
-    public static bool IsRu => _lang == "ru";
+	public static string Lang
+	{
+		get
+		{
+			return _lang;
+		}
+		set
+		{
+			if (value != "ru" && value != "en")
+			{
+				value = "ru";
+			}
+			_lang = value;
+			Loc.Changed?.Invoke();
+		}
+	}
 
-    public static event Action? Changed;
+	public static bool IsRu => _lang == "ru";
 
-    public static string T(string key)
-    {
-        if (!Map.TryGetValue(key, out var pair)) return key;
-        return _lang == "en" ? pair.en : pair.ru;
-    }
+	public static event Action? Changed;
 
-    public static string F(string key, params object[] args) => string.Format(T(key), args);
+	public static string T(string key)
+	{
+		if (!Map.TryGetValue(key, out (string, string) value))
+		{
+			return key;
+		}
+		if (!(_lang == "en"))
+		{
+			return value.Item1;
+		}
+		return value.Item2;
+	}
 
-    private static readonly Dictionary<string, (string ru, string en)> Map = new()
-    {
-        ["app.name"] = ("LUDEX", "LUDEX"),
-        ["app.tagline"] = ("Моя библиотека игр", "My game library"),
-        ["btn.scan"] = ("Сканировать", "Scan"),
-        ["btn.settings"] = ("Настройки", "Settings"),
-        ["btn.play"] = ("Играть", "Play"),
-        ["btn.playAdmin"] = ("Играть от админа", "Play as admin"),
-        ["btn.openFolder"] = ("Открыть папку", "Open folder"),
-        ["btn.changeCover"] = ("Обложка", "Artwork"),
-        ["btn.rename"] = ("Переименовать", "Rename"),
-        ["btn.remove"] = ("Убрать из библиотеки", "Remove from library"),
-        ["btn.deleteDisk"] = ("Удалить с компьютера", "Delete from computer"),
-        ["btn.favorite"] = ("В избранное", "Add to favorites"),
-        ["btn.unfavorite"] = ("Убрать из избранного", "Remove from favorites"),
-        ["btn.add"] = ("Добавить", "Add"),
-        ["btn.removeSel"] = ("Удалить", "Remove"),
-        ["btn.save"] = ("Сохранить", "Save"),
-        ["btn.cancel"] = ("Отмена", "Cancel"),
-        ["btn.close"] = ("Закрыть", "Close"),
-        ["btn.integrations"] = ("Интеграции", "Integrations"),
-        ["btn.rescanAll"] = ("Обновить", "Refresh"),
-        ["update.title"] = ("Обновление Ludex", "Ludex update"),
-        ["update.available"] = ("Доступна версия {0}. У вас установлена {1}. Скачать и обновить сейчас?",
-            "Version {0} is available. You have {1}. Download and update now?"),
-        ["update.now"] = ("Обновить", "Update"),
-        ["update.later"] = ("Позже", "Later"),
-        ["update.latest"] = ("У вас последняя версия ({0}).", "You are on the latest version ({0})."),
-        ["update.checkFailed"] = ("Не удалось проверить обновления.\n{0}", "Could not check for updates.\n{0}"),
-        ["update.downloading"] = ("Скачиваем обновление…", "Downloading update…"),
-        ["update.applying"] = ("Устанавливаем и перезапускаем…", "Installing and restarting…"),
-        ["update.applyingHint"] = ("Приложение закроется и запустится само.", "The app will close and start again."),
-        ["update.manual"] = ("Обновите вручную из релиза:\n{0}", "Please update manually from the release:\n{0}"),
-        ["settings.autoupdate"] = ("Проверять обновления при запуске", "Check for updates on startup"),
-        ["settings.checkNow"] = ("Проверить обновления сейчас", "Check for updates now"),
-        ["settings.autoupdateHint"] = ("Ludex смотрит последний релиз на GitHub и при новой версии предлагает обновиться — файл скачивается оттуда же.",
-            "Ludex looks at the latest GitHub release and offers to update; the file is downloaded from there."),
+	public static string F(string key, params object[] args)
+	{
+		return string.Format(T(key), args);
+	}
 
-        ["btn.browseFile"] = ("Выбрать файл с диска…", "Pick a file…"),
-        ["btn.resetCover"] = ("Автоподбор обложки", "Fetch artwork automatically"),
-        ["btn.thisPc"] = ("Этот компьютер", "This PC"),
-        ["splash.catalog"] = ("Загружаем каталог игр…", "Loading the game catalogue…"),
-        ["splash.library"] = ("Загружаем вашу библиотеку…", "Loading your library…"),
-        ["splash.scan"] = ("Ищем игры в ваших папках…", "Looking for games in your folders…"),
-        ["splash.catalogReady"] = ("Каталог готов", "Catalogue is ready"),
-        ["splash.libraryCount"] = ("в библиотеке: {0} игр", "in your library: {0} games"),
-        ["splash.almost"] = ("Почти готово…", "Almost there…"),
-        ["splash.skip"] = ("Пропустить", "Skip"),
-        ["catalog.loadingFree"] = ("Отсеиваем бесплатные сетевые игры…", "Filtering out free-to-play online games…"),
-        ["catalog.loadingMmo"] = ("Отсеиваем MMO…", "Filtering out MMOs…"),
-        ["catalog.throttled"] = ("Магазин недавно не отвечал — подождём пару минут", "The store did not respond recently — try again in a few minutes"),
-        ["catalog.blocked"] = ("Магазин временно ограничил запросы — попробуйте обновить через несколько минут", "The store is rate-limiting requests — try refreshing in a few minutes"),
-        ["catalog.empty"] = ("Поиск магазина не вернул игр", "The store search returned no games"),
-        ["recs.offlineWhy"] = ("Каталог не загрузился: {0}", "The catalogue did not load: {0}"),
-        ["settings.webSearch"] = ("Поиск в браузере", "Browser search"),
-        ["settings.webSearchHint"] = ("Куда отправляется запрос «название игры скачать». Открывается в браузере по умолчанию.", "Where the “game name download” query goes. Opens in your default browser."),
-        ["settings.engineGoogle"] = ("Google", "Google"),
-        ["settings.engineYandex"] = ("Яндекс", "Yandex"),
-        ["settings.engineDdg"] = ("DuckDuckGo", "DuckDuckGo"),
-        ["catalog.loadingStart"] = ("Собираем каталог игр…", "Building the catalogue…"),
-        ["catalog.download"] = ("Скачиваем каталог игр…", "Downloading the game catalogue…"),
-        ["catalog.loading"] = ("Загружаем жанры: {0} из {1} · {2}", "Loading genres: {0} of {1} · {2}"),
-        ["catalog.updated"] = ("обновлено {0}", "updated {0}"),
-        ["catalog.count"] = ("игр в каталоге: {0} · обновлено {1}", "{0} games in the catalogue · updated {1}"),
-        ["catalog.showing"] = ("показано {0} из {1}", "showing {0} of {1}"),
-        ["recs.sectionAll"] = ("Все игры", "All games"),
-        ["recs.sectionHits"] = ("Хиты", "Popular"),
-        ["recs.sectionFree"] = ("Бесплатные", "Free"),
-        ["recs.sortStore"] = ("Как в магазине", "Store order"),
-        ["recs.sortPopular"] = ("По популярности", "By popularity"),
-        ["recs.more"] = ("Показать ещё", "Show more"),
-        ["recs.devLine"] = ("{0} · издатель: {1}", "{0} · publisher: {1}"),
-        ["recs.owners"] = ("владельцев: {0}", "owners: {0}"),
-        ["recs.online"] = ("сейчас играют: {0}", "playing now: {0}"),
-        ["cgenre.Action"] = ("Экшен", "Action"),
-        ["cgenre.Adventure"] = ("Приключения", "Adventure"),
-        ["cgenre.Indie"] = ("Инди", "Indie"),
-        ["cgenre.RPG"] = ("RPG", "RPG"),
-        ["cgenre.Strategy"] = ("Стратегия", "Strategy"),
-        ["cgenre.Simulation"] = ("Симулятор", "Simulation"),
-        ["cgenre.Casual"] = ("Казуальные", "Casual"),
-        ["cgenre.Racing"] = ("Гонки", "Racing"),
-        ["cgenre.Sports"] = ("Спорт", "Sports"),
-        ["cgenre.Early Access"] = ("Ранний доступ", "Early Access"),
-        ["recs.sectionToday"] = ("Сегодня", "Today"),
-        ["recs.sectionNew"] = ("Новинки", "New releases"),
-        ["recs.sectionDiscount"] = ("Скидки", "Specials"),
-        ["recs.sectionTop"] = ("Топ продаж", "Top sellers"),
-        ["recs.sectionSoon"] = ("Скоро", "Coming soon"),
-        ["recs.loading"] = ("Загружаем витрину магазина…", "Loading store shelves…"),
-        ["recs.loaded"] = ("Загружено игр: {0}", "Games loaded: {0}"),
-        ["recs.offline"] = ("Магазин недоступен — показан встроенный каталог", "Store unavailable — showing the built-in catalogue"),
-        ["recs.updated"] = ("данные магазина · обновлено {0}", "store data · updated {0}"),
-        ["recs.cached"] = ("данные из кэша · {0}", "cached data · {0}"),
-        ["recs.refresh"] = ("Обновить", "Refresh"),
-        ["recs.sortSteam"] = ("Как в магазине", "Store order"),
-        ["recs.sortDiscount"] = ("По размеру скидки", "By discount"),
-        ["recs.sortPrice"] = ("По цене", "By price"),
-        ["recs.sortNew"] = ("Сначала новые", "Newest first"),
-        ["recs.openSteam"] = ("Открыть страницу игры", "Open the game page"),
-        ["recs.opening"] = ("Открываю поиск «{0}» в браузере…", "Opening a web search for “{0}”…"),
-        ["recs.openingSteam"] = ("Открываю страницу «{0}»…", "Opening the “{0}” page…"),
-        ["recs.release"] = ("выход: {0}", "release: {0}"),
-        ["recs.soon"] = ("скоро", "soon"),
-        ["store.free"] = ("Бесплатно", "Free"),
-        ["nav.recs"] = ("Каталог", "Catalogue"),
-        ["recs.search"] = ("Поиск по каталогу…", "Search the catalogue…"),
-        ["recs.allGenres"] = ("Все жанры", "All genres"),
-        ["recs.years"] = ("Все годы", "All years"),
-        ["recs.yearsNew"] = ("Новинки", "New"),
-        ["recs.years2020"] = ("2020–2023", "2020–2023"),
-        ["recs.yearsOld"] = ("До 2020", "Before 2020"),
-        ["recs.sortNew"] = ("Сначала новые", "Newest first"),
-        ["recs.sortOld"] = ("Сначала старые", "Oldest first"),
-        ["recs.sortAz"] = ("По названию", "By title"),
-        ["recs.sortDev"] = ("По разработчику", "By developer"),
-        ["recs.found"] = ("Найдено: {0}", "Found: {0}"),
-        ["recs.hint"] = ("Встроенный каталог · обычный поиск по названию в браузере", "Built-in catalogue · plain web search by title"),
-        ["recs.devYear"] = ("{0} · {1}", "{0} · {1}"),
-        ["recs.new"] = ("Новинка", "New"),
-        ["recs.inLibrary"] = ("В библиотеке", "In library"),
-        ["recs.findWeb"] = ("Найти в браузере", "Search the web"),
-        ["recs.opening"] = ("Открываю поиск «{0}» в браузере…", "Opening a web search for “{0}”…"),
-        ["recs.empty"] = ("Ничего не нашлось", "Nothing found"),
-        ["recs.emptyHint"] = ("Сбросьте жанр или год, либо измените запрос.", "Reset the genre or year, or change the query."),
-        ["genre.action"] = ("Экшен", "Action"),
-        ["genre.rpg"] = ("RPG", "RPG"),
-        ["genre.strategy"] = ("Стратегия", "Strategy"),
-        ["genre.indie"] = ("Инди", "Indie"),
-        ["genre.horror"] = ("Хоррор", "Horror"),
-        ["genre.sim"] = ("Симулятор", "Simulation"),
-        ["genre.adventure"] = ("Приключения", "Adventure"),
-        ["genre.survival"] = ("Выживание", "Survival"),
-        ["search.watermark"] = ("Поиск по библиотеке…", "Search library…"),
-        ["empty.title"] = ("Библиотека пуста", "Library is empty"),
-        ["empty.hint"] = ("Укажите папки с играми в настройках и нажмите «Сканировать».\nПрограмма сама найдёт папки с играми, определит названия и подтянет обложки.",
-            "Add your game folders in settings and press “Scan”.\nThe app finds game folders and .exe files, recognizes titles and downloads artwork."),
-        ["empty.btn"] = ("Открыть настройки", "Open settings"),
-        ["empty.favTitle"] = ("Нет избранных игр", "No favourites yet"),
-        ["empty.favHint"] = ("Наведите курсор на карточку и нажмите ★ в правом верхнем углу — игра появится здесь.",
-            "Hover a card and press ★ in its top-right corner to add it here."),
-        ["status.games"] = ("Игр: {0}", "Games: {0}"),
-        ["status.ready"] = ("Готово", "Ready"),
-        ["status.scanning"] = ("Сканирую: {0}", "Scanning: {0}"),
-        ["status.scanFolders"] = ("Сканирую папки…", "Scanning folders…"),
-        ["status.found"] = ("Найдено игр: {0}", "Found games: {0}"),
-        ["status.art"] = ("Подбираю обложки… ({0}/{1})", "Fetching artwork… ({0}/{1})"),
-        ["status.noFolders"] = ("Сначала добавьте хотя бы одну папку в настройках", "Add at least one folder in settings first"),
-        ["status.launched"] = ("Запущено: {0}", "Launched: {0}"),
-        ["status.launchError"] = ("Не удалось запустить игру", "Failed to launch the game"),
-        ["status.removed"] = ("Игра удалена из библиотеки навсегда", "Game removed from library for good"),
-        ["status.deleting"] = ("Удаляю «{0}» с диска…", "Deleting «{0}» from the disk…"),
-        ["status.deleted"] = ("Игра удалена с диска", "Game deleted from the disk"),
-        ["status.deleteFailed"] = ("Не удалось удалить папку игры", "Could not delete the game folder"),
-        ["sort.title"] = ("По названию", "By title"),
-        ["sort.added"] = ("По дате добавления", "By date added"),
-        ["sort.played"] = ("По последнему запуску", "By last played"),
-        ["sort.favorite"] = ("Избранное сверху", "Favorites first"),
-        ["sort.label"] = ("Сортировка", "Sort"),
-        ["filter.all"] = ("Все игры", "All games"),
-        ["nav.library"] = ("Библиотека", "Library"),
-        ["nav.all"] = ("Все игры", "All games"),
-        ["nav.sort"] = ("Сортировка", "Sort"),
-        ["filter.fav"] = ("Избранное", "Favorites"),
-        ["lbl.path"] = ("Папка", "Folder"),
-        ["lbl.source"] = ("Источник", "Source"),
-        ["lbl.exe"] = ("Файл запуска", "Executable"),
-        ["lbl.size"] = ("Размер", "Size"),
-        ["lbl.added"] = ("Добавлена", "Added"),
-        ["lbl.lastplayed"] = ("Последний запуск", "Last played"),
-        ["lbl.plays"] = ("Запусков", "Launches"),
-        ["lbl.steam"] = ("Каталог", "Catalog"),
-        ["lbl.never"] = ("никогда", "never"),
-        ["lbl.unknown"] = ("не определён", "unknown"),
-        ["lbl.calculating"] = ("считается…", "calculating…"),
-        ["lbl.custom"] = ("обложка выбрана вручную", "custom artwork"),
-        ["settings.title"] = ("Настройки", "Settings"),
-
-        // ---- интеграции с лаунчерами
-        ["integrations.title"] = ("Интеграции", "Integrations"),
-        ["integrations.hint"] = ("Подключите лаунчеры — Ludex заберёт из них список установленных игр и добавит в библиотеку. Пароли не нужны: читаются только локальные данные лаунчеров на этом компьютере.", "Connect your launchers and Ludex will pull the installed games into your library. No passwords needed: only local launcher data on this computer is read."),
-        ["integrations.how"] = ("Как это работает", "How it works"),
-        ["integrations.howHint"] = ("Steam — файлы steamapps и appmanifest; Epic — манифесты лаунчера; GOG, Ubisoft, EA и Battle.net — записи в реестре Windows; Heroic и Lutris — их конфиги. Облачные аккаунты и онлайн-API не используются, поэтому библиотека показывает то, что уже установлено.", "Steam — steamapps and appmanifest files; Epic — launcher manifests; GOG, Ubisoft, EA and Battle.net — Windows registry entries; Heroic and Lutris — their configs. No cloud accounts or online APIs, so the library shows what is already installed."),
-        ["integrations.checking"] = ("Проверяем…", "Checking…"),
-        ["integrations.found"] = ("игр: {0}", "games: {0}"),
-        ["integrations.empty"] = ("игр не найдено", "no games found"),
-        ["integrations.notInstalled"] = ("не найден на этом компьютере", "not found on this computer"),
-        ["integrations.windowsOnly"] = ("только Windows", "Windows only"),
-        ["integrations.error"] = ("ошибка чтения", "read error"),
-        ["integrations.enabled"] = ("Подключено лаунчеров: {0} · игр: {1}", "Launchers connected: {0} · games: {1}"),
-        ["integrations.noFolders"] = ("Можно пользоваться только интеграциями — папки для сканирования не обязательны.", "Integrations can be used on their own — scan folders are optional."),
-        ["integrations.applyHint"] = ("Изменения применяются сразу: игры добавляются в библиотеку, отключённый лаунчер убирает свои игры.", "Changes apply immediately: games are added to the library, disabling a launcher removes its games."),
-        ["launcher.steam"] = ("Steam", "Steam"),
-        ["launcher.epic"] = ("Epic Games", "Epic Games"),
-        ["launcher.gog"] = ("GOG Galaxy", "GOG Galaxy"),
-        ["launcher.ubisoft"] = ("Ubisoft Connect", "Ubisoft Connect"),
-        ["launcher.ea"] = ("EA app", "EA app"),
-        ["launcher.battlenet"] = ("Battle.net", "Battle.net"),
-        ["launcher.heroic"] = ("Heroic", "Heroic"),
-        ["launcher.lutris"] = ("Lutris", "Lutris"),
-        ["launcher.amazon"] = ("Amazon Games", "Amazon Games"),
-        ["launcher.steam.hint"] = ("библиотеки Steam, включая дополнительные диски", "Steam libraries, extra drives included"),
-        ["launcher.epic.hint"] = ("манифесты Epic Games Launcher и legendary", "Epic Games Launcher manifests and legendary"),
-        ["launcher.gog.hint"] = ("установленные игры GOG Galaxy", "installed GOG Galaxy games"),
-        ["launcher.ubisoft.hint"] = ("папки Ubisoft Connect из реестра", "Ubisoft Connect folders from the registry"),
-        ["launcher.ea.hint"] = ("EA app и Origin из реестра", "EA app and Origin from the registry"),
-        ["launcher.battlenet.hint"] = ("Blizzard Battle.net из реестра", "Blizzard Battle.net from the registry"),
-        ["launcher.heroic.hint"] = ("Epic, GOG и Amazon в Heroic", "Epic, GOG and Amazon inside Heroic"),
-        ["launcher.lutris.hint"] = ("конфиги игр Lutris", "Lutris game configs"),
-        ["status.launchers"] = ("Импортировано из лаунчеров: {0}", "Imported from launchers: {0}"),
-        ["status.importing"] = ("Импортирую игры из лаунчеров…", "Importing games from launchers…"),
-        ["status.sizes"] = ("Считаю размеры… ({0}/{1})", "Measuring sizes… ({0}/{1})"),
-        ["status.done"] = ("Готово · игр: {0}", "Done · games: {0}"),
-        ["settings.folders"] = ("Папки с играми", "Game folders"),
-        ["settings.foldersHint"] = ("Программа просматривает эти папки (включая подпапки) и ищет игры. Можно указать диск целиком, например D:\\Games.",
-            "The app walks these folders recursively looking for games. You can point it at a whole drive, e.g. D:\\Games."),
-        ["settings.language"] = ("Язык интерфейса", "Interface language"),
-        ["settings.sgdb"] = ("Ключ SteamGridDB (необязательно)", "SteamGridDB API key (optional)"),
-        ["settings.sgdbHint"] = ("С ключом программа берёт красивые вертикальные обложки с SteamGridDB. Бесплатный ключ: steamgriddb.com → Preferences → API. Без ключа используются обложки каталога Steam.",
-            "With a key the app uses nice vertical covers from SteamGridDB (free key: steamgriddb.com → Preferences → API). Without a key it uses Steam catalog covers."),
-        ["settings.ignore"] = ("Игнорировать .exe с такими именами", "Ignore .exe files named like"),
-        ["settings.ignoreHint"] = ("Через запятую. Это дополнение к встроенному списку (unins000, vcredist, dxsetup и т. п.).",
-            "Comma separated. Added to the built-in list (unins000, vcredist, dxsetup, etc.)."),
-        ["settings.filterPrograms"] = ("Отсеивать программы при сканировании", "Filter out software while scanning"),
-        ["settings.filterProgramsHint"] = ("Обои, саундпады, прицелы, тренеры, драйверы и прочие утилиты не попадут в библиотеку — даже если лежат в папке с играми.", "Wallpapers, soundpads, crosshairs, trainers, drivers and other utilities stay out of the library, even inside game folders."),
-        ["btn.deleteLauncher"] = ("Удалить через {0}…", "Uninstall via {0}…"),
-        ["btn.openLauncher"] = ("Открыть {0}", "Open {0}"),
-        ["ctx.uninstallLauncher"] = ("Удалить через {0}…", "Uninstall via {0}…"),
-        ["dlg.launcherDeleteTitle"] = ("Удаление через лаунчер", "Uninstall via launcher"),
-        ["dlg.launcherDeleteText"] = ("«{0}» установлена через {1}: откроется родной деинсталлятор.\n\nОн сам уберёт файлы и запись в списке лаунчера — игра не вернётся в библиотеку.\n\nПродолжить?", "“{0}” was installed via {1}: its own uninstaller will open.\n\nIt removes the files and the launcher entry, so the game will not come back.\n\nContinue?"),
-        ["status.uninstallOpening"] = ("Открываю удаление в {0}…", "Opening {0} uninstaller…"),
-        ["status.uninstallOpened"] = ("Удаление открыто в {0} — подтвердите там", "Uninstall opened in {0} — confirm there"),
-        ["status.dupes"] = ("Убрано дублей: {0}", "Duplicates removed: {0}"),
-        ["status.filtered"] = ("Отсеяно программ: {0}", "Filtered out software: {0}"),
-        ["hidden.restored"] = ("Игра возвращена в библиотеку", "Game restored to the library"),
-        ["hidden.restoredMany"] = ("Возвращено игр: {0}", "Restored games: {0}"),
-        ["settings.autoscan"] = ("Сканировать при запуске", "Scan on startup"),
-        ["settings.theme"] = ("Тема оформления", "Theme"),
-        ["theme.dark"] = ("Тёмная", "Dark"),
-        ["theme.light"] = ("Светлая", "Light"),
-        ["settings.autostart"] = ("Запускать вместе с Windows", "Start with Windows"),
-        ["settings.autostartHint"] = ("Программа будет автоматически открываться при входе в систему (ярлык добавляется в автозагрузку Windows).",
-            "The app will open automatically when you sign in (a startup entry is added to Windows)."),
-        ["settings.autostartUnsupported"] = ("Автозапуск доступен только в Windows", "Autostart is available on Windows only"),
-        ["status.autostartFailed"] = ("Не удалось изменить автозапуск", "Could not change the startup setting"),
-        ["settings.dataFolder"] = ("Данные программы", "App data"),
-        ["settings.openData"] = ("Открыть папку данных", "Open data folder"),
-        ["settings.addFolder"] = ("Добавить папку…", "Add folder…"),
-        ["settings.noFolders"] = ("Папки не добавлены", "No folders added"),
-        ["hidden.title"] = ("Скрытые игры", "Hidden games"),
-        ["hidden.hint"] = ("Эти игры убраны из библиотеки навсегда: сканирование и импорт их не возвращают. Вернуть можно любую — по одной.", "These games were removed from the library for good. Restore any of them one by one."),
-        ["hidden.count"] = ("Скрыто: {0}", "Hidden: {0}"),
-        ["hidden.empty"] = ("Скрытых игр нет — все на месте.", "No hidden games — nothing to restore."),
-        ["hidden.restore"] = ("Вернуть", "Restore"),
-        ["hidden.restoreAll"] = ("Вернуть все", "Restore all"),
-        ["settings.hiddenList"] = ("Скрытые игры ({0})", "Hidden games ({0})"),
-        ["settings.restoreHidden"] = ("Вернуть скрытые ({0})", "Restore hidden ({0})"),
-        ["settings.restoreHiddenHint"] = ("Игры, убранные из библиотеки, больше не импортируются. В списке скрытых любую можно вернуть по одной.",
-            "Games you removed stay hidden from imports. In the hidden list you can bring back any of them."),
-        ["cover.title"] = ("Обложка игры", "Game artwork"),
-        ["cover.search"] = ("Название игры", "Game title"),
-        ["cover.searchBtn"] = ("Найти", "Search"),
-        ["cover.searching"] = ("Ищу…", "Searching…"),
-        ["cover.noresults"] = ("Ничего не нашлось — вставьте ссылку на картинку ниже или выберите файл с диска.", "Nothing found — paste an image link below or pick a file from your drive."),
-        ["cover.urlWatermark"] = ("или вставьте ссылку на картинку (jpg, png, webp)", "or paste an image link (jpg, png, webp)"),
-        ["cover.urlApply"] = ("Взять по ссылке", "Use link"),
-        ["cover.appIdWatermark"] = ("Steam AppId (необязательно)", "Steam AppId (optional)"),
-        ["cover.appIdApply"] = ("Показать варианты", "Show options"),
-        ["cover.badUrl"] = ("По этой ссылке картинку загрузить не удалось", "Could not load an image from this link"),
-        ["cover.tipPortrait"] = ("Вертикальные обложки", "Portrait covers"),
-        ["cover.tipWide"] = ("Горизонтальные", "Wide artwork"),
-        ["dlg.deleteTitle"] = ("Удалить игру с компьютера?", "Delete the game from the computer?"),
-        ["dlg.deleteText"] = ("«{0}» будет удалена с диска:\n{1}\n\nНайден деинсталлятор — сначала запустится он, затем удалю остатки папки. Действие необратимо.", "«{0}» will be deleted from the disk:\n{1}\n\nAn uninstaller was found — it will run first, then the leftovers will be removed. This cannot be undone."),
-        ["dlg.deleteTextNoUninstall"] = ("«{0}» будет удалена с диска:\n{1}\n\nДеинсталлятор не найден — папка игры будет удалена целиком. Действие необратимо.", "«{0}» will be deleted from the disk:\n{1}\n\nNo uninstaller found — the game folder will be deleted entirely. This cannot be undone."),
-        ["btn.deleteForever"] = ("Удалить с диска", "Delete from disk"),
-        ["dlg.removeTitle"] = ("Убрать игру?", "Remove the game?"),
-        ["dlg.removeText"] = ("«{0}» будет удалена из библиотеки навсегда: файлы на диске останутся, но игра больше не появится при сканировании и импорте. Вернуть её можно в разделе «Скрытые игры» в настройках",
-            "“{0}” will be removed from the library for good: the files stay on disk, but the game will not come back on scan or import. You can bring it back from “Hidden games” in the settings."),
-        ["dlg.renameTitle"] = ("Название игры", "Game title"),
-        ["scan.nothingFound"] = ("Игры не найдены. Проверьте папки в настройках.", "No games found. Check folders in settings."),
-        ["scan.progress"] = ("Проверено папок: {0}", "Folders checked: {0}"),
-        ["ctx.play"] = ("Запустить", "Launch"),
-        ["ctx.folder"] = ("Открыть папку", "Open folder"),
-        ["ctx.cover"] = ("Сменить обложку…", "Change artwork…"),
-        ["ctx.rename"] = ("Переименовать…", "Rename…"),
-        ["ctx.remove"] = ("Убрать из библиотеки", "Remove from library"),
-        ["ctx.admin"] = ("Запустить от имени администратора", "Run as administrator"),
-        ["ctx.fav"] = ("Избранное", "Favorite"),
-        ["ctx.uninstall"] = ("Удалить с компьютера…", "Delete from computer…"),
-        ["launch.title"] = ("Запуск игры…", "Launching game…"),
-        ["launch.hint"] = ("Приятной игры!", "Have fun!"),
-        ["win.minimize"] = ("Свернуть", "Minimize"),
-        ["win.maximize"] = ("Развернуть", "Maximize"),
-        ["win.close"] = ("Закрыть", "Close"),
-        ["settings.customize"] = ("Кастомизация", "Customization"),
-        ["settings.customizeHint"] = ("Тема, цветовая палитра, обои на фон и прозрачность интерфейса.",
-            "Theme, colour palette, wallpaper and interface transparency."),
-        ["settings.back"] = ("← Назад", "← Back"),
-        ["custom.title"] = ("Кастомизация", "Customization"),
-        ["custom.theme"] = ("Тема", "Theme"),
-        ["custom.palette"] = ("Цветовая палитра", "Colour palette"),
-        ["custom.transparent"] = ("Полупрозрачный интерфейс", "Translucent interface"),
-        ["custom.transparentHint"] = ("Мягкое матовое стекло: панели и карточки чуть просвечивают, но остаются плотными — обои и рабочий стол лишь слегка угадываются, текст остаётся читаемым.",
-            "Frosted glass: panels and cards are slightly see-through yet stay solid — wallpaper and desktop only faintly show through, text stays readable."),
-        ["custom.wallpaper"] = ("Обои на фон", "Wallpaper"),
-        ["custom.wallpaperHint"] = ("Вставьте ссылку на картинку или GIF (jpg, png, webp, gif) и нажмите «Применить». Файл скачается один раз и будет храниться на компьютере. GIF показывается в движении.",
-            "Paste a link to an image or GIF (jpg, png, webp, gif) and press “Apply”. The file is downloaded once and stored locally. GIFs are animated."),
-        ["custom.apply"] = ("Применить", "Apply"),
-        ["custom.clearWallpaper"] = ("Убрать обои", "Remove wallpaper"),
-        ["custom.downloading"] = ("Скачиваю обои…", "Downloading wallpaper…"),
-        ["custom.wallpaperSet"] = ("Обои установлены", "Wallpaper applied"),
-        ["custom.paletteHint"] = ("Выберите любой оттенок: тяните маркер по квадрату (насыщенность и яркость), полосой ниже — сам оттенок, либо впишите значения R, G, B.",
-            "Pick any colour: drag inside the square (saturation and brightness), use the strip below for the hue, or type R, G, B values."),
-        ["custom.wallpaperPageError"] = ("По ссылке открылась страница, а не картинка. Скопируйте прямую ссылку на изображение (на Pinterest это ссылка, начинающаяся с https://i.pinimg.com/…).",
-            "That link is a web page, not an image. Copy the direct image link (on Pinterest it starts with https://i.pinimg.com/…)."),
-        ["custom.wallpaperError"] = ("Не удалось скачать картинку по этой ссылке", "Could not download the image from this link"),
-        ["custom.favOnHover"] = ("Звезда в углу карточки", "Star in the card corner"),
-        ["card.favorite"] = ("В избранное", "Add to favorites"),
-    };
+	static Loc()
+	{
+		_lang = "ru";
+		Dictionary<string, (string, string)> dictionary = new Dictionary<string, (string, string)>();
+		dictionary["app.name"] = ("LUDEX", "LUDEX");
+		dictionary["btn.scan"] = ("Сканировать", "Scan");
+		dictionary["btn.settings"] = ("Настройки", "Settings");
+		dictionary["btn.play"] = ("Играть", "Play");
+		dictionary["btn.playAdmin"] = ("Играть от админа", "Play as admin");
+		dictionary["btn.openFolder"] = ("Открыть папку", "Open folder");
+		dictionary["btn.changeCover"] = ("Обложка", "Artwork");
+		dictionary["btn.rename"] = ("Переименовать", "Rename");
+		dictionary["btn.remove"] = ("Убрать из библиотеки", "Remove from library");
+		dictionary["btn.deleteDisk"] = ("Удалить с компьютера", "Delete from computer");
+		dictionary["btn.removeSel"] = ("Удалить", "Remove");
+		dictionary["btn.save"] = ("Сохранить", "Save");
+		dictionary["btn.cancel"] = ("Отмена", "Cancel");
+		dictionary["btn.close"] = ("Закрыть", "Close");
+		dictionary["btn.integrations"] = ("Интеграции", "Integrations");
+		dictionary["btn.rescanAll"] = ("Обновить", "Refresh");
+		dictionary["update.title"] = ("Обновление Ludex", "Ludex update");
+		dictionary["update.available"] = ("Доступна версия {0}. У вас установлена {1}. Скачать и обновить сейчас?", "Version {0} is available. You have {1}. Download and update now?");
+		dictionary["update.now"] = ("Обновить", "Update");
+		dictionary["update.later"] = ("Позже", "Later");
+		dictionary["update.latest"] = ("У вас последняя версия ({0}).", "You are on the latest version ({0}).");
+		dictionary["update.checkFailed"] = ("Не удалось проверить обновления.\n{0}", "Could not check for updates.\n{0}");
+		dictionary["update.downloading"] = ("Скачиваем обновление…", "Downloading update…");
+		dictionary["update.applyingHint"] = ("Приложение закроется и запустится само.", "The app will close and start again.");
+		dictionary["update.manual"] = ("Обновите вручную из релиза:\n{0}", "Please update manually from the release:\n{0}");
+		dictionary["settings.autoupdate"] = ("Проверять обновления при запуске", "Check for updates on startup");
+		dictionary["settings.checkNow"] = ("Проверить обновления сейчас", "Check for updates now");
+		dictionary["settings.autoupdateHint"] = ("Ludex смотрит последний релиз на GitHub и при новой версии предлагает обновиться — файл скачивается оттуда же.", "Ludex looks at the latest GitHub release and offers to update; the file is downloaded from there.");
+		dictionary["btn.browseFile"] = ("Выбрать файл с диска…", "Pick a file…");
+		dictionary["btn.resetCover"] = ("Автоподбор обложки", "Fetch artwork automatically");
+		dictionary["btn.thisPc"] = ("Этот компьютер", "This PC");
+		dictionary["splash.catalogReady"] = ("Каталог готов", "Catalogue is ready");
+		dictionary["splash.libraryCount"] = ("в библиотеке: {0} игр", "in your library: {0} games");
+		dictionary["catalog.loadingFree"] = ("Отсеиваем бесплатные сетевые игры…", "Filtering out free-to-play online games…");
+		dictionary["catalog.loadingMmo"] = ("Отсеиваем MMO…", "Filtering out MMOs…");
+		dictionary["catalog.throttled"] = ("Магазин недавно не отвечал — подождём пару минут", "The store did not respond recently — try again in a few minutes");
+		dictionary["catalog.blocked"] = ("Магазин временно ограничил запросы — попробуйте обновить через несколько минут", "The store is rate-limiting requests — try refreshing in a few minutes");
+		dictionary["catalog.empty"] = ("Поиск магазина не вернул игр", "The store search returned no games");
+		dictionary["recs.offlineWhy"] = ("Каталог не загрузился: {0}", "The catalogue did not load: {0}");
+		dictionary["settings.webSearch"] = ("Поиск в браузере", "Browser search");
+		dictionary["settings.webSearchHint"] = ("Куда отправляется запрос «название игры скачать». Открывается в браузере по умолчанию.", "Where the “game name download” query goes. Opens in your default browser.");
+		dictionary["settings.engineGoogle"] = ("Google", "Google");
+		dictionary["settings.engineYandex"] = ("Яндекс", "Yandex");
+		dictionary["settings.engineDdg"] = ("DuckDuckGo", "DuckDuckGo");
+		dictionary["catalog.loadingStart"] = ("Собираем каталог игр…", "Building the catalogue…");
+		dictionary["catalog.download"] = ("Скачиваем каталог игр…", "Downloading the game catalogue…");
+		dictionary["catalog.loading"] = ("Загружаем жанры: {0} из {1} · {2}", "Loading genres: {0} of {1} · {2}");
+		dictionary["catalog.updated"] = ("обновлено {0}", "updated {0}");
+		dictionary["catalog.showing"] = ("показано {0} из {1}", "showing {0} of {1}");
+		dictionary["catalog.searching"] = ("ищем в магазине Steam…", "searching the Steam store…");
+		dictionary["catalog.foundWeb"] = ("найдено в магазине: {0}", "found in the store: {0}");
+		dictionary["catalog.nothingFound"] = ("В Steam ничего не нашлось по запросу «{0}»", "Nothing found in Steam for “{0}”");
+		dictionary["recs.sectionAll"] = ("Все игры", "All games");
+		dictionary["recs.sectionHits"] = ("Хиты", "Popular");
+		dictionary["recs.sectionFree"] = ("Бесплатные", "Free");
+		dictionary["facet.button"] = ("Фильтры", "Filters");
+		dictionary["facet.genre.action"] = ("Экшен", "Action");
+		dictionary["facet.genre.adventure"] = ("Приключения", "Adventure");
+		dictionary["facet.genre.indie"] = ("Инди", "Indie");
+		dictionary["facet.genre.rpg"] = ("RPG", "RPG");
+		dictionary["facet.genre.strategy"] = ("Стратегия", "Strategy");
+		dictionary["facet.genre.simulation"] = ("Симулятор", "Simulation");
+		dictionary["facet.genre.casual"] = ("Казуальные", "Casual");
+		dictionary["facet.genre.racing"] = ("Гонки", "Racing");
+		dictionary["facet.genre.sports"] = ("Спорт", "Sports");
+		dictionary["facet.genre.early"] = ("Ранний доступ", "Early access");
+		dictionary["facet.tag.singleplayer"] = ("Одиночная игра", "Single-player");
+		dictionary["facet.tag.freetoplay"] = ("Бесплатная", "Free to play");
+		dictionary["facet.tag.openworld"] = ("Открытый мир", "Open world");
+		dictionary["facet.tag.story"] = ("Глубокий сюжет", "Story rich");
+		dictionary["facet.tag.atmospheric"] = ("Атмосфера", "Atmospheric");
+		dictionary["facet.tag.postapoc"] = ("Постапокалипсис", "Post-apocalyptic");
+		dictionary["facet.tag.survival"] = ("Выживание", "Survival");
+		dictionary["facet.tag.survivalhorror"] = ("Хоррор на выживание", "Survival horror");
+		dictionary["facet.tag.horror"] = ("Ужасы", "Horror");
+		dictionary["facet.tag.zombies"] = ("Зомби", "Zombies");
+		dictionary["facet.tag.scifi"] = ("Научная фантастика", "Sci-fi");
+		dictionary["facet.tag.fantasy"] = ("Фэнтези", "Fantasy");
+		dictionary["facet.tag.space"] = ("Космос", "Space");
+		dictionary["facet.tag.mystery"] = ("Тайны", "Mystery");
+		dictionary["facet.tag.detective"] = ("Детектив", "Detective");
+		dictionary["facet.tag.roguelike"] = ("Роглайк", "Roguelike");
+		dictionary["facet.tag.metroidvania"] = ("Метроидвания", "Metroidvania");
+		dictionary["facet.tag.platformer"] = ("Платформер", "Platformer");
+		dictionary["facet.tag.puzzle"] = ("Головоломки", "Puzzle");
+		dictionary["facet.tag.shooter"] = ("Шутеры", "Shooter");
+		dictionary["facet.tag.fps"] = ("От первого лица", "First-person");
+		dictionary["facet.tag.actionadventure"] = ("Экшен-приключение", "Action-adventure");
+		dictionary["facet.tag.stealth"] = ("Стелс", "Stealth");
+		dictionary["facet.tag.combat"] = ("Бои", "Combat");
+		dictionary["facet.tag.building"] = ("Строительство", "Building");
+		dictionary["facet.tag.crafting"] = ("Крафт", "Crafting");
+		dictionary["facet.tag.farming"] = ("Фермерство", "Farming");
+		dictionary["facet.tag.sandbox"] = ("Песочница", "Sandbox");
+		dictionary["facet.tag.tactical"] = ("Тактика", "Tactical");
+		dictionary["facet.tag.turnbased"] = ("Пошаговая", "Turn-based");
+		dictionary["facet.tag.difficult"] = ("Сложная", "Difficult");
+		dictionary["facet.tag.exploration"] = ("Исследование", "Exploration");
+		dictionary["facet.tag.funny"] = ("Юмор", "Funny");
+		dictionary["facet.tag.music"] = ("Музыка", "Music");
+		dictionary["facet.tag.soundtrack"] = ("Саундтрек", "Soundtrack");
+		dictionary["facet.tag.coop"] = ("Кооператив", "Co-op");
+		dictionary["facet.tag.vr"] = ("VR", "VR");
+		dictionary["facet.tag.cats"] = ("Коты", "Cats");
+		dictionary["facet.tag.mysterydungeon"] = ("Роглайк-данжен", "Mystery dungeon");
+		dictionary["facet.tag.y1990"] = ("1990-е", "1990s");
+		dictionary["recs.sortStore"] = ("Как в магазине", "Store order");
+		dictionary["facet.presets"] = ("Подборки", "Presets");
+		dictionary["facet.genres"] = ("Жанры", "Genres");
+		dictionary["facet.tags"] = ("Темы и особенности", "Themes & features");
+		dictionary["facet.decade"] = ("Год выхода", "Release year");
+		dictionary["facet.size"] = ("Описание", "Description");
+		dictionary["facet.size.described"] = ("есть описание", "has a description");
+		dictionary["facet.size.short"] = ("короткое", "short");
+		dictionary["facet.size.long"] = ("подробное", "detailed");
+		dictionary["facet.sortTitle"] = ("Сортировка", "Sort by");
+		dictionary["facet.sort.za"] = ("Я → А", "Z → A");
+		dictionary["facet.sort.new"] = ("Сначала новые", "Newest first");
+		dictionary["facet.sort.old"] = ("Сначала старые", "Oldest first");
+		dictionary["facet.any"] = ("Любой", "Any");
+		dictionary["facet.reset"] = ("Сбросить", "Reset");
+		dictionary["facet.show"] = ("Показать", "Show");
+		dictionary["facet.onlyDescribed"] = ("Только с описанием", "Only with a description");
+		dictionary["facet.onlyUnshelved"] = ("Только те, которых нет в библиотеке", "Only games not in my library");
+		dictionary["facet.favourites"] = ("Ваши любимые категории", "Your favourite categories");
+		dictionary["facet.favouritesHint"] = ("по {0} играм вашей библиотеки", "from the {0} games in your library");
+		dictionary["recs.sortPopular"] = ("По популярности", "By popularity");
+		dictionary["recs.more"] = ("Показать ещё", "Show more");
+		dictionary["recs.devLine"] = ("{0} · издатель: {1}", "{0} · publisher: {1}");
+		dictionary["cgenre.Action"] = ("Экшен", "Action");
+		dictionary["cgenre.Adventure"] = ("Приключения", "Adventure");
+		dictionary["cgenre.Indie"] = ("Инди", "Indie");
+		dictionary["cgenre.RPG"] = ("RPG", "RPG");
+		dictionary["cgenre.Strategy"] = ("Стратегия", "Strategy");
+		dictionary["cgenre.Simulation"] = ("Симулятор", "Simulation");
+		dictionary["cgenre.Casual"] = ("Казуальные", "Casual");
+		dictionary["cgenre.Racing"] = ("Гонки", "Racing");
+		dictionary["cgenre.Sports"] = ("Спорт", "Sports");
+		dictionary["cgenre.Early Access"] = ("Ранний доступ", "Early Access");
+		dictionary["recs.sectionToday"] = ("Сегодня", "Today");
+		dictionary["recs.sectionNew"] = ("Новинки", "New releases");
+		dictionary["recs.sectionDiscount"] = ("Скидки", "Specials");
+		dictionary["recs.sectionTop"] = ("Топ продаж", "Top sellers");
+		dictionary["recs.sectionSoon"] = ("Скоро", "Coming soon");
+		dictionary["recs.loaded"] = ("Загружено игр: {0}", "Games loaded: {0}");
+		dictionary["recs.offline"] = ("Магазин недоступен — показан встроенный каталог", "Store unavailable — showing the built-in catalogue");
+		dictionary["recs.refresh"] = ("Обновить", "Refresh");
+		dictionary["recs.sortSteam"] = ("Как в магазине", "Store order");
+		dictionary["recs.sortDiscount"] = ("По размеру скидки", "By discount");
+		dictionary["recs.sortPrice"] = ("По цене", "By price");
+		dictionary["recs.sortNew"] = ("Сначала новые", "Newest first");
+		dictionary["recs.openSteam"] = ("Открыть страницу игры", "Open the game page");
+		dictionary["recs.openingSteam"] = ("Открываю страницу «{0}»…", "Opening the “{0}” page…");
+		dictionary["recs.release"] = ("выход: {0}", "release: {0}");
+		dictionary["nav.recs"] = ("Каталог", "Catalogue");
+		dictionary["nav.catalog"] = ("Каталог", "Catalogue");
+		dictionary["nav.settings"] = ("Настройки", "Settings");
+		dictionary["tray.exit"] = ("Выйти из Ludex", "Quit Ludex");
+		dictionary["tray.open"] = ("Открыть Ludex", "Open Ludex");
+		dictionary["tray.tooltip"] = ("Ludex — библиотека игр", "Ludex — game library");
+		dictionary["auto.step.launchers"] = ("Автопоиск: смотрю лаунчеры и диски…", "Auto search: scanning launchers and drives…");
+		dictionary["auto.step.known"] = ("Автопоиск: известные папки с играми…", "Auto search: known game folders…");
+		dictionary["auto.step.drives"] = ("Автопоиск: обход дисков…", "Auto search: walking drives…");
+		dictionary["auto.step.verify"] = ("Проверяю, что найденное — игры…", "Checking that the found items are games…");
+		dictionary["auto.progress"] = ("Автопоиск: папок {0}, найдено {1}", "Auto search: {0} folders, {1} found");
+		dictionary["auto.foundOne"] = ("Найдено: {0} ({1})", "Found: {0} ({1})");
+		dictionary["auto.verify.progress"] = ("Проверяю {0} из {1}: {2}", "Checking {0} of {1}: {2}");
+		dictionary["auto.verified"] = ("Проверено магазином: осталось {0}, отсеяно {1}", "Verified: {0} kept, {1} dropped");
+		dictionary["status.autoFound"] = ("Автопоиск: найдено {0}", "Auto search: {0} found");
+		dictionary["status.cleaned"] = ("Убрано из библиотеки: {0}", "Removed from the library: {0}");
+		dictionary["status.nothingCleaned"] = ("В библиотеке нет ничего лишнего", "Nothing to remove from the library");
+		dictionary["settings.autodetect"] = ("Автопоиск игр (бета)", "Automatic search (beta)");
+		dictionary["settings.autodetect.badge"] = ("Недоступно при автопоиске", "Unavailable with auto search");
+		dictionary["settings.autodetectHint"] = ("Программа сама обходит диски и лаунчеры и находит установленные игры. Папки указывать не нужно — они станут неактивны.", "The app scans drives and launchers and finds installed games on its own. Folders are not needed while it is on.");
+		dictionary["settings.cleanup"] = ("Убрать из библиотеки всё, что не игра", "Remove non-games from the library");
+		dictionary["settings.cleanupHint"] = ("Один проход по накопленным записям: служебные папки уходят сразу, остальное сверяется со Steam.", "One pass over stored entries: service folders go at once, the rest is checked against Steam.");
+		dictionary["settings.tray.title"] = ("Значок в трее", "Tray icon");
+		dictionary["settings.tray.closeToTray"] = ("Закрывать окно в трей, а не выходить", "Close the window to the tray instead of quitting");
+		dictionary["settings.tray.hint"] = ("Значок живёт в области уведомлений: клик открывает Ludex без повторной загрузки, правый клик — меню с разделами.", "The icon lives in the notification area: a click reopens Ludex instantly, right click opens the menu.");
+		dictionary["recs.search"] = ("Поиск по каталогу…", "Search the catalogue…");
+		dictionary["recs.allGenres"] = ("Все жанры", "All genres");
+		dictionary["recs.yearsNew"] = ("Новинки", "New");
+		dictionary["recs.yearsOld"] = ("До 2020", "Before 2020");
+		dictionary["recs.sortNew"] = ("Сначала новые", "Newest first");
+		dictionary["recs.sortOld"] = ("Сначала старые", "Oldest first");
+		dictionary["recs.sortAz"] = ("По названию", "By title");
+		dictionary["recs.sortDev"] = ("По разработчику", "By developer");
+		dictionary["recs.found"] = ("Найдено: {0}", "Found: {0}");
+		dictionary["recs.devYear"] = ("{0} · {1}", "{0} · {1}");
+		dictionary["recs.inLibrary"] = ("В библиотеке", "In library");
+		dictionary["recs.findWeb"] = ("Найти в браузере", "Search the web");
+		dictionary["recs.empty"] = ("Ничего не нашлось", "Nothing found");
+		dictionary["recs.emptyHint"] = ("Сбросьте жанр или год, либо измените запрос.", "Reset the genre or year, or change the query.");
+		dictionary["genre.action"] = ("Экшен", "Action");
+		dictionary["genre.rpg"] = ("RPG", "RPG");
+		dictionary["genre.strategy"] = ("Стратегия", "Strategy");
+		dictionary["genre.indie"] = ("Инди", "Indie");
+		dictionary["genre.horror"] = ("Хоррор", "Horror");
+		dictionary["genre.sim"] = ("Симулятор", "Simulation");
+		dictionary["genre.adventure"] = ("Приключения", "Adventure");
+		dictionary["genre.survival"] = ("Выживание", "Survival");
+		dictionary["search.watermark"] = ("Поиск по библиотеке…", "Search library…");
+		dictionary["empty.title"] = ("Библиотека пуста", "Library is empty");
+		dictionary["empty.hint"] = ("Укажите папки с играми в настройках и нажмите «Сканировать».\nПрограмма сама найдёт папки с играми, определит названия и подтянет обложки.", "Add your game folders in settings and press “Scan”.\nThe app finds game folders and .exe files, recognizes titles and downloads artwork.");
+		dictionary["empty.btn"] = ("Открыть настройки", "Open settings");
+		dictionary["empty.favTitle"] = ("Нет избранных игр", "No favourites yet");
+		dictionary["empty.favHint"] = ("Наведите курсор на карточку и нажмите ★ в правом верхнем углу — игра появится здесь.", "Hover a card and press ★ in its top-right corner to add it here.");
+		dictionary["status.games"] = ("Игр: {0}", "Games: {0}");
+		dictionary["status.scanFolders"] = ("Сканирую папки…", "Scanning folders…");
+		dictionary["status.found"] = ("Найдено игр: {0}", "Found games: {0}");
+		dictionary["status.art"] = ("Подбираю обложки… ({0}/{1})", "Fetching artwork… ({0}/{1})");
+		dictionary["status.noFolders"] = ("Сначала добавьте хотя бы одну папку в настройках", "Add at least one folder in settings first");
+		dictionary["status.launched"] = ("Запущено: {0}", "Launched: {0}");
+		dictionary["status.launchError"] = ("Не удалось запустить игру", "Failed to launch the game");
+		dictionary["status.removed"] = ("Игра удалена из библиотеки навсегда", "Game removed from library for good");
+		dictionary["status.deleting"] = ("Удаляю «{0}» с диска…", "Deleting «{0}» from the disk…");
+		dictionary["status.deleted"] = ("Игра удалена с диска", "Game deleted from the disk");
+		dictionary["status.deleteFailed"] = ("Не удалось удалить папку игры", "Could not delete the game folder");
+		dictionary["sort.title"] = ("По названию", "By title");
+		dictionary["sort.added"] = ("По дате добавления", "By date added");
+		dictionary["sort.played"] = ("По последнему запуску", "By last played");
+		dictionary["sort.favorite"] = ("Избранное сверху", "Favorites first");
+		dictionary["nav.library"] = ("Библиотека", "Library");
+		dictionary["nav.sort"] = ("Сортировка", "Sorting");
+		dictionary["nav.all"] = ("Все игры", "All games");
+		dictionary["filter.fav"] = ("Избранное", "Favorites");
+		dictionary["lbl.path"] = ("Папка", "Folder");
+		dictionary["lbl.source"] = ("Источник", "Source");
+		dictionary["lbl.exe"] = ("Файл запуска", "Executable");
+		dictionary["lbl.size"] = ("Размер", "Size");
+		dictionary["lbl.added"] = ("Добавлена", "Added");
+		dictionary["lbl.lastplayed"] = ("Последний запуск", "Last played");
+		dictionary["lbl.plays"] = ("Запусков", "Launches");
+		dictionary["lbl.never"] = ("никогда", "never");
+		dictionary["lbl.unknown"] = ("не определён", "unknown");
+		dictionary["lbl.calculating"] = ("считается…", "calculating…");
+		dictionary["settings.title"] = ("Настройки", "Settings");
+		dictionary["integrations.title"] = ("Интеграции", "Integrations");
+		dictionary["integrations.hint"] = ("Подключите лаунчеры — Ludex заберёт из них список установленных игр и добавит в библиотеку. Пароли не нужны: читаются только локальные данные лаунчеров на этом компьютере.", "Connect your launchers and Ludex will pull the installed games into your library. No passwords needed: only local launcher data on this computer is read.");
+		dictionary["integrations.how"] = ("Как это работает", "How it works");
+		dictionary["integrations.howHint"] = ("Steam — файлы steamapps и appmanifest; Epic — манифесты лаунчера; GOG, Ubisoft, EA и Battle.net — записи в реестре Windows; Heroic и Lutris — их конфиги. Облачные аккаунты и онлайн-API не используются, поэтому библиотека показывает то, что уже установлено.", "Steam — steamapps and appmanifest files; Epic — launcher manifests; GOG, Ubisoft, EA and Battle.net — Windows registry entries; Heroic and Lutris — their configs. No cloud accounts or online APIs, so the library shows what is already installed.");
+		dictionary["integrations.checking"] = ("Проверяем…", "Checking…");
+		dictionary["integrations.found"] = ("игр: {0}", "games: {0}");
+		dictionary["integrations.empty"] = ("игр не найдено", "no games found");
+		dictionary["integrations.notInstalled"] = ("не найден на этом компьютере", "not found on this computer");
+		dictionary["integrations.windowsOnly"] = ("только Windows", "Windows only");
+		dictionary["integrations.error"] = ("ошибка чтения", "read error");
+		dictionary["integrations.enabled"] = ("Подключено лаунчеров: {0} · игр: {1}", "Launchers connected: {0} · games: {1}");
+		dictionary["integrations.noFolders"] = ("Можно пользоваться только интеграциями — папки для сканирования не обязательны.", "Integrations can be used on their own — scan folders are optional.");
+		dictionary["integrations.applyHint"] = ("Изменения применяются сразу: игры добавляются в библиотеку, отключённый лаунчер убирает свои игры.", "Changes apply immediately: games are added to the library, disabling a launcher removes its games.");
+		dictionary["launcher.steam"] = ("Steam", "Steam");
+		dictionary["launcher.epic"] = ("Epic Games", "Epic Games");
+		dictionary["launcher.gog"] = ("GOG Galaxy", "GOG Galaxy");
+		dictionary["launcher.ubisoft"] = ("Ubisoft Connect", "Ubisoft Connect");
+		dictionary["launcher.ea"] = ("EA app", "EA app");
+		dictionary["launcher.battlenet"] = ("Battle.net", "Battle.net");
+		dictionary["launcher.heroic"] = ("Heroic", "Heroic");
+		dictionary["launcher.lutris"] = ("Lutris", "Lutris");
+		dictionary["launcher.amazon"] = ("Amazon Games", "Amazon Games");
+		dictionary["launcher.steam.hint"] = ("библиотеки Steam, включая дополнительные диски", "Steam libraries, extra drives included");
+		dictionary["launcher.epic.hint"] = ("манифесты Epic Games Launcher и legendary", "Epic Games Launcher manifests and legendary");
+		dictionary["launcher.gog.hint"] = ("установленные игры GOG Galaxy", "installed GOG Galaxy games");
+		dictionary["launcher.ubisoft.hint"] = ("папки Ubisoft Connect из реестра", "Ubisoft Connect folders from the registry");
+		dictionary["launcher.ea.hint"] = ("EA app и Origin из реестра", "EA app and Origin from the registry");
+		dictionary["launcher.battlenet.hint"] = ("Blizzard Battle.net из реестра", "Blizzard Battle.net from the registry");
+		dictionary["launcher.heroic.hint"] = ("Epic, GOG и Amazon в Heroic", "Epic, GOG and Amazon inside Heroic");
+		dictionary["launcher.lutris.hint"] = ("конфиги игр Lutris", "Lutris game configs");
+		dictionary["status.launchers"] = ("Импортировано из лаунчеров: {0}", "Imported from launchers: {0}");
+		dictionary["status.importing"] = ("Импортирую игры из лаунчеров…", "Importing games from launchers…");
+		dictionary["status.sizes"] = ("Считаю размеры… ({0}/{1})", "Measuring sizes… ({0}/{1})");
+		dictionary["status.done"] = ("Готово · игр: {0}", "Done · games: {0}");
+		dictionary["settings.folders"] = ("Папки с играми", "Game folders");
+		dictionary["settings.foldersHint"] = ("Программа просматривает эти папки (включая подпапки) и ищет игры. Можно указать диск целиком, например D:\\Games.", "The app walks these folders recursively looking for games. You can point it at a whole drive, e.g. D:\\Games.");
+		dictionary["settings.language"] = ("Язык интерфейса", "Interface language");
+		dictionary["settings.sgdb"] = ("Ключ SteamGridDB (необязательно)", "SteamGridDB API key (optional)");
+		dictionary["settings.sgdbHint"] = ("С ключом программа берёт красивые вертикальные обложки с SteamGridDB. Бесплатный ключ: steamgriddb.com → Preferences → API. Без ключа используются обложки каталога Steam.", "With a key the app uses nice vertical covers from SteamGridDB (free key: steamgriddb.com → Preferences → API). Without a key it uses Steam catalog covers.");
+		dictionary["settings.ignore"] = ("Игнорировать .exe с такими именами", "Ignore .exe files named like");
+		dictionary["settings.ignoreHint"] = ("Через запятую. Это дополнение к встроенному списку (unins000, vcredist, dxsetup и т. п.).", "Comma separated. Added to the built-in list (unins000, vcredist, dxsetup, etc.).");
+		dictionary["btn.deleteLauncher"] = ("Удалить через {0}…", "Uninstall via {0}…");
+		dictionary["btn.openLauncher"] = ("Открыть {0}", "Open {0}");
+		dictionary["ctx.uninstallLauncher"] = ("Удалить через {0}…", "Uninstall via {0}…");
+		dictionary["dlg.launcherDeleteTitle"] = ("Удаление через лаунчер", "Uninstall via launcher");
+		dictionary["dlg.launcherDeleteText"] = ("«{0}» установлена через {1}: откроется родной деинсталлятор.\n\nОн сам уберёт файлы и запись в списке лаунчера — игра не вернётся в библиотеку.\n\nПродолжить?", "“{0}” was installed via {1}: its own uninstaller will open.\n\nIt removes the files and the launcher entry, so the game will not come back.\n\nContinue?");
+		dictionary["status.uninstallOpening"] = ("Открываю удаление в {0}…", "Opening {0} uninstaller…");
+		dictionary["status.uninstallOpened"] = ("Удаление открыто в {0} — подтвердите там", "Uninstall opened in {0} — confirm there");
+		dictionary["status.dupes"] = ("Убрано дублей: {0}", "Duplicates removed: {0}");
+		dictionary["status.filtered"] = ("Отсеяно программ: {0}", "Filtered out software: {0}");
+		dictionary["hidden.restored"] = ("Игра возвращена в библиотеку", "Game restored to the library");
+		dictionary["hidden.restoredMany"] = ("Возвращено игр: {0}", "Restored games: {0}");
+		dictionary["settings.autoscan"] = ("Сканировать при запуске", "Scan on startup");
+		dictionary["theme.dark"] = ("Тёмная", "Dark");
+		dictionary["theme.light"] = ("Светлая", "Light");
+		dictionary["settings.autostart"] = ("Запускать вместе с Windows", "Start with Windows");
+		dictionary["settings.autostartHint"] = ("Программа будет автоматически открываться при входе в систему (ярлык добавляется в автозагрузку Windows).", "The app will open automatically when you sign in (a startup entry is added to Windows).");
+		dictionary["settings.autostartUnsupported"] = ("Автозапуск доступен только в Windows", "Autostart is available on Windows only");
+		dictionary["status.autostartFailed"] = ("Не удалось изменить автозапуск", "Could not change the startup setting");
+		dictionary["settings.dataFolder"] = ("Данные программы", "App data");
+		dictionary["settings.openData"] = ("Открыть папку данных", "Open data folder");
+		dictionary["settings.addFolder"] = ("Добавить папку…", "Add folder…");
+		dictionary["settings.noFolders"] = ("Папки не добавлены", "No folders added");
+		dictionary["hidden.title"] = ("Скрытые игры", "Hidden games");
+		dictionary["hidden.hint"] = ("Эти игры убраны из библиотеки навсегда: сканирование и импорт их не возвращают. Вернуть можно любую — по одной.", "These games were removed from the library for good. Restore any of them one by one.");
+		dictionary["hidden.count"] = ("Скрыто: {0}", "Hidden: {0}");
+		dictionary["hidden.empty"] = ("Скрытых игр нет — все на месте.", "No hidden games — nothing to restore.");
+		dictionary["hidden.restore"] = ("Вернуть", "Restore");
+		dictionary["hidden.restoreAll"] = ("Вернуть все", "Restore all");
+		dictionary["settings.hiddenList"] = ("Скрытые игры ({0})", "Hidden games ({0})");
+		dictionary["settings.restoreHidden"] = ("Вернуть скрытые ({0})", "Restore hidden ({0})");
+		dictionary["settings.restoreHiddenHint"] = ("Игры, убранные из библиотеки, больше не импортируются. В списке скрытых любую можно вернуть по одной.", "Games you removed stay hidden from imports. In the hidden list you can bring back any of them.");
+		dictionary["cover.title"] = ("Обложка игры", "Game artwork");
+		dictionary["cover.searchBtn"] = ("Найти", "Search");
+		dictionary["cover.searching"] = ("Ищу…", "Searching…");
+		dictionary["cover.noresults"] = ("Ничего не нашлось — вставьте ссылку на картинку ниже или выберите файл с диска.", "Nothing found — paste an image link below or pick a file from your drive.");
+		dictionary["cover.urlWatermark"] = ("или вставьте ссылку на картинку (jpg, png, webp)", "or paste an image link (jpg, png, webp)");
+		dictionary["cover.urlApply"] = ("Взять по ссылке", "Use link");
+		dictionary["cover.appIdWatermark"] = ("Steam AppId (необязательно)", "Steam AppId (optional)");
+		dictionary["cover.appIdApply"] = ("Показать варианты", "Show options");
+		dictionary["cover.badUrl"] = ("По этой ссылке картинку загрузить не удалось", "Could not load an image from this link");
+		dictionary["cover.tipPortrait"] = ("Вертикальные обложки", "Portrait covers");
+		dictionary["cover.tipWide"] = ("Горизонтальные", "Wide artwork");
+		dictionary["dlg.deleteTitle"] = ("Удалить игру с компьютера?", "Delete the game from the computer?");
+		dictionary["dlg.deleteText"] = ("«{0}» будет удалена с диска:\n{1}\n\nНайден деинсталлятор — сначала запустится он, затем удалю остатки папки. Действие необратимо.", "«{0}» will be deleted from the disk:\n{1}\n\nAn uninstaller was found — it will run first, then the leftovers will be removed. This cannot be undone.");
+		dictionary["dlg.deleteTextNoUninstall"] = ("«{0}» будет удалена с диска:\n{1}\n\nДеинсталлятор не найден — папка игры будет удалена целиком. Действие необратимо.", "«{0}» will be deleted from the disk:\n{1}\n\nNo uninstaller found — the game folder will be deleted entirely. This cannot be undone.");
+		dictionary["btn.deleteForever"] = ("Удалить с диска", "Delete from disk");
+		dictionary["dlg.removeTitle"] = ("Убрать игру?", "Remove the game?");
+		dictionary["dlg.removeText"] = ("«{0}» будет удалена из библиотеки навсегда: файлы на диске останутся, но игра больше не появится при сканировании и импорте. Вернуть её можно в разделе «Скрытые игры» в настройках", "“{0}” will be removed from the library for good: the files stay on disk, but the game will not come back on scan or import. You can bring it back from “Hidden games” in the settings.");
+		dictionary["dlg.renameTitle"] = ("Название игры", "Game title");
+		dictionary["scan.nothingFound"] = ("Игры не найдены. Проверьте папки в настройках.", "No games found. Check folders in settings.");
+		dictionary["scan.progress"] = ("Проверено папок: {0}", "Folders checked: {0}");
+		dictionary["ctx.play"] = ("Запустить", "Launch");
+		dictionary["ctx.folder"] = ("Открыть папку", "Open folder");
+		dictionary["ctx.cover"] = ("Сменить обложку…", "Change artwork…");
+		dictionary["ctx.rename"] = ("Переименовать…", "Rename…");
+		dictionary["ctx.remove"] = ("Убрать из библиотеки", "Remove from library");
+		dictionary["ctx.admin"] = ("Запустить от имени администратора", "Run as administrator");
+		dictionary["ctx.fav"] = ("Избранное", "Favorite");
+		dictionary["ctx.uninstall"] = ("Удалить с компьютера…", "Delete from computer…");
+		dictionary["launch.title"] = ("Запуск игры…", "Launching game…");
+		dictionary["launch.hint"] = ("Приятной игры!", "Have fun!");
+		dictionary["win.minimize"] = ("Свернуть", "Minimize");
+		dictionary["win.maximize"] = ("Развернуть", "Maximize");
+		dictionary["win.close"] = ("Закрыть", "Close");
+		dictionary["settings.customize"] = ("Кастомизация", "Customization");
+		dictionary["settings.customizeHint"] = ("Тема, цветовая палитра, обои на фон и прозрачность интерфейса.", "Theme, colour palette, wallpaper and interface transparency.");
+		dictionary["settings.back"] = ("← Назад", "← Back");
+		dictionary["custom.title"] = ("Кастомизация", "Customization");
+		dictionary["custom.theme"] = ("Тема", "Theme");
+		dictionary["custom.palette"] = ("Цветовая палитра", "Colour palette");
+		dictionary["custom.transparent"] = ("Полупрозрачный интерфейс", "Translucent interface");
+		dictionary["custom.transparentHint"] = ("Мягкое матовое стекло: панели и карточки чуть просвечивают, но остаются плотными — обои и рабочий стол лишь слегка угадываются, текст остаётся читаемым.", "Frosted glass: panels and cards are slightly see-through yet stay solid — wallpaper and desktop only faintly show through, text stays readable.");
+		dictionary["custom.wallpaper"] = ("Обои на фон", "Wallpaper");
+		dictionary["custom.wallpaperHint"] = ("Вставьте ссылку на картинку или GIF (jpg, png, webp, gif) и нажмите «Применить». Файл скачается один раз и будет храниться на компьютере. GIF показывается в движении.", "Paste a link to an image or GIF (jpg, png, webp, gif) and press “Apply”. The file is downloaded once and stored locally. GIFs are animated.");
+		dictionary["custom.apply"] = ("Применить", "Apply");
+		dictionary["custom.clearWallpaper"] = ("Убрать обои", "Remove wallpaper");
+		dictionary["custom.downloading"] = ("Скачиваю обои…", "Downloading wallpaper…");
+		dictionary["custom.wallpaperSet"] = ("Обои установлены", "Wallpaper applied");
+		dictionary["custom.paletteHint"] = ("Выберите любой оттенок: тяните маркер по квадрату (насыщенность и яркость), полосой ниже — сам оттенок, либо впишите значения R, G, B.", "Pick any colour: drag inside the square (saturation and brightness), use the strip below for the hue, or type R, G, B values.");
+		dictionary["custom.wallpaperPageError"] = ("По ссылке открылась страница, а не картинка. Скопируйте прямую ссылку на изображение (на Pinterest это ссылка, начинающаяся с https://i.pinimg.com/…).", "That link is a web page, not an image. Copy the direct image link (on Pinterest it starts with https://i.pinimg.com/…).");
+		dictionary["custom.wallpaperError"] = ("Не удалось скачать картинку по этой ссылке", "Could not download the image from this link");
+		dictionary["custom.favOnHover"] = ("Звезда в углу карточки", "Star in the card corner");
+		dictionary["card.favorite"] = ("В избранное", "Add to favorites");
+		Map = dictionary;
+	}
 }

@@ -1,126 +1,178 @@
-using System;
+using Avalonia.Animation.Easings;
+using Avalonia.Animation;
+using Avalonia.Collections;
+using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Shapes;
+using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Labs.Gif;
+using Avalonia.Layout;
+using Avalonia.Logging;
+using Avalonia.Media.Imaging;
+using Avalonia.Media;
+using Avalonia.Platform.Storage;
+using Avalonia.Platform;
+using Avalonia.Styling;
+using Avalonia.Themes.Fluent;
+using Avalonia.Threading;
+using Avalonia;
+using Ludex.Services;
+using Ludex.UI;
+using Microsoft.Win32;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.ComponentModel;
+using System.Diagnostics;
+using System.Globalization;
+using System.IO.Compression;
 using System.IO;
 using System.Linq;
+using System.Net.Http.Headers;
+using System.Net.Http;
+using System.Net;
+using System.Reflection;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
+using System.Security.Cryptography;
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using System.Text.RegularExpressions;
+using System.Text;
+using System.Threading.Tasks;
+using System.Threading;
+using System;
 
 namespace Ludex;
 
-/// <summary>
-/// Различия между платформами в одном месте: как искать игры, как их запускать
-/// и что из системной интеграции вообще доступно.
-/// </summary>
 public static class Platform
 {
-    public static bool IsWindows => OperatingSystem.IsWindows();
-    public static bool IsMac => OperatingSystem.IsMacOS();
-    public static bool IsLinux => OperatingSystem.IsLinux();
+	private const long MinGameFileSize = 65536L;
 
-    /// <summary>Запуск от администратора (UAC) существует только в Windows.</summary>
-    public static bool SupportsElevation => IsWindows;
+	private static readonly HashSet<string> GameExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "", ".appimage", ".sh", ".x86_64", ".x86", ".run", ".bin", ".elf", ".exe" };
 
-    /// <summary>Человекочитаемое имя системы — для подсказок в интерфейсе.</summary>
-    public static string DisplayName => IsWindows ? "Windows" : IsMac ? "macOS" : "Linux";
+	private static readonly string[] LibraryNoise = new string[21]
+	{
+		".so", ".so.", ".dll", ".dylib", ".py", ".jar", ".desktop", ".png", ".jpg", ".jpeg",
+		".webp", ".svg", ".txt", ".md", ".json", ".xml", ".cfg", ".ini", ".log", ".pak",
+		".dat"
+	};
 
-    /// <summary>Минимальный размер файла, чтобы считать его игрой, а не скриптом-обёрткой.</summary>
-    private const long MinGameFileSize = 64 * 1024;
+	public static bool IsWindows => OperatingSystem.IsWindows();
 
-    /// <summary>Расширения исполняемых файлов, которые имеет смысл запускать.</summary>
-    private static readonly HashSet<string> GameExtensions = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "", ".appimage", ".sh", ".x86_64", ".x86", ".run", ".bin", ".elf", ".exe",
-    };
+	public static bool IsMac => OperatingSystem.IsMacOS();
 
-    /// <summary>Файлы, которые никогда не являются игрой.</summary>
-    private static readonly string[] LibraryNoise =
-    {
-        ".so", ".so.", ".dll", ".dylib", ".py", ".jar", ".desktop", ".png", ".jpg", ".jpeg",
-        ".webp", ".svg", ".txt", ".md", ".json", ".xml", ".cfg", ".ini", ".log", ".pak", ".dat",
-    };
+	public static bool IsLinux => OperatingSystem.IsLinux();
 
-    /// <summary>
-    /// Файлы-кандидаты в текущей папке. Windows — *.exe, Linux/macOS — исполняемые
-    /// файлы (AppImage, нативные бинарники, .sh-обёртки), отфильтрованные от библиотек.
-    /// </summary>
-    public static List<FileInfo> GameFiles(DirectoryInfo dir)
-    {
-        var result = new List<FileInfo>();
+	public static bool SupportsElevation => IsWindows;
 
-        try
-        {
-            if (IsWindows)
-            {
-                result.AddRange(dir.GetFiles("*.exe", SearchOption.TopDirectoryOnly));
-                return result;
-            }
+	public static string DisplayName
+	{
+		get
+		{
+			if (!IsWindows)
+			{
+				if (!IsMac)
+				{
+					return "Linux";
+				}
+				return "macOS";
+			}
+			return "Windows";
+		}
+	}
 
-            foreach (var file in dir.GetFiles("*", SearchOption.TopDirectoryOnly))
-            {
-                var ext = Path.GetExtension(file.Name);
-                if (!GameExtensions.Contains(ext)) continue;
+	public static List<FileInfo> GameFiles(DirectoryInfo dir)
+	{
+		List<FileInfo> list = new List<FileInfo>();
+		try
+		{
+			if (IsWindows)
+			{
+				list.AddRange(dir.GetFiles("*.exe", SearchOption.TopDirectoryOnly));
+				return list;
+			}
+			FileInfo[] files = dir.GetFiles("*", SearchOption.TopDirectoryOnly);
+			foreach (FileInfo fileInfo in files)
+			{
+				string extension = System.IO.Path.GetExtension(fileInfo.Name);
+				if (GameExtensions.Contains(extension))
+				{
+					string lower = fileInfo.Name.ToLowerInvariant();
+					if (!LibraryNoise.Any((string n) => lower.Contains(n, StringComparison.Ordinal)) && IsExecutable(fileInfo) && fileInfo.Length >= 65536)
+					{
+						list.Add(fileInfo);
+					}
+				}
+			}
+		}
+		catch
+		{
+		}
+		return list;
+	}
 
-                var lower = file.Name.ToLowerInvariant();
-                if (LibraryNoise.Any(n => lower.Contains(n, StringComparison.Ordinal))) continue;
-                if (!IsExecutable(file)) continue;
-                if (file.Length < MinGameFileSize) continue;
+	public static List<DirectoryInfo> MacBundles(DirectoryInfo dir)
+	{
+		if (!IsMac)
+		{
+			return new List<DirectoryInfo>();
+		}
+		try
+		{
+			return dir.GetDirectories("*.app", SearchOption.TopDirectoryOnly).ToList();
+		}
+		catch
+		{
+			return new List<DirectoryInfo>();
+		}
+	}
 
-                result.Add(file);
-            }
-        }
-        catch
-        {
-            // нет доступа — просто ничего не нашли
-        }
+	public static bool IsBundle(string path)
+	{
+		if (IsMac)
+		{
+			return path.EndsWith(".app", StringComparison.OrdinalIgnoreCase);
+		}
+		return false;
+	}
 
-        return result;
-    }
+	private static bool IsExecutable(FileInfo file)
+	{
+		if (OperatingSystem.IsWindows())
+		{
+			return true;
+		}
+		try
+		{
+			return (File.GetUnixFileMode(file.FullName) & (UnixFileMode.OtherExecute | UnixFileMode.GroupExecute | UnixFileMode.UserExecute)) != 0;
+		}
+		catch
+		{
+			return false;
+		}
+	}
 
-    /// <summary>macOS-приложения — это папки *.app с бинарником внутри.</summary>
-    public static List<DirectoryInfo> MacBundles(DirectoryInfo dir)
-    {
-        if (!IsMac) return new List<DirectoryInfo>();
-
-        try
-        {
-            return dir.GetDirectories("*.app", SearchOption.TopDirectoryOnly).ToList();
-        }
-        catch
-        {
-            return new List<DirectoryInfo>();
-        }
-    }
-
-    public static bool IsBundle(string path) =>
-        IsMac && path.EndsWith(".app", StringComparison.OrdinalIgnoreCase);
-
-    private static bool IsExecutable(FileInfo file)
-    {
-        if (OperatingSystem.IsWindows()) return true;
-
-        try
-        {
-            var mode = File.GetUnixFileMode(file.FullName);
-            return (mode & (UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute)) != 0;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    /// <summary>Ставит бит выполнения — нужен для распакованных из архива файлов.</summary>
-    public static void MakeExecutable(string path)
-    {
-        if (OperatingSystem.IsWindows()) return;
-
-        try
-        {
-            var mode = File.GetUnixFileMode(path);
-            var exec = UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute;
-            if ((mode & exec) != exec) File.SetUnixFileMode(path, mode | exec);
-        }
-        catch (Exception ex)
-        {
-            AppPaths.Log("chmod failed " + path + ": " + ex.Message);
-        }
-    }
+	public static void MakeExecutable(string path)
+	{
+		if (OperatingSystem.IsWindows())
+		{
+			return;
+		}
+		try
+		{
+			UnixFileMode unixFileMode = File.GetUnixFileMode(path);
+			UnixFileMode unixFileMode2 = UnixFileMode.OtherExecute | UnixFileMode.GroupExecute | UnixFileMode.UserExecute;
+			if ((unixFileMode & unixFileMode2) != unixFileMode2)
+			{
+				File.SetUnixFileMode(path, unixFileMode | unixFileMode2);
+			}
+		}
+		catch (Exception ex)
+		{
+			AppPaths.Log("chmod failed " + path + ": " + ex.Message);
+		}
+	}
 }
