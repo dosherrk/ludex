@@ -30,19 +30,9 @@ public static class CatalogFacets
         "VR", "Free to Play", "1990s", "Cats", "Mystery Dungeon",
     };
 
-    /// <summary>
-    /// Темы, которые показываем в панели. В файле каталога темы идут вместе с жанрами
-    /// (в списке есть «Action», «Adventure», «Indie»…), а служебные «Free to Play»
-    /// и «Singleplayer» не полезны — их отсекаем, чтобы не дублировать жанры.
-    /// </summary>
-    public static string[] Tags { get; } = ThemeOrder
-        .Where(t => !IsGenreTheme(t))
-        .Where(t => t is not ("Free to Play" or "Singleplayer"))
-        .ToArray();
-
     /// <summary>Название темы совпадает с жанром («Action», «Racing», «Early Access»…).</summary>
-    public static bool IsGenreTheme(string name) =>
-        GenreThemeNames.Contains(name.Trim().ToLowerInvariant());
+    public static bool IsGenreTheme(string? name) =>
+        !string.IsNullOrWhiteSpace(name) && GenreThemeNames.Contains(name.Trim().ToLowerInvariant());
 
     private static readonly HashSet<string> GenreThemeNames = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -50,6 +40,18 @@ public static class CatalogFacets
         "racing", "sports", "early access", "экшен", "приключения", "инди", "стратегия",
         "симулятор", "казуальные", "гонки", "спорт", "ранний доступ",
     };
+
+    /// <summary>
+    /// Темы, которые показываем в панели. В файле каталога темы идут вместе с жанрами
+    /// (в списке есть «Action», «Adventure», «Indie»…), а служебные «Free to Play»
+    /// и «Singleplayer» не полезны — их отсекаем, чтобы не дублировать жанры.
+    /// </summary>
+    public static string[] Tags => _tags ??= ThemeOrder
+        .Where(t => !IsGenreTheme(t))
+        .Where(t => t is not ("Free to Play" or "Singleplayer"))
+        .ToArray();
+
+    private static string[]? _tags;
 
     /// <summary>Варианты сортировки: значение и ключ локализации.</summary>
     public static readonly (string Value, string Key)[] Sorts =

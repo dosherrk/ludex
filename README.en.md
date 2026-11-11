@@ -13,7 +13,7 @@ and fetches artwork. No accounts, no launcher, no cloud — just your files and 
 [![Linux](https://img.shields.io/badge/Linux-x64-FCC624?logo=linux&logoColor=black)](#linux-x64)
 [![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet&logoColor=white)](#building-from-source)
 [![Avalonia](https://img.shields.io/badge/Avalonia-11-8B44AC)](https://avaloniaui.net)
-[![Version](https://img.shields.io/badge/version-1.20.1-3B9EFF)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.20.2-3B9EFF)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-35C48A)](LICENSE)
 [![Website](https://img.shields.io/badge/website-ludex--one.vercel.app-3B9EFF)](https://ludex-one.vercel.app/?lang=en)
 
@@ -120,11 +120,11 @@ buttons for your system automatically.
 
 ### Windows 10/11 (x64)
 
-**Option 1 — installer (recommended).** `Ludex-Setup-1.20.1.exe` → choose the language → “Next”.
+**Option 1 — installer (recommended).** `Ludex-Setup-1.20.2.exe` → choose the language → “Next”.
 It installs into `%LOCALAPPDATA%\Programs\Ludex` (no admin prompt), creates desktop and Start-menu
 shortcuts, adds an entry to “Apps & features” and an uninstaller.
 
-**Option 2 — portable.** `Ludex-1.20.1-windows.zip` — unpack the whole folder anywhere
+**Option 2 — portable.** `Ludex-1.20.2-windows.zip` — unpack the whole folder anywhere
 (a USB stick, `D:\Ludex`) and run `Ludex.exe`. Settings and the library are kept in
 `%LOCALAPPDATA%\Ludex`.
 
@@ -145,17 +145,17 @@ settings and the cover cache. **Game files are never deleted.**
 **`.deb` package** (Debian, Ubuntu, Mint, Pop!_OS and derivatives):
 
 ```bash
-sudo apt install ./Ludex-1.20.1-linux-x64.deb
+sudo apt install ./Ludex-1.20.2-linux-x64.deb
 ```
 
 It adds a menu entry, `ludex` to `PATH`, and installs files into `/opt/ludex`.
 Uninstall with `sudo apt remove ludex` (data in `~/.local/share/Ludex` stays).
 
-**Portable archive** `Ludex-1.20.1-linux-x64.tar.gz` — for any system with glibc 2.31+
+**Portable archive** `Ludex-1.20.2-linux-x64.tar.gz` — for any system with glibc 2.31+
 (Fedora, Arch, openSUSE and others):
 
 ```bash
-mkdir -p ~/Applications && tar -xzf Ludex-1.20.1-linux-x64.tar.gz -C ~/Applications
+mkdir -p ~/Applications && tar -xzf Ludex-1.20.2-linux-x64.tar.gz -C ~/Applications
 ~/Applications/Ludex/Ludex
 ```
 

@@ -33,6 +33,24 @@ internal static class Program
         catch (Exception ex)
         {
             AppPaths.Log("Fatal: " + ex);
+
+            // без окна пользователь видит только «приложение не запускается»:
+            // показываем причину и путь к журналу
+            if (args.All(a => !a.StartsWith("-psn", StringComparison.Ordinal)))
+            {
+                try
+                {
+                    Console.Error.WriteLine("Ludex не запустился: " + ex.Message);
+                    Console.Error.WriteLine("Журнал: " + AppPaths.LogFile);
+                    if (!Console.IsErrorRedirected) Console.Error.WriteLine("Нажмите Enter, чтобы закрыть окно.");
+                    if (!Console.IsErrorRedirected) Console.ReadLine();
+                }
+                catch
+                {
+                    // консоли нет — остаётся журнал
+                }
+            }
+
             throw;
         }
     }

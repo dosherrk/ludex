@@ -78,6 +78,8 @@ LangString SecDesktop     ${LANG_ENGLISH} "Desktop shortcut"
 LangString SecUninstall    ${LANG_RUSSIAN} "Удалить ${APPNAME}"
 LangString SecUninstall    ${LANG_ENGLISH} "Uninstall ${APPNAME}"
 LangString AskWipeData    ${LANG_RUSSIAN} "Удалить также настройки и кэш обложек Ludex?$\r$\n$\r$\nПапка: $LOCALAPPDATA\${APPNAME}$\r$\n(сами игры на диске не затрагиваются)"
+LangString LeftFiles      ${LANG_RUSSIAN} "Часть файлов удалить не удалось: $INSTDIR$\r$\n$\r$\nСкорее всего, Ludex ещё запущен. Закройте его и удалите папку вручную."
+LangString LeftFiles      ${LANG_ENGLISH} "Some files could not be removed: $INSTDIR$\r$\n$\r$\nLudex is probably still running. Close it and delete the folder manually."
 LangString AskWipeData    ${LANG_ENGLISH} "Also delete Ludex settings and artwork cache?$\r$\n$\r$\nFolder: $LOCALAPPDATA\${APPNAME}$\r$\n(The game files on your disks are not touched)"
 
 ; ------------------------------------------------------------------- helpers
@@ -151,9 +153,33 @@ Section "Uninstall"
   DeleteRegKey HKCU "${UNINSTKEY}"
   DeleteRegKey HKCU "${REGKEY}"
 
-  Delete "$INSTDIR\Ludex.exe"
+  ; приложение ставится набором файлов: exe рядом с ним лежат Ludex.dll, папка runtimes,
+  ; файлы локализации и нативные библиотеки. Удаляем папку целиком, иначе остаются dll.
+  ; Перед этим закрываем запущенный Ludex — иначе Windows не даёт удалить занятые файлы.
+  nsExec::ExecToLog 'taskkill /IM ${APPEXE} /F'
+  Pop $0
+  Sleep 700
+
+  ; данные обновления (если есть) — отдельная папка рядом
+  RMDir /r "$INSTDIR\runtimes"
+  Delete "$INSTDIR\*.dll"
+  Delete "$INSTDIR\*.so"
+  Delete "$INSTDIR\*.json"
+  Delete "$INSTDIR\*.pdb"
+
+  Delete "$INSTDIR\${APPEXE}"
   Delete "$INSTDIR\uninstall.exe"
-  RMDir "$INSTDIR"
+  RMDir /r "$INSTDIR"
+
+  ; если что-то осталось (файл занят), пробуем ещё раз после паузы и сообщаем путь
+  IfFileExists "$INSTDIR\*.*" 0 done
+    Sleep 1500
+    RMDir /r "$INSTDIR"
+  done:
+  IfFileExists "$INSTDIR\*.*" 0 cleaned
+    IfSilent +2
+    MessageBox MB_OK|MB_ICONEXCLAMATION "$(LeftFiles)"
+  cleaned:
 
   ; library database + cached covers (optional)
   IfSilent wipe

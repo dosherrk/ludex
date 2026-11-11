@@ -9,7 +9,7 @@ const KINDS = ['setup', 'win-zip', 'linux-tar', 'linux-deb'];
 
 // Запасные имена файлов — на случай, если Redis ещё пуст.
 const FALLBACK = {
-  setup: 'Ludex-Setup-1.20.1.exe',
+  setup: 'Ludex-Setup-1.20.2.exe',
   'win-zip': 'Ludex-1.20.1-windows.zip',
   'linux-tar': 'Ludex-1.20.1-linux-x64.tar.gz',
   'linux-deb': 'Ludex-1.20.1-linux-x64.deb',
