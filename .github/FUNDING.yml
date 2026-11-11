@@ -1,0 +1,4 @@
+# Кнопка «Sponsor» в репозитории Ludex.
+# DonationAlerts не входит в список custom-ссылок GitHub напрямую, но поле custom
+# принимает любой URL — он и появится в кнопке.
+custom: ["https://www.donationalerts.com/r/dosherrk"]
