@@ -9,13 +9,13 @@ const KINDS = ['setup', 'win-zip', 'linux-tar', 'linux-deb'];
 
 // Запасные имена файлов — на случай, если Redis ещё пуст.
 const FALLBACK = {
-  setup: 'Ludex-Setup-1.19.2.exe',
-  'win-zip': 'Ludex-1.19.2-windows.zip',
-  'linux-tar': 'Ludex-1.19.2-linux-x64.tar.gz',
-  'linux-deb': 'Ludex-1.19.2-linux-x64.deb',
+  setup: 'Ludex-Setup-1.19.3.exe',
+  'win-zip': 'Ludex-1.19.3-windows.zip',
+  'linux-tar': 'Ludex-1.19.3-linux-x64.tar.gz',
+  'linux-deb': 'Ludex-1.19.3-linux-x64.deb',
 };
 
-// Старые ссылки: «Архив» до 1.5.0 и кнопка «Портативный» до 1.19.2
+// Старые ссылки: «Архив» до 1.5.0 и кнопка «Портативный» до 1.19.3
 // (раньше это был один exe, теперь — архив с файлами рядом с Ludex.exe).
 const ALIASES = { zip: 'win-zip', portable: 'win-zip' };
 

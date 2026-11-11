@@ -537,6 +537,26 @@ h1 {
 
 .footer .tiny { flex-basis: 100%; margin: 6px 0 0; max-width: 90ch; }
 
+/* ---------------- поддержка автора ---------------- */
+
+.support { padding: 10px 0 46px; }
+
+.support-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 26px;
+  flex-wrap: wrap;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 22px 26px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.012));
+}
+
+.support-inner h3 { margin: 0 0 6px; font-size: 18px; }
+.support-inner p { margin: 0; max-width: 62ch; }
+.support-btn { white-space: nowrap; }
+
 /* ---------------- lightbox ---------------- */
 
 .lightbox {

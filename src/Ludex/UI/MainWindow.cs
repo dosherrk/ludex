@@ -69,6 +69,7 @@ public sealed class MainWindow : Window
     private int _recsFound;
     private Border _settingsLayer = null!;
     private Border _launchLayer = null!;
+    private Border _revealHost = null!;
     private Toast _processToast = null!;
     private Toast _eventToast = null!;
     private DispatcherTimer? _eventTimer;
@@ -349,7 +350,17 @@ public sealed class MainWindow : Window
         Grid.SetColumnSpan(_launchLayer, 2);
         root.Children.Add(_launchLayer);
 
-        Content = root;
+        // ---- слой разворота: при старте интерфейс «открывается» из центра,
+        // как окно из заставки. Трансформация не влияет на раскладку.
+        _revealHost = new Border
+        {
+            Child = root,
+            RenderTransformOrigin = RelativePoint.Center,
+            ClipToBounds = false,
+        };
+
+        Content = _revealHost;
+
         UpdateCount();
         ApplyFavChipState();
 
@@ -2092,6 +2103,57 @@ public sealed class MainWindow : Window
     /// Грузит каталог и библиотеку, пока на экране отдельное окно загрузки.
     /// Вызывается из <see cref="App"/> до показа главного окна.
     /// </summary>
+    /// <summary>
+    /// Развернуть интерфейс после заставки: масштаб с лёгким «перелётом», растворение
+    /// и мягкий подъём. Длительность ~460 мс — заметно, но не задерживает работу.
+    /// </summary>
+    public async Task RevealAsync()
+    {
+        if (_revealHost == null) return;
+
+        var easing = new Avalonia.Animation.Easings.CubicEaseOut();
+        var ms = RevealMs(460);
+
+        var scale = new ScaleTransform(0.88, 0.88);
+        var lift = new TranslateTransform(0, 18);
+        var group = new TransformGroup { Children = { scale, lift } };
+        _revealHost.RenderTransform = group;
+        _revealHost.Opacity = 0;
+
+        await AnimateAsync(_revealHost, ms, easing, (t, e) =>
+        {
+            // 0.88 → 1.0 с лёгким перелётом до 1.012 в середине
+            var k = (float)(0.88 + 0.12 * e + 0.012 * Math.Sin(Math.PI * e));
+            scale.ScaleX = k;
+            scale.ScaleY = k;
+            lift.Y = 18 * (1 - e);
+            _revealHost.Opacity = Math.Min(1, e * 1.35);
+        });
+    }
+
+    /// <summary>
+    /// Длительность разворота. По умолчанию 460 мс; переменная LUDEX_REVEAL_MS нужна
+    /// для замедленной съёмки перехода (и для тестов на медленных машинах).
+    /// </summary>
+    private static int RevealMs(int fallback) =>
+        int.TryParse(Environment.GetEnvironmentVariable("LUDEX_REVEAL_MS"), out var ms) && ms > 0
+            ? ms
+            : fallback;
+
+    /// <summary>Покадровая анимация без анимационных классов: надёжно на всех системах.</summary>
+    private static async Task AnimateAsync(Visual target, int ms, Avalonia.Animation.Easings.IEasing easing,
+        Action<double, double> step)
+    {
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        while (true)
+        {
+            var p = Math.Min(1, clock.Elapsed.TotalMilliseconds / ms);
+            step(p, easing.Ease(p));
+            if (p >= 1) break;
+            await Task.Delay(12);
+        }
+    }
+
     public async Task WarmUpAsync()
     {
         var started = DateTime.UtcNow;

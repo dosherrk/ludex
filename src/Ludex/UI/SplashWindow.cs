@@ -100,6 +100,47 @@ public sealed class SplashWindow : Window
         _fill.Opacity = 0.35 + 0.65 * Math.Sin(Math.PI * eased);
     }
 
+    /// <summary>
+    /// Заставка «раскрывается» в готовое приложение: полоска добегает до края,
+    /// карточка чуть светлеет и растягивается — дальше её подхватывает окно приложения.
+    /// </summary>
+    public void OpenInto()
+    {
+        if (_finished) return;
+
+        var stack = (Control)((Border)Content!).Child!;
+        var plate = (Border)Content!;
+        var easing = new Avalonia.Animation.Easings.CubicEaseOut();
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var ms = int.TryParse(Environment.GetEnvironmentVariable("LUDEX_REVEAL_MS"), out var custom) && custom > 0
+            ? custom : 320;
+
+        // растягиваем карточку к размеру окна; окно закроется раньше, чем это станет заметно
+        var scale = new ScaleTransform(1, 1);
+        plate.RenderTransformOrigin = RelativePoint.Center;
+        plate.RenderTransform = scale;
+
+        _timer.Stop();
+
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(12) };
+        timer.Tick += (_, _) =>
+        {
+            var p = Math.Min(1, clock.Elapsed.TotalMilliseconds / ms);
+            var e = easing.Ease(p);
+
+            Canvas.SetLeft(_fill, (TrackWidth - Segment) * Math.Min(1, p * 1.6));
+            _fill.Width = Segment + (TrackWidth - Segment) * Math.Min(1, p * 1.6);
+            _fill.Opacity = 1;
+
+            stack.Opacity = 1 - e * 0.55;
+            scale.ScaleX = 1 + 0.06 * e;
+            scale.ScaleY = 1 + 0.06 * e;
+
+            if (p >= 1) timer.Stop();
+        };
+        timer.Start();
+    }
+
     /// <summary>Загрузка закончилась: гасим окно.</summary>
     public void Finish()
     {
