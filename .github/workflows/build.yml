@@ -25,13 +25,13 @@ jobs:
       - name: Build (Release)
         run: dotnet build Ludex.sln -c Release --no-restore
 
-      # Скрипт сам собирает Windows (NSIS), Linux (tar.gz + deb) и macOS (.app в zip)
-      # для тега — но на каждый пуш достаточно проверки сборки выше.
-      - name: Упаковка для всех платформ
+      # Скрипт сам собирает Windows (NSIS) и Linux (tar.gz + deb) для тега —
+      # на каждый пуш достаточно проверки сборки выше.
+      - name: Упаковка (Windows и Linux)
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq nsis imagemagick icnsutils zip
+          sudo apt-get install -y -qq nsis imagemagick zip
           bash ./build.sh all
 
       - name: Артефакты сборки

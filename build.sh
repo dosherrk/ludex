@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
-# Ludex: сборка дистрибутивов под Windows, Linux и macOS из одной машины (Linux).
+# Ludex: сборка дистрибутивов под Windows и Linux из одной машины (Linux).
 # Требуется: .NET SDK 8, makensis (apt install nsis), imagemagick, dpkg-deb, zip.
 #
 #   ./build.sh            собрать всё
 #   ./build.sh linux      только Linux (tar.gz + .deb)
-#   ./build.sh mac        только macOS (osx-arm64 и osx-x64)
 #   ./build.sh windows    только Windows (установщик + portable + zip)
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -150,79 +149,11 @@ CONTROL
   ls -lh "release/Ludex-${VER}-linux-x64.tar.gz" "release/Ludex-${VER}-linux-x64.deb"
 }
 
-# -------------------------------------------------------------------- macOS
-build_mac() {
-  echo "==> macOS $VER"
-  make_icon assets/logo-ludex.png build/icons
-  png2icns build/AppIcon.icns $(for s in 16 32 64 128 256 512; do echo build/icons/ludex-$s.png; done) 2>/dev/null \
-    || echo "png2icns не сработал — иконка в бандле будет отсутствовать"
-
-  for rid in osx-arm64 osx-x64; do
-    local arch="${rid#osx-}"
-    local app="build/Ludex-${arch}/Ludex.app"
-    rm -rf "build/Ludex-${arch}" release/$rid
-    $PUB -r $rid -o release/$rid
-
-    mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
-    cp -a release/$rid/. "$app/Contents/MacOS/"
-    chmod 755 "$app/Contents/MacOS/"*
-    [ -f build/AppIcon.icns ] && cp build/AppIcon.icns "$app/Contents/Resources/AppIcon.icns"
-
-    cat > "$app/Contents/Info.plist" <<PLIST
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>CFBundleName</key><string>Ludex</string>
-    <key>CFBundleDisplayName</key><string>Ludex</string>
-    <key>CFBundleIdentifier</key><string>app.ludex.desktop</string>
-    <key>CFBundleVersion</key><string>${VER}</string>
-    <key>CFBundleShortVersionString</key><string>${VER}</string>
-    <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleExecutable</key><string>Ludex</string>
-    <key>CFBundleIconFile</key><string>AppIcon</string>
-    <key>LSMinimumSystemVersion</key><string>11.0</string>
-    <key>NSHighResolutionCapable</key><true/>
-    <key>LSApplicationCategoryType</key><string>public.app-category.utilities</string>
-</dict>
-</plist>
-PLIST
-
-    cat > "build/Ludex-${arch}/КАК-ЗАПУСТИТЬ.txt" <<'TXT'
-Ludex для macOS
-================
-
-1. Распакуйте архив — получится Ludex.app. Перетащите его в «Программы» (Applications).
-
-2. Первый запуск: приложение не подписано сертификатом Apple, поэтому Gatekeeper
-   скажет «Не удаётся открыть, так как разработчик не может быть проверен».
-   Варианты:
-     • правый клик по Ludex.app → «Открыть» → «Открыть» (один раз, дальше обычный запуск);
-     • либо в Терминале:
-           xattr -dr com.apple.quarantine /Applications/Ludex.app
-
-Требования: macOS 11 Big Sur или новее.
-  Ludex-1.5.0-macos-arm64.zip — для Apple Silicon (M1/M2/M3/M4);
-  Ludex-1.5.0-macos-x64.zip   — для Mac на Intel.
-
-Данные (настройки, библиотека, обложки) хранятся в ~/Library/Application Support/Ludex.
-
-Что работает: сканирование папок, поиск игр (.app-бандлы и исполняемые файлы),
-обложки из Steam, темы, обои, запуск игр. Автозапуск и «запуск от администратора» —
-функции Windows, в macOS их нет.
-TXT
-    # -UN=UTF8: иначе кириллическое имя файла уезжает в zip как #U041a#U0410…
-    ( cd "build/Ludex-${arch}" && zip -qry -UN=UTF8 "../../release/Ludex-${VER}-macos-${arch}.zip" Ludex.app "КАК-ЗАПУСТИТЬ.txt" )
-    echo "    $rid: $(file -b release/$rid/Ludex | cut -c1-40) → $(du -h "release/Ludex-${VER}-macos-${arch}.zip" | cut -f1)"
-  done
-}
-
 case "$WHAT" in
   windows) build_windows ;;
   linux)   build_linux ;;
-  mac)     build_mac ;;
-  all)     build_windows; build_linux; build_mac ;;
-  *) echo "использование: $0 [all|windows|linux|mac]"; exit 1 ;;
+  all)     build_windows; build_linux ;;
+  *) echo "использование: $0 [all|windows|linux]"; exit 1 ;;
 esac
 
 echo "==> готово, release/:"

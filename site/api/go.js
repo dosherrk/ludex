@@ -1,23 +1,21 @@
 // Ludex — лендинг: переход по кнопке скачивания со счётчиком кликов.
-// GET /api/go?f=setup|win-zip|linux-tar|linux-deb|macos-arm|macos-x64
-// → 302 на файл самого свежего релиза (у macOS это .dmg).
+// GET /api/go?f=setup|win-zip|linux-tar|linux-deb
+// → 302 на файл самого свежего релиза.
 // Клик пишется в Upstash Redis (если он подключён) и не задерживает переход.
 
 const { configured, incrMany, get } = require('./_lib/redis');
 
-const KINDS = ['setup', 'win-zip', 'linux-tar', 'linux-deb', 'macos-arm', 'macos-x64'];
+const KINDS = ['setup', 'win-zip', 'linux-tar', 'linux-deb'];
 
 // Запасные имена файлов — на случай, если Redis ещё пуст.
 const FALLBACK = {
-  setup: 'Ludex-Setup-1.19.1.exe',
-  'win-zip': 'Ludex-1.19.1-windows.zip',
-  'linux-tar': 'Ludex-1.19.1-linux-x64.tar.gz',
-  'linux-deb': 'Ludex-1.19.1-linux-x64.deb',
-  'macos-arm': 'Ludex-1.19.1-macos-arm64.dmg',
-  'macos-x64': 'Ludex-1.19.1-macos-x64.dmg',
+  setup: 'Ludex-Setup-1.19.2.exe',
+  'win-zip': 'Ludex-1.19.2-windows.zip',
+  'linux-tar': 'Ludex-1.19.2-linux-x64.tar.gz',
+  'linux-deb': 'Ludex-1.19.2-linux-x64.deb',
 };
 
-// Старые ссылки: «Архив» до 1.5.0 и кнопка «Портативный» до 1.19.1
+// Старые ссылки: «Архив» до 1.5.0 и кнопка «Портативный» до 1.19.2
 // (раньше это был один exe, теперь — архив с файлами рядом с Ludex.exe).
 const ALIASES = { zip: 'win-zip', portable: 'win-zip' };
 

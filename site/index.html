@@ -48,7 +48,7 @@
       <div class="hero-text">
         <div class="pill">
           <span class="dot"></span>
-          <span data-ru="Версия 1.19.1 · Windows, Linux, macOS · бесплатно" data-en="Version 1.19.1 · Windows, Linux, macOS · free">Версия 1.19.1 · Windows, Linux, macOS · бесплатно</span>
+          <span data-ru="Версия 1.19.2 · Windows и Linux · бесплатно" data-en="Version 1.19.2 · Windows and Linux · free">Версия 1.19.2 · Windows и Linux · бесплатно</span>
         </div>
 
         <h1>
@@ -64,7 +64,6 @@
 
         <div class="os-tabs" role="tablist" aria-label="Ваша система">
           <button class="os-tab" type="button" data-os="windows" role="tab">Windows</button>
-          <button class="os-tab" type="button" data-os="macos" role="tab">macOS</button>
           <button class="os-tab" type="button" data-os="linux" role="tab">Linux</button>
         </div>
 
@@ -78,19 +77,6 @@
             <span data-ru="Портативная версия" data-en="Portable version">Портативная версия</span>
             <span class="muted small">40 МБ</span>
             <span class="dl-count" data-count="win-zip" hidden></span>
-          </a>
-        </div>
-
-        <div class="cta" data-os-panel="macos" hidden>
-          <a class="btn btn-primary" data-kind="macos-arm" href="/api/go?f=macos-arm">
-            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3v11m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            <span data-ru="Скачать для Apple Silicon" data-en="Download for Apple Silicon">Скачать для Apple Silicon</span>
-            <span class="dl-count" data-count="macos-arm" hidden></span>
-          </a>
-          <a class="btn btn-ghost" data-kind="macos-x64" href="/api/go?f=macos-x64">
-            <span data-ru="Версия для Intel" data-en="Intel version">Версия для Intel</span>
-            <span class="muted small">40 МБ</span>
-            <span class="dl-count" data-count="macos-x64" hidden></span>
           </a>
         </div>
 
@@ -224,8 +210,8 @@
         <div class="step">
           <span class="num">1</span>
           <h3 data-ru="Скачайте и запустите" data-en="Download and run">Скачайте и запустите</h3>
-          <p data-ru="Windows: установщик поставит Ludex в %LOCALAPPDATA%\Programs\Ludex без запроса прав администратора. Linux: .deb или архив. macOS: распакуйте и перетащите Ludex.app в «Программы»."
-             data-en="Windows: the installer puts Ludex into %LOCALAPPDATA%\Programs\Ludex without an admin prompt. Linux: .deb or archive. macOS: unzip and drag Ludex.app into Applications.">Windows: установщик поставит Ludex в %LOCALAPPDATA%\Programs\Ludex без запроса прав администратора. Linux: .deb или архив. macOS: распакуйте и перетащите Ludex.app в «Программы».</p>
+          <p data-ru="Windows: установщик поставит Ludex в %LOCALAPPDATA%\Programs\Ludex без запроса прав администратора. Linux: .deb или архив."
+             data-en="Windows: the installer puts Ludex into %LOCALAPPDATA%\Programs\Ludex without an admin prompt. Linux: .deb or archive.">Windows: установщик поставит Ludex в %LOCALAPPDATA%\Programs\Ludex без запроса прав администратора. Linux: .deb или архив.</p>
         </div>
         <div class="step">
           <span class="num">2</span>
@@ -243,9 +229,9 @@
 
       <div class="download-box">
         <div>
-          <h3 data-ru="Все файлы релиза 1.19.1" data-en="All 1.19.1 release files">Все файлы релиза 1.19.1</h3>
-          <p class="muted" data-ru="Файлы не подписаны сертификатом: SmartScreen в Windows и Gatekeeper в macOS попросят подтвердить первый запуск."
-             data-en="Files are not code-signed: SmartScreen on Windows and Gatekeeper on macOS will ask you to confirm the first launch.">Файлы не подписаны сертификатом: SmartScreen в Windows и Gatekeeper в macOS попросят подтвердить первый запуск.</p>
+          <h3 data-ru="Все файлы релиза 1.19.2" data-en="All 1.19.2 release files">Все файлы релиза 1.19.2</h3>
+          <p class="muted" data-ru="Файлы не подписаны сертификатом: SmartScreen в Windows попросит подтвердить первый запуск."
+             data-en="Files are not code-signed: SmartScreen on Windows will ask you to confirm the first launch.">Файлы не подписаны сертификатом: SmartScreen в Windows попросит подтвердить первый запуск.</p>
         </div>
         <div class="download-groups">
           <div class="download-group">
@@ -260,13 +246,6 @@
             <div class="download-links">
               <a class="btn btn-ghost" data-kind="linux-tar" href="/api/go?f=linux-tar"><span data-ru="Архив tar.gz" data-en="tar.gz archive">Архив tar.gz</span> <span class="muted small">37 МБ</span> <span class="dl-count" data-count="linux-tar" hidden></span></a>
               <a class="btn btn-ghost" data-kind="linux-deb" href="/api/go?f=linux-deb"><span data-ru="Пакет .deb" data-en=".deb package">Пакет .deb</span> <span class="muted small">36 МБ</span> <span class="dl-count" data-count="linux-deb" hidden></span></a>
-            </div>
-          </div>
-          <div class="download-group">
-            <span class="dl-group-title">macOS 11+</span>
-            <div class="download-links">
-              <a class="btn btn-ghost" data-kind="macos-arm" href="/api/go?f=macos-arm"><span data-ru="Apple Silicon" data-en="Apple Silicon">Apple Silicon</span> <span class="muted small">DMG · 39 МБ</span> <span class="dl-count" data-count="macos-arm" hidden></span></a>
-              <a class="btn btn-ghost" data-kind="macos-x64" href="/api/go?f=macos-x64"><span data-ru="Intel" data-en="Intel">Intel</span> <span class="muted small">DMG · 40 МБ</span> <span class="dl-count" data-count="macos-x64" hidden></span></a>
             </div>
           </div>
         </div>
@@ -304,7 +283,7 @@
     <div class="brand small-brand">
       <img src="/img/logo.png" alt="" width="22" height="22">
       <span>LUDEX</span>
-      <span class="muted">· 1.19.1</span>
+      <span class="muted">· 1.19.2</span>
     </div>
     <div class="footer-links">
       <a href="https://github.com/dosherrk/ludex" target="_blank" rel="noopener">GitHub</a>

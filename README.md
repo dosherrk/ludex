@@ -11,10 +11,9 @@
 
 [![Windows](https://img.shields.io/badge/Windows-10%20%2F%2011%20x64-0078D6?logo=windows&logoColor=white)](#установка)
 [![Linux](https://img.shields.io/badge/Linux-x64-FCC624?logo=linux&logoColor=black)](#linux)
-[![macOS](https://img.shields.io/badge/macOS-Apple%20Silicon%20%2F%20Intel-000000?logo=apple&logoColor=white)](#macos)
 [![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet&logoColor=white)](#сборка-из-исходников)
 [![Avalonia](https://img.shields.io/badge/Avalonia-11-8B44AC)](https://avaloniaui.net)
-[![Version](https://img.shields.io/badge/version-1.19.1-3B9EFF)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.19.2-3B9EFF)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-35C48A)](LICENSE)
 [![Website](https://img.shields.io/badge/сайт-ludex--one.vercel.app-3B9EFF)](https://ludex-one.vercel.app)
 
@@ -102,15 +101,15 @@
 
 ### Windows 10/11 (x64)
 
-**Вариант 1 — установщик (рекомендуется).** `Ludex-Setup-1.19.1.exe` → выберите язык → «Далее».
+**Вариант 1 — установщик (рекомендуется).** `Ludex-Setup-1.19.2.exe` → выберите язык → «Далее».
 Ставится в `%LOCALAPPDATA%\Programs\Ludex` (запрос администратора не появляется), создаёт ярлыки
 на рабочем столе и в меню «Пуск», добавляет запись в «Установку и удаление программ» и деинсталлятор.
 
-**Вариант 2 — портативно.** `Ludex-1.19.1-windows.zip` — распакуйте папку целиком куда угодно
+**Вариант 2 — портативно.** `Ludex-1.19.2-windows.zip` — распакуйте папку целиком куда угодно
 (флешка, `D:\Ludex`) и запускайте `Ludex.exe`. Настройки и библиотека хранятся в `%LOCALAPPDATA%\Ludex`.
 
 > Файлы должны лежать вместе: `Ludex.exe` не работает без `Ludex.dll` и папки `runtimes` рядом.
-> Поэтому один exe не перетаскивают на рабочий стол — делают ярлык на него. С 1.19.1 приложение
+> Поэтому один exe не перетаскивают на рабочий стол — делают ярлык на него. С 1.19.2 приложение
 > поставляется набором файлов, а не одним большим exe: так запуск заметно быстрее, потому что
 > не нужно распаковывать встроенный рантайм во временную папку при каждом старте.
 
@@ -126,17 +125,17 @@
 **Пакет `.deb`** (Debian, Ubuntu, Mint, Pop!_OS и производные):
 
 ```bash
-sudo apt install ./Ludex-1.19.1-linux-x64.deb
+sudo apt install ./Ludex-1.19.2-linux-x64.deb
 ```
 
 Появится ярлык в меню приложений, `ludex` — в `PATH`; файлы ставятся в `/opt/ludex`.
 Удаление — `sudo apt remove ludex` (данные в `~/.local/share/Ludex` остаются).
 
-**Портативный архив** `Ludex-1.19.1-linux-x64.tar.gz` — для любой системы с glibc 2.31+
+**Портативный архив** `Ludex-1.19.2-linux-x64.tar.gz` — для любой системы с glibc 2.31+
 (Fedora, Arch, openSUSE и т.д.):
 
 ```bash
-mkdir -p ~/Applications && tar -xzf Ludex-1.19.1-linux-x64.tar.gz -C ~/Applications
+mkdir -p ~/Applications && tar -xzf Ludex-1.19.2-linux-x64.tar.gz -C ~/Applications
 ~/Applications/Ludex/Ludex
 ```
 
@@ -145,24 +144,13 @@ mkdir -p ~/Applications && tar -xzf Ludex-1.19.1-linux-x64.tar.gz -C ~/Applicati
 Нужны библиотеки интерфейса: libX11, libXrandr, libXi, libXcursor, libXext, libXrender,
 libICE, libSM, libGL, libfontconfig, libfreetype, libxkbcommon; под Wayland работает через XWayland.
 
-### macOS 11+ (Apple Silicon и Intel) <a id="macos"></a>
-
-`Ludex-1.19.1-macos-arm64.dmg` — для Apple Silicon (M1–M4), `Ludex-1.19.1-macos-x64.dmg` — для Intel.
-Откройте `.dmg`, перетащите Ludex в `Applications`. Рядом в релизе лежат те же сборки в `.zip`
-(`Ludex-1.19.1-macos-arm64.zip` / `-x64.zip`) — если удобнее архив (его надо просто распаковать).
-
-Приложение не подписано сертификатом Apple, поэтому первый запуск — правый клик по `Ludex.app`
-→ **«Открыть»** → **«Открыть»** (или в Терминале: `xattr -dr com.apple.quarantine /Applications/Ludex.app`).
-
-Данные хранятся в `~/Library/Application Support/Ludex`.
-
-| Что | Windows | Linux | macOS |
-|---|---|---|---|
-| Поиск игр | `*.exe` | AppImage, нативные бинарники, `.sh` | `.app`-бандлы |
-| Запуск в один клик | да | да | да |
-| Обложки, темы, обои, поиск | да | да | да |
-| Автозапуск с системой | да (реестр) | нет | нет |
-| «Запуск от администратора» | да (UAC) | нет | нет |
+| Что | Windows | Linux |
+|---|---|---|
+| Поиск игр | `*.exe` | AppImage, нативные бинарники, `.sh` |
+| Запуск в один клик | да | да |
+| Обложки, темы, обои, поиск | да | да |
+| Автозапуск с системой | да (реестр) | нет |
+| «Запуск от администратора» | да (UAC) | нет |
 
 ### Почему в поставке много файлов
 
@@ -227,12 +215,11 @@ Ludex сам проверяет, не вышла ли новая версия, �
   **Проверить обновления сейчас** там же.
 - Источник — последний релиз [GitHub](https://github.com/dosherrk/ludex/releases); файл
   выбирается под систему и архитектуру: `Ludex-Setup-*.exe`, `Ludex-*-windows.zip`,
-  `Ludex-*-macos-arm64.zip|dmg`, `Ludex-*-macos-x64.zip|dmg`, `Ludex-*-linux-x64.tar.gz`.
+  `Ludex-*-linux-x64.tar.gz`.
 - Скачанное сверяется с `sha256` из метаданных релиза, прогресс виден в окне. Затем
   приложение закрывается, подменяет свои файлы и запускается заново — уже новой версией.
 - Windows ставит установщик в тихом режиме (`/S`) или распаковывает портативный архив
   и накрывает папку приложения новыми файлами (из `Program Files` — с запросом UAC).
-  macOS заменяет `Ludex.app` (при необходимости через пароль администратора).
   Linux распаковывает архив и заменяет файлы приложения
   (`pkexec`, если папка принадлежит root; при установке из `.deb` без `pkexec`
   предложит обновиться вручную).
@@ -244,8 +231,7 @@ Ludex сам проверяет, не вышла ли новая версия, �
 
 Сканер считает папку игрой, если внутри (или в подпапке) есть «правдоподобный» исполняемый файл:
 в Windows — `*.exe`, в Linux — AppImage, нативный бинарник или `.sh`-обёртка с битом выполнения
-(библиотеки `.so` и ярлыки `.desktop` отбрасываются), в macOS — `.app`-бандл (он берётся целиком,
-внутрь не заходим).
+(библиотеки `.so` и ярлыки `.desktop` отбрасываются).
 
 - **Игнорируются:** `unins*`, `setup`, `install*`, `vcredist`, `dxsetup`, `dotnetfx`,
   `UnityCrashHandler`, `crashreport`, `7za`, `ffmpeg`, `python*`, `update*` и подобные.
@@ -285,7 +271,7 @@ Ludex сам проверяет, не вышла ли новая версия, �
 (для установщика).
 
 ```bash
-# портативный single-file exe под Windows x64 (кросс-сборка работает с Linux/macOS)
+# портативный single-file exe под Windows x64 (кросс-сборка работает с Linux)
 dotnet publish src/Ludex -c Release -r win-x64 --self-contained true \
   -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true \
   -p:EnableCompressionInSingleFile=true -p:PublishReadyToRun=false -p:DebugType=none \
@@ -295,77 +281,7 @@ dotnet publish src/Ludex -c Release -r win-x64 --self-contained true \
 cd installer && makensis Ludex.nsi
 ```
 
-Готовые скрипты: `./build.sh` (Linux/macOS) и `build_windows.bat` (Windows).
-
-### Как собирается macOS DMG
-
-`build.sh mac` делает `Ludex.app` и кладёт его в `.zip`. DMG-образ собирается
-отдельным скриптом — на Linux, без macOS и без подписи Apple:
-
-```bash
-./tools/make-dmg.sh release/macos-arm64/Ludex.app Ludex-1.19.1-macos-arm64.dmg "Ludex 1.19.1" 150
-```
-
-Как собрать эти утилиты на Ubuntu/Debian (проверено на 24.04, gcc 13, OpenSSL 3):
-
-```bash
-# 1. mkfs.hfsplus (hfsprogs): Ubuntu его больше не пакетирует, берём исходник из архива
-curl -LO http://archive.ubuntu.com/ubuntu/pool/universe/h/hfsprogs/hfsprogs_332.25.orig.tar.gz
-git clone --depth 1 https://github.com/rbrito/pkg-hfsprogs.git hfsprogs && cd hfsprogs
-for p in debian/patches/*.patch; do patch -p1 -s < "$p"; done      # патчи Debian = сборка на Linux
-mkdir -p /tmp/stub/sys && : > /tmp/stub/sys/sysctl.h                 # на Linux этого заголовка нет
-gcc -DDEBUG_BUILD=0 -D_FILE_OFFSET_BITS=64 -D LINUX=1 -D BSD=1 \
-    -I/tmp/stub -Iinclude -I/usr/include/x86_64-linux-gnu -O2 -w \
-    newfs_hfs.tproj/newfs_hfs.c newfs_hfs.tproj/makehfs.c newfs_hfs.tproj/hfs_endian.c \
-    -lbsd -lcrypto -o /tmp/newfs_hfs                                     # нужен libbsd-dev
-
-# 2. hfsplus и dmg из libdmg-hfsplus — под OpenSSL 3 правится тип HMAC_CTX
-git clone --depth 1 https://github.com/planetbeing/libdmg-hfsplus.git && cd libdmg-hfsplus
-#   includes/dmg/filevault.h:  HMAC_CTX hmacCTX      →  HMAC_CTX *hmacCTX
-#   dmg/filevault.c:          HMAC_CTX_init(&x)     →  x = HMAC_CTX_new()
-#                             HMAC_CTX_cleanup(&x)  →  HMAC_CTX_free(x); x = NULL
-#                             HMAC_*(&(info->hmacCTX), ...) → HMAC_*(info->hmacCTX, ...)
-cmake -DCMAKE_BUILD_TYPE=Release . && make -j4
-export NEWFS_HFS=/tmp/newfs_hfs HFSPLUS=$PWD/hfs/hfsplus DMG=$PWD/dmg/dmg
-```
-
-Скрипту нужны три утилиты, собранные из исходников (в репозиторий они не входят):
-`newfs_hfs` (mkfs.hfsplus из hfsprogs), `hfsplus` и `dmg` из libdmg-hfsplus —
-пути передаются через переменные `NEWFS_HFS`, `HFSPLUS`, `DMG`. Внутрь тома кладутся
-`Ludex.app`, `INSTALL.txt` и симлинк `Applications → /Applications`, исполняемым
-файлам возвращается бит `+x`, после чего HFS+ образ сжимается в UDIF (zlib).
-
-### Структура проекта
-
-```
-src/Ludex/
-  Program.cs, App.cs            — точка входа, инициализация темы
-  Models.cs                     — модели игры и настроек
-  Loc.cs                        — локализация RU/EN
-  AppPaths.cs                   — пути к данным, лог, перенос данных с GameVault
-  Services/
-    Scanner.cs                  — обход папок, эвристики выбора .exe, очистка названий
-    Artwork.cs                  — Steam / SteamGridDB, скачивание обложек
-    Storage.cs                  — library.json / settings.json
-    Shell.cs                    — запуск игр, открытие папок
-    Backgrounds.cs              — загрузка обоев, в т.ч. анимированных GIF
-    Autostart.cs                — автозапуск вместе с Windows
-    Platform.cs                 — различия платформ: поиск и запуск игр, права
-  UI/
-    MainWindow.cs               — сетка библиотеки, панель игры, окно запуска, обои, сканирование
-    SettingsPanel.cs            — настройки (встроенная панель внутри главного окна)
-    CustomizePanel.cs           — тема, палитра, прозрачность, обои
-    ColorPicker.cs              — выбор цвета: квадрат HSV, полоса оттенков, поля R/G/B
-    Dropdown.cs, Toggle.cs      — свои выпадающий список и переключатель
-    Menu.cs, OverlayPanel.cs    — контекстное меню и панели поверх окна (без окон ОС)
-    ProgressStrip.cs            — индикатор сканирования с бегущим свечением
-    Skin.cs                     — палитры тёмной/светлой темы, акцент, стеклянный режим
-    CoverWindow.cs              — ручной выбор обложки
-    Dialogs.cs, Ui.cs           — диалоги, контролы, иконки, анимации
-installer/Ludex.nsi             — установщик + деинсталлятор (NSIS)
-site/                           — лендинг для Vercel (index.html, styles.css, app.js, img/)
-assets/logo-ludex.png           — исходник логотипа (из него собраны app.ico и Assets/icon.png)
-```
+Готовые скрипты: `./build.sh` (Linux) и `build_windows.bat` (Windows).
 
 ## Примечания
 
@@ -374,9 +290,9 @@ assets/logo-ludex.png           — исходник логотипа (из не
   (Steam/Epic/GOG) — только реальные папки с `.exe`.
 - Некоторым играм нужны права администратора (античит/DRM) — используйте «Играть от админа».
 - Автозапуск с системой, «запуск от администратора» и акриловое размытие панелей —
-  только Windows; в Linux и macOS этих пунктов в интерфейсе нет.
-- Сборки для macOS и Linux не подписаны (Apple Developer ID / ключи для deb нет),
-  поэтому Gatekeeper и SmartScreen могут предупреждать при первом запуске.
+  только Windows; в Linux этих пунктов в интерфейсе нет.
+- Сборки для Linux не подписаны (ключей для deb нет), поэтому SmartScreen
+  и предупреждения пакетного менеджера могут просить подтвердить первый запуск.
 - Обои скачиваются по прямой ссылке на файл; ссылки Pinterest (`pinterest.com/pin/…`,
   `pin.it/…`, `i.pinimg.com/…`) тоже поддерживаются — программа сама достаёт адрес картинки
   в исходном размере.
@@ -386,8 +302,6 @@ assets/logo-ludex.png           — исходник логотипа (из не
 
 Откройте issue — для каждой платформы есть отдельная форма, она сама спросит нужное:
 
-- **[Ошибка в версии для macOS](https://github.com/dosherrk/ludex/issues/new?template=bug-macos.yml)** —
-  чип, версия macOS, способ установки, вывод из Терминала и `~/Library/Application Support/Ludex/log.txt`.
 - **[Ошибка в версии для Linux](https://github.com/dosherrk/ludex/issues/new?template=bug-linux.yml)** —
   дистрибутив, `.deb` или `.tar.gz`, X11/Wayland, `ldd` и `~/.local/share/Ludex/log.txt`.
 

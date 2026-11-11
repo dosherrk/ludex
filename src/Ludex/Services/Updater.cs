@@ -198,14 +198,6 @@ public static class Updater
                 : new[] { zip, portable, setup };
         }
 
-        if (OperatingSystem.IsMacOS())
-        {
-            var apple = arch is Architecture.Arm64;
-            return apple
-                ? new[] { $"Ludex-{v}-macos-arm64.zip", $"Ludex-{v}-macos-arm64.dmg" }
-                : new[] { $"Ludex-{v}-macos-x64.zip", $"Ludex-{v}-macos-x64.dmg" };
-        }
-
         // Linux: tar.gz обновляется на месте без root, .deb — запасной вариант
         return new[] { $"Ludex-{v}-linux-x64.tar.gz", $"Ludex-{v}-linux-x64.deb" };
     }
@@ -305,7 +297,7 @@ public static class Updater
                   ?? throw new UpdateException("Не удалось определить путь к приложению.");
 
         if (OperatingSystem.IsWindows()) ApplyWindows(packagePath, info, work, pid, exe);
-        else ApplyUnix(packagePath, info, work, pid, exe, OperatingSystem.IsMacOS());
+        else ApplyUnix(packagePath, info, work, pid, exe);
     }
 
     private static void ApplyWindows(string packagePath, UpdateInfo info, string work, int pid, string exe)
@@ -394,7 +386,7 @@ public static class Updater
         LaunchDetached("powershell", $"-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"{script}\"");
     }
 
-    private static void ApplyUnix(string packagePath, UpdateInfo info, string work, int pid, string exe, bool macos)
+    private static void ApplyUnix(string packagePath, UpdateInfo info, string work, int pid, string exe)
     {
         var script = Path.Combine(work, "apply.sh");
         var sb = new StringBuilder();
@@ -402,30 +394,6 @@ public static class Updater
         sb.AppendLine($"while kill -0 {pid} 2>/dev/null; do sleep 0.3; done");
         sb.AppendLine("sleep 0.4");
 
-        if (macos)
-        {
-            var bundle = MacBundleRoot(exe) ?? throw new UpdateException(
-                "Не удалось найти Ludex.app вокруг приложения — обновите вручную из релиза.");
-
-            sb.AppendLine("set -e");
-            sb.AppendLine($"WORK='{work}'");
-            sb.AppendLine("cd \"$WORK\"");
-            sb.AppendLine("rm -rf unpack && mkdir -p unpack");
-            sb.AppendLine($"ditto -x -k '{Escape(packagePath)}' unpack");
-            sb.AppendLine("NEW=\"\"");
-            sb.AppendLine("for a in unpack/*.app; do NEW=\"$a\"; break; done");
-            sb.AppendLine("[ -n \"$NEW\" ] || exit 1");
-            sb.AppendLine($"TARGET='{bundle}'");
-            sb.AppendLine("xattr -dr com.apple.quarantine \"$NEW\" 2>/dev/null || true");
-            sb.AppendLine("if [ -w \"$(dirname \"$TARGET\")\" ]; then");
-            sb.AppendLine("  rm -rf \"$TARGET\"");
-            sb.AppendLine("  cp -R \"$NEW\" \"$TARGET\"");
-            sb.AppendLine("else");
-            sb.AppendLine("  osascript -e \"do shell script \\\"rm -rf '$TARGET' && cp -R '$WORK/$NEW' '$TARGET'\\\" with administrator privileges\"");
-            sb.AppendLine("fi");
-            sb.AppendLine("open \"$TARGET\"");
-        }
-        else
         {
             var dir = Path.GetDirectoryName(exe) ?? work;
             sb.AppendLine("set -e");
@@ -489,18 +457,6 @@ public static class Updater
         }
     }
 
-    /// <summary>Путь до .app, внутри которого лежит исполняемый файл (macOS).</summary>
-    private static string? MacBundleRoot(string exePath)
-    {
-        var dir = new DirectoryInfo(Path.GetDirectoryName(exePath) ?? "");
-        while (dir != null)
-        {
-            if (dir.Name.EndsWith(".app", StringComparison.OrdinalIgnoreCase)) return dir.FullName;
-            dir = dir.Parent;
-        }
-        return null;
-    }
-
     private static void LaunchDetached(string fileName, string arguments)
     {
         var psi = new ProcessStartInfo(fileName, arguments)
@@ -527,14 +483,6 @@ public static class Updater
         if (OperatingSystem.IsWindows()) return true;
 
         var dir = Path.GetDirectoryName(exe) ?? "";
-
-        if (OperatingSystem.IsMacOS())
-        {
-            var bundle = MacBundleRoot(exe);
-            var target = bundle != null ? Path.GetDirectoryName(bundle) ?? dir : dir;
-            // без прав на папку попросим администратора через osascript
-            return IsWritable(target) || HasCommand("osascript");
-        }
 
         if (IsWritable(dir)) return true;
         if (HasCommand("pkexec")) return true;

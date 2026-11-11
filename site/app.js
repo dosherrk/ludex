@@ -41,21 +41,16 @@
   function wordClicks(n) { return isEn() ? (n === 1 ? 'click' : 'clicks') : plural(n, ['клик', 'клика', 'кликов']); }
 
   // Имена файлов релиза → ключи кнопок.
-  // Ludex-Setup-1.19.1.exe → setup, Ludex-1.19.1-linux-x64.deb → linux-deb и т.д.
+  // Ludex-Setup-1.19.2.exe → setup, Ludex-1.19.2-linux-x64.deb → linux-deb и т.д.
   function classify(name) {
     var n = String(name || '').toLowerCase();
     if (n.indexOf('sources') !== -1) return null;
 
     if (n.indexOf('.deb') === n.length - 4) return 'linux-deb';
     if (n.indexOf('.tar.gz') !== -1) return 'linux-tar';
-    if (n.indexOf('.dmg') === n.length - 4) {
-      // кнопки macOS ведут на .dmg; .zip остаётся в релизе как альтернатива
-      if (n.indexOf('arm64') !== -1) return 'macos-arm';
-      if (n.indexOf('x64') !== -1 || n.indexOf('intel') !== -1) return 'macos-x64';
-      return null;
-    }
+    // файлы для macOS больше не публикуются: .dmg/.zip с «macos» не считаем
+    if (n.indexOf('macos') !== -1) return null;
     if (n.indexOf('.zip') === n.length - 4) {
-      if (n.indexOf('macos') !== -1) return null;
       if (n.indexOf('windows') !== -1 || n.indexOf('portable') !== -1) return 'win-zip';
       return null;
     }
@@ -266,14 +261,13 @@
     var ua = (navigator.userAgent || '').toLowerCase();
     var platform = (navigator.platform || '').toLowerCase();
 
-    if (ua.indexOf('mac') !== -1 || platform.indexOf('mac') !== -1) return 'macos';
     if (ua.indexOf('linux') !== -1 || platform.indexOf('linux') !== -1) return 'linux';
     if (ua.indexOf('android') !== -1) return 'linux';
     return 'windows';
   }
 
   function selectOs(os) {
-    if (['windows', 'macos', 'linux'].indexOf(os) === -1) os = 'windows';
+    if (['windows', 'linux'].indexOf(os) === -1) os = 'windows';
 
     document.querySelectorAll('.os-tab').forEach(function (tab) {
       tab.setAttribute('aria-selected', tab.getAttribute('data-os') === os ? 'true' : 'false');
@@ -293,7 +287,7 @@
   var savedOs = null;
   try { savedOs = localStorage.getItem(OS_KEY); } catch (e) { /* ignore */ }
 
-  // ?os=macos — ссылка сразу на нужную систему (удобно кидать другу)
+  // ?os=linux — ссылка сразу на нужную систему (удобно кидать другу)
   var fromUrlOs = new URLSearchParams(location.search).get('os');
   selectOs(fromUrlOs || savedOs || detectOs());
 
