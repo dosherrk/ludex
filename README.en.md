@@ -13,7 +13,7 @@ and fetches artwork. No accounts, no launcher, no cloud — just your files and 
 [![Linux](https://img.shields.io/badge/Linux-x64-FCC624?logo=linux&logoColor=black)](#linux-x64)
 [![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet&logoColor=white)](#building-from-source)
 [![Avalonia](https://img.shields.io/badge/Avalonia-11-8B44AC)](https://avaloniaui.net)
-[![Version](https://img.shields.io/badge/version-1.19.4-3B9EFF)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.20.0-3B9EFF)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-35C48A)](LICENSE)
 [![Website](https://img.shields.io/badge/website-ludex--one.vercel.app-3B9EFF)](https://ludex-one.vercel.app/?lang=en)
 
@@ -52,6 +52,13 @@ you can say thanks via **DonationAlerts** — one-time or recurring, card or loc
   action, adventure, indie, RPG, strategy, simulation, casual, racing, sports and early access.
   Online shooters and MMOs, free live services and tools such as crosshair apps are filtered out:
   the catalogue is built from the store search with the “has single-player” filter and cached.
+- **Catalogue filters.** A single **“Filters”** button opens a panel with ready-made picks
+  (“Co-op for the evening”, “Horror & zombies”, “2000s classics”…), genres as tiles, themes
+  (open world, survival, post-apocalyptic, roguelike and four dozen more), release year,
+  description length and two toggles — “only with a description” and “only games not in my
+  library”. The sort switch sits next to the button.
+- **Your favourite categories.** Above the catalogue you get tiles for the genres and themes
+  that appear most often in your own library — one click filters by that category.
 - **Fast start.** A small loading screen is shown while the catalogue and your library are prepared
   underneath, so the tab opens instantly, already with covers. When loading finishes, the interface
   unfolds from the centre — one smooth motion instead of a window popping up.
@@ -113,11 +120,11 @@ buttons for your system automatically.
 
 ### Windows 10/11 (x64)
 
-**Option 1 — installer (recommended).** `Ludex-Setup-1.19.4.exe` → choose the language → “Next”.
+**Option 1 — installer (recommended).** `Ludex-Setup-1.20.0.exe` → choose the language → “Next”.
 It installs into `%LOCALAPPDATA%\Programs\Ludex` (no admin prompt), creates desktop and Start-menu
 shortcuts, adds an entry to “Apps & features” and an uninstaller.
 
-**Option 2 — portable.** `Ludex-1.19.4-windows.zip` — unpack the whole folder anywhere
+**Option 2 — portable.** `Ludex-1.20.0-windows.zip` — unpack the whole folder anywhere
 (a USB stick, `D:\Ludex`) and run `Ludex.exe`. Settings and the library are kept in
 `%LOCALAPPDATA%\Ludex`.
 
@@ -138,17 +145,17 @@ settings and the cover cache. **Game files are never deleted.**
 **`.deb` package** (Debian, Ubuntu, Mint, Pop!_OS and derivatives):
 
 ```bash
-sudo apt install ./Ludex-1.19.4-linux-x64.deb
+sudo apt install ./Ludex-1.20.0-linux-x64.deb
 ```
 
 It adds a menu entry, `ludex` to `PATH`, and installs files into `/opt/ludex`.
 Uninstall with `sudo apt remove ludex` (data in `~/.local/share/Ludex` stays).
 
-**Portable archive** `Ludex-1.19.4-linux-x64.tar.gz` — for any system with glibc 2.31+
+**Portable archive** `Ludex-1.20.0-linux-x64.tar.gz` — for any system with glibc 2.31+
 (Fedora, Arch, openSUSE and others):
 
 ```bash
-mkdir -p ~/Applications && tar -xzf Ludex-1.19.4-linux-x64.tar.gz -C ~/Applications
+mkdir -p ~/Applications && tar -xzf Ludex-1.20.0-linux-x64.tar.gz -C ~/Applications
 ~/Applications/Ludex/Ludex
 ```
 

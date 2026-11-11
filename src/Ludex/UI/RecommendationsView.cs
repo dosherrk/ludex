@@ -33,6 +33,8 @@ public sealed class RecommendationsView : Grid
     private static string _query = "";
     private static string _genre = "all";
     private static string _sort = "catalog";
+    /// <summary>Панель фильтров: жанры, темы, год, объём описания (переживает перестройку окна).</summary>
+    private static readonly CatalogFilter _filter = new();
 
     private readonly Func<string, bool> _inLibrary;
     private readonly Func<string> _engine;
@@ -52,6 +54,20 @@ public sealed class RecommendationsView : Grid
     private readonly Border _loading;
     private readonly Border _detail;
     private readonly Border _more;
+    private readonly TextBlock _filterCount;
+    private readonly WrapPanel _presetRow;
+    private readonly TextBlock _presetHint;
+    private Control? _filterAnchor;
+
+    /// <summary>Совпадения «игра каталога ↔ библиотека» — считаются один раз на загрузку.</summary>
+    private readonly Dictionary<int, bool> _inLib = new();
+    private readonly List<StoreGame> _mine = new();
+    private int _inLibStamp = -1;
+
+    /// <summary>Поиск срабатывает после паузы в наборе, а не на каждую букву.</summary>
+    private readonly DispatcherTimer _searchTimer = new() { Interval = TimeSpan.FromMilliseconds(180) };
+    /// <summary>Перерисовка без анимации — когда причина ввод в поиске.</summary>
+    private bool _quiet;
 
     private List<StoreGame> _games = new();
     private CancellationTokenSource? _cts;
@@ -71,21 +87,32 @@ public sealed class RecommendationsView : Grid
         // ---------------------------------------------------------------- панель фильтров
         var toolbar = new StackPanel { Spacing = 9, Margin = new Thickness(22, 12, 22, 8) };
 
+        _searchTimer.Tick += (_, _) =>
+        {
+            _searchTimer.Stop();
+            _shown = PageSize;
+            Refresh(quiet: true);
+        };
+
         var searchBox = Ui.SearchBox(_query, Loc.T("recs.search"), text =>
         {
             _query = text ?? "";
-            _shown = PageSize;
-            Refresh();
+            // ввод не должен ждать перестройки карточек: применяем фильтр после паузы
+            _searchTimer.Stop();
+            _searchTimer.Start();
         });
         searchBox.Width = 286;
         searchBox.Height = 38;
 
-        var sortDropdown = new Dropdown(new[] { Loc.T("recs.sortStore"), Loc.T("recs.sortAz") },
-            _sort == "az" ? 1 : 0, 190, 38, 12.5);
+        var sortDropdown = new Dropdown(
+            CatalogFacets.Sorts.Select(x => Loc.T(x.Key)).ToArray(),
+            Math.Max(0, Array.FindIndex(CatalogFacets.Sorts, x => x.Value == _sort)),
+            190, 38, 12.5);
 
         sortDropdown.SelectionChanged += index =>
         {
-            _sort = index == 1 ? "az" : "catalog";
+            _sort = CatalogFacets.Sorts[Math.Clamp(index, 0, CatalogFacets.Sorts.Length - 1)].Value;
+            _filter.Sort = _sort;
             _shown = PageSize;
             Refresh();
         };
@@ -94,8 +121,37 @@ public sealed class RecommendationsView : Grid
         refresh.Height = 38;
         refresh.Padding = new Thickness(14, 0);
 
+        // ---- одна кнопка «Фильтры»: за ней вся панель, как в Steam
+        _filterCount = Ui.T("", 11.5, Skin.OnAccent, FontWeight.SemiBold);
+        _filterCount.IsVisible = false;
+
+        var filterIcon = Ui.Icon("M2,4 L14,4 M4,8 L12,8 M6,12 L10,12", Skin.Text, 16, 16, true, 1.6);
+        var filterContent = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 9,
+            VerticalAlignment = VerticalAlignment.Center,
+            Children =
+            {
+                filterIcon,
+                Ui.T(Loc.T("facet.button"), 13, Skin.Text, FontWeight.Medium),
+                _filterCount,
+                Ui.Icon("M1,3 L6,8 L11,3", Skin.TextMuted, 12, 9, true, 1.7),
+            },
+        };
+
+        var filterButton = Ui.Clickable(filterContent, OpenFilters, Brushes.Transparent, Skin.CardHover,
+            new CornerRadius(7), new Thickness(14, 0), Skin.Border, new Thickness(1));
+        filterButton.Height = 38;
+        _filterAnchor = filterButton;
+
         var firstRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto") };
         firstRow.Children.Add(searchBox);
+
+        filterButton.Margin = new Thickness(10, 0, 0, 0);
+        Grid.SetColumn(filterButton, 1);
+        filterButton.HorizontalAlignment = HorizontalAlignment.Left;
+        firstRow.Children.Add(filterButton);
 
         refresh.Margin = new Thickness(0, 0, 8, 0);
         Grid.SetColumn(refresh, 2);
@@ -105,6 +161,17 @@ public sealed class RecommendationsView : Grid
         firstRow.Children.Add(sortDropdown);
         toolbar.Children.Add(firstRow);
 
+        // ---- «ваши любимые категории»: чипы, собранные по вашей библиотеке
+        _presetHint = Ui.T("", 11, Skin.TextDim);
+        _presetHint.Margin = new Thickness(0, -2, 0, 0);
+        _presetHint.IsVisible = false;
+
+        _presetRow = new WrapPanel { Orientation = Orientation.Horizontal };
+        _presetRow.IsVisible = false;
+        toolbar.Children.Add(_presetHint);
+        toolbar.Children.Add(_presetRow);
+
+        // ---- кнопки быстрых жанров (как раньше), но с учётом выбора в панели
         _genreChips.Margin = new Thickness(-2, 0, 0, 0);
         toolbar.Children.Add(_genreChips);
         BuildGenreChips();
@@ -302,6 +369,127 @@ public sealed class RecommendationsView : Grid
 
     // ------------------------------------------------------------------ фильтры
 
+    /// <summary>Открыть панель фильтров под кнопкой.</summary>
+    private void OpenFilters()
+    {
+        var anchor = _filterAnchor;
+        if (anchor == null) return;
+
+        var width = Math.Max(420, Math.Min(760, Bounds.Width - 80));
+        FilterPopover.Show(anchor, _filter, applied =>
+        {
+            _filter.CopyFrom(applied);
+            _sort = _filter.Sort;
+            _genre = "all";          // выбор в панели отменяет быстрый жанр
+            _shown = PageSize;
+            ApplyChipStyles();
+            UpdateFilterBadge();
+            Refresh();
+        }, width);
+    }
+
+    /// <summary>Проверка «есть ли эта игра у меня» с кэшем по appid.</summary>
+    private bool InLibrary(StoreGame game, bool useCache = true)
+    {
+        if (useCache && _inLib.TryGetValue(game.AppId, out var known)) return known;
+
+        var hit = _inLibrary(game.Name);
+        _inLib[game.AppId] = hit;
+        if (hit) _mine.Add(game);
+        return hit;
+    }
+
+    private void ResetLibraryCache()
+    {
+        _inLib.Clear();
+        _mine.Clear();
+        _inLibStamp = -1;
+    }
+
+    private void UpdateFilterBadge()
+    {
+        var count = _filter.Count;
+        _filterCount.IsVisible = count > 0;
+        _filterCount.Text = count > 0 ? count.ToString() : "";
+    }
+
+    /// <summary>
+    /// «Ваши любимые категории» — темы, которые чаще всего встречаются в играх вашей
+    /// библиотеки. Считаем по названиям (у библиотечных карточек нет appid), поэтому
+    /// к темам каталога привязываемся по совпадению названия игры.
+    /// </summary>
+    private string _favouritesSignature = "";
+
+    private void UpdateFavourites()
+    {
+        if (_presetRow == null) return;
+
+        var mine = _mine.Count > 0 ? _mine : _games.Take(0).ToList();
+        if (mine.Count < 3)
+        {
+            _presetRow.IsVisible = false;
+            _presetHint.IsVisible = false;
+            _genreChips.IsVisible = true;
+            return;
+        }
+
+        var popular = mine
+            .SelectMany(g => g.Themes)
+            .Where(t => !string.IsNullOrWhiteSpace(t))
+            .GroupBy(t => t)
+            .OrderByDescending(gr => gr.Count())
+            .Take(8)
+            .Select(gr => gr.Key)
+            .ToList();
+
+        var genres = mine
+            .SelectMany(g => g.Genres)
+            .Where(t => !string.IsNullOrWhiteSpace(t))
+            .GroupBy(t => t)
+            .OrderByDescending(gr => gr.Count())
+            .Select(gr => gr.Key)
+            .Take(3)
+            .ToList();
+
+        var items = popular.Count > 0 ? popular : genres;
+
+        // пересобираем плитки, только если набор категорий изменился
+        var signature = string.Join('|', items) + "#" + mine.Count;
+        if (signature == _favouritesSignature) return;
+        _favouritesSignature = signature;
+        _presetRow.Children.Clear();
+
+        _presetRow.IsVisible = items.Count > 0;
+        _presetHint.IsVisible = items.Count > 0;
+        _genreChips.IsVisible = items.Count == 0;
+        _presetHint.Text = Loc.T("facet.favourites") + " · " + Loc.F("facet.favouritesHint", mine.Count);
+
+        foreach (var item in items)
+        {
+            var isGenre = CatalogFacets.Genres.Contains(item, StringComparer.CurrentCultureIgnoreCase);
+            var key = isGenre ? "facet.genre." + CatalogFacets.Key(item) : "facet.tag." + CatalogFacets.Key(item);
+
+            var label = Ui.T(Loc.T(key), 12, Skin.Text, FontWeight.Medium);
+            var frame = Ui.Clickable(label, () =>
+            {
+                // одно нажатие — подборка по этой категории
+                _filter.Tags.Clear();
+                _filter.Genres.Clear();
+                if (isGenre) _filter.Genres.Add(item);
+                else _filter.Tags.Add(item);
+                _genre = "all";
+                _shown = PageSize;
+                ApplyChipStyles();
+                UpdateFilterBadge();
+                Refresh();
+            }, Brushes.Transparent, Skin.CardHover, new CornerRadius(999), new Thickness(12, 6),
+                Skin.Border, new Thickness(1));
+
+            frame.Margin = new Thickness(0, 0, 6, 6);
+            _presetRow.Children.Add(frame);
+        }
+    }
+
     private void BuildGenreChips()
     {
         _genreChips.Children.Clear();
@@ -382,19 +570,78 @@ public sealed class RecommendationsView : Grid
             var s = _query.Trim();
             q = q.Where(g => g.Name.Contains(s, StringComparison.CurrentCultureIgnoreCase)
                              || g.Developer.Contains(s, StringComparison.CurrentCultureIgnoreCase)
-                             || g.Genres.Any(x => x.Contains(s, StringComparison.CurrentCultureIgnoreCase)));
+                             || g.Genres.Any(x => x.Contains(s, StringComparison.CurrentCultureIgnoreCase))
+                             || g.Themes.Any(x => x.Contains(s, StringComparison.CurrentCultureIgnoreCase)));
         }
 
         if (_genre != "all") q = q.Where(g => g.Genres.Contains(_genre));
 
-        if (_sort == "az")
-            q = q.OrderBy(g => g.Name, StringComparer.CurrentCultureIgnoreCase);
+        // ---- панель фильтров
+        if (_filter.Genres.Count > 0)
+            q = q.Where(g => g.Genres.Any(_filter.Genres.Contains));
+
+        if (_filter.Tags.Count > 0)
+            q = q.Where(g => CatalogFacets.HasTheme(g, _filter.Tags));
+
+        if (_filter.Decade.Length > 0)
+        {
+            var from = int.TryParse(_filter.Decade, out var y) ? y : 0;
+            q = q.Where(g => YearOf(g) >= from);
+        }
+
+        if (_filter.Size.Length > 0)
+        {
+            q = _filter.Size switch
+            {
+                "described" => q.Where(g => !string.IsNullOrWhiteSpace(g.Description)),
+                "short" => q.Where(g => !string.IsNullOrWhiteSpace(g.Description) && g.Description!.Length <= 160),
+                "long" => q.Where(g => !string.IsNullOrWhiteSpace(g.Description) && g.Description!.Length > 160),
+                _ => q,
+            };
+        }
+
+        if (_filter.OnlyUnshelved) q = q.Where(g => !InLibrary(g));
+
+        // ---- порядок
+        q = _filter.Sort switch
+        {
+            "az" => q.OrderBy(g => g.Name, StringComparer.CurrentCultureIgnoreCase),
+            "za" => q.OrderByDescending(g => g.Name, StringComparer.CurrentCultureIgnoreCase),
+            "new" => q.OrderByDescending(YearOf),
+            "old" => q.OrderBy(YearOf),
+            _ => q,
+        };
 
         return q.ToList();
     }
 
-    private void Refresh()
+    /// <summary>Год выхода игры (0 — неизвестен).</summary>
+    private static int YearOf(StoreGame game) =>
+        int.TryParse(game.ReleaseDate, out var year) && year > 1900 ? year : 0;
+
+    private void Refresh(bool quiet = false)
     {
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        RefreshCore(quiet);
+        watch.Stop();
+        if (watch.ElapsedMilliseconds >= 40)
+            AppPaths.Log($"каталог: перерисовка {watch.ElapsedMilliseconds} мс, запрос «{_query}»");
+    }
+
+    private void RefreshCore(bool quiet)
+    {
+        if (string.IsNullOrWhiteSpace(_query) && _inLibStamp != _games.Count)
+        {
+            _inLibStamp = _games.Count;
+            _inLib.Clear();
+            _mine.Clear();
+            if (_games.Count <= 4000)
+                foreach (var g in _games) InLibrary(g, useCache: false);
+        }
+
+        UpdateFilterBadge();
+        UpdateFavourites();
+
         var list = Visible();
         var slice = list.Take(Math.Max(PageSize, _shown)).ToList();
 
@@ -411,10 +658,10 @@ public sealed class RecommendationsView : Grid
         _more.IsVisible = list.Count > slice.Count;
         _count?.Invoke(list.Count);
 
-        if (slice.Count > 0 && !_loading.IsVisible) Ui.FadeSlideIn(_cards, 0, 160, 6);
+        if (slice.Count > 0 && !_loading.IsVisible && !quiet) Ui.FadeSlideIn(_cards, 0, 160, 6);
 
-        // обложки — только для показанных карточек
-        if (slice.Count > 0) _ = EnsureCoversAsync(slice);
+        // обложки — только для показанных карточек, и не на каждый набранный символ
+        if (slice.Count > 0 && !quiet) _ = EnsureCoversAsync(slice);
     }
 
     /// <summary>Когда обложка не нашлась — не пытаемся снова раньше, чем через 5 минут.</summary>
@@ -690,12 +937,22 @@ public sealed class RecommendationsView : Grid
         return new string(letters.ToArray());
     }
 
+    /// <summary>Декодированные обложки: перерисовка списка больше не читает их с диска.</summary>
+    private static readonly Dictionary<string, Bitmap> _bitmaps = new();
+
     private static Bitmap? LoadCover(string? path)
     {
         if (string.IsNullOrEmpty(path)) return null;
+        if (_bitmaps.TryGetValue(path, out var ready)) return ready;
+
         try
         {
-            return new Bitmap(path);
+            var bitmap = new Bitmap(path);
+
+            // держим в памяти не больше двухсот обложек — этого хватает на весь экран с запасом
+            if (_bitmaps.Count > 200) _bitmaps.Clear();
+            _bitmaps[path] = bitmap;
+            return bitmap;
         }
         catch
         {

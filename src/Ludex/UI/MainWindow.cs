@@ -2322,19 +2322,52 @@ public sealed class MainWindow : Window
         var needle = NormalizeTitle(title);
         if (needle.Length < 3) return false;
 
-        foreach (var game in _games)
-        {
-            var have = NormalizeTitle(game.Title);
-            if (have.Length >= 3 && (have.Contains(needle) || needle.Contains(have))) return true;
+        var index = LibraryIndex;
+        if (index.Count == 0) return false;
 
-            if (!string.IsNullOrEmpty(game.SteamName))
-            {
-                var steam = NormalizeTitle(game.SteamName);
-                if (steam.Length >= 3 && (steam.Contains(needle) || needle.Contains(steam))) return true;
-            }
-        }
+        // быстрый путь: точное совпадение и вхождение названия каталога в название библиотеки
+        foreach (var have in index)
+            if (have.Contains(needle)) return true;
+
+        // обратное вхождение (название библиотеки короче) — идём по началам слов
+        if (needle.Length > 6)
+            foreach (var have in index)
+                if (have.Length >= 3 && needle.Contains(have)) return true;
 
         return false;
+    }
+
+    private List<string>? _libraryIndex;
+    private int _libraryIndexStamp = -1;
+
+    /// <summary>
+    /// Нормализованные названия библиотеки. Раньше при каждой проверке заново
+    /// нормализовались все игры — на каталоге из 130 тысяч это давало задержку ввода.
+    /// </summary>
+    private List<string> LibraryIndex
+    {
+        get
+        {
+            var stamp = _games.Count;
+            if (_libraryIndex != null && _libraryIndexStamp == stamp) return _libraryIndex;
+
+            var list = new List<string>(_games.Count * 2);
+            foreach (var game in _games)
+            {
+                var have = NormalizeTitle(game.Title);
+                if (have.Length >= 3) list.Add(have);
+
+                if (!string.IsNullOrEmpty(game.SteamName))
+                {
+                    var steam = NormalizeTitle(game.SteamName);
+                    if (steam.Length >= 3) list.Add(steam);
+                }
+            }
+
+            _libraryIndex = list;
+            _libraryIndexStamp = stamp;
+            return list;
+        }
     }
 
     private static string NormalizeTitle(string s) =>

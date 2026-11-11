@@ -106,13 +106,13 @@ public sealed class Dropdown : Border
                 new Avalonia.Animation.DoubleTransition
                 {
                     Property = Visual.OpacityProperty,
-                    Duration = TimeSpan.FromMilliseconds(150),
+                    Duration = TimeSpan.FromMilliseconds(90),
                     Easing = new Avalonia.Animation.Easings.CubicEaseOut(),
                 },
                 new Avalonia.Animation.TransformOperationsTransition
                 {
                     Property = Visual.RenderTransformProperty,
-                    Duration = TimeSpan.FromMilliseconds(180),
+                    Duration = TimeSpan.FromMilliseconds(110),
                     Easing = new Avalonia.Animation.Easings.CubicEaseOut(),
                 },
             },
@@ -126,9 +126,6 @@ public sealed class Dropdown : Border
         {
             if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
             e.Handled = true;
-            RenderTransform = new ScaleTransform(0.975, 0.975);
-            DispatcherTimer.RunOnce(() => RenderTransform = new ScaleTransform(1, 1),
-                TimeSpan.FromMilliseconds(90));
             Toggle();
         };
     }

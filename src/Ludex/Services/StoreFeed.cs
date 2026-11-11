@@ -39,6 +39,8 @@ public sealed class StoreGame
     // ---- добирается из appdetails
     public string? ReleaseDate { get; set; }
     public string[] Genres { get; set; } = Array.Empty<string>();
+    /// <summary>Темы из каталога («Zombies», «Survival», «Post-apocalyptic»…).</summary>
+    public string[] Themes { get; set; } = Array.Empty<string>();
     public string? Description { get; set; }
     public bool ComingSoon { get; set; }
 

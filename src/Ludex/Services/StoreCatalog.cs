@@ -208,7 +208,7 @@ public static class StoreCatalog
                 LastError = null;
                 Report(progress, Loc.F("recs.loaded", ready.Count), 1);
                 AppPaths.Log($"StoreCatalog: готовый каталог {ready.Count} игр");
-                WriteCache(ready, FetchedUtc);
+                WriteCache(ready, FetchedUtc, withGenreSweep: true);
                 TryDelete(FailFile);
                 return ready;
             }
@@ -300,7 +300,7 @@ public static class StoreCatalog
             Report(progress, Loc.F("recs.loaded", games.Count), 1);
             AppPaths.Log($"StoreCatalog: собрано {games.Count} игр");
 
-            WriteCache(games);
+            WriteCache(games, withGenreSweep: false);
             TryDelete(FailFile);
             return games;
         }
@@ -365,6 +365,10 @@ public static class StoreCatalog
             if (root.TryGetProperty("genres", out var labelsEl) && labelsEl.ValueKind == JsonValueKind.Array)
                 labels = labelsEl.EnumerateArray().Select(x => x.GetString() ?? "").ToArray();
 
+            var themes = Array.Empty<string>();
+            if (root.TryGetProperty("themes", out var themesEl) && themesEl.ValueKind == JsonValueKind.Array)
+                themes = themesEl.EnumerateArray().Select(x => x.GetString() ?? "").ToArray();
+
             _remoteStamp = DateTime.UtcNow;
             if (root.TryGetProperty("utc", out var utcEl) && utcEl.ValueKind == JsonValueKind.String &&
                 DateTime.TryParse(utcEl.GetString(), CultureInfo.InvariantCulture,
@@ -394,14 +398,36 @@ public static class StoreCatalog
 
                 var len = row.GetArrayLength();
 
-                if (len >= 7)
+                // темы: битовая маска в hex, индексы — из списка "themes" (файл v3)
+                if (themes.Length > 0 && len >= 4 && row[3].ValueKind == JsonValueKind.String)
                 {
-                    if (row[3].ValueKind == JsonValueKind.String) game.Developer = (row[3].GetString() ?? "").Trim();
-                    if (row[4].ValueKind == JsonValueKind.String) game.Publisher = (row[4].GetString() ?? "").Trim();
-                    if (row[5].ValueKind == JsonValueKind.Number && row[5].GetInt32() > 1900)
-                        game.ReleaseDate = row[5].GetInt32().ToString(CultureInfo.InvariantCulture);
-                    var text = (row[6].GetString() ?? "").Trim();
-                    if (text.Length > 0) game.Description = text;
+                    var maskText = (row[3].GetString() ?? "").Trim();
+                    if (maskText.Length > 0 && long.TryParse(maskText, NumberStyles.HexNumber,
+                            CultureInfo.InvariantCulture, out var mask) && mask != 0)
+                    {
+                        var picked = new List<string>(4);
+                        for (var bit = 0; bit < themes.Length && bit < 62; bit++)
+                        {
+                            if ((mask & (1L << bit)) == 0) continue;
+                            if (themes[bit].Length > 0) picked.Add(themes[bit]);
+                        }
+                        game.Themes = picked.ToArray();
+                    }
+                }
+
+                // данные игры: v3 — поля 4..7 (перед ними маска тем), v2 — поля 3..6
+                var at = len >= 8 ? 4 : len >= 7 ? 3 : -1;
+                if (at > 0)
+                {
+                    if (row[at].ValueKind == JsonValueKind.String) game.Developer = (row[at].GetString() ?? "").Trim();
+                    if (row[at + 1].ValueKind == JsonValueKind.String) game.Publisher = (row[at + 1].GetString() ?? "").Trim();
+                    if (row[at + 2].ValueKind == JsonValueKind.Number && row[at + 2].GetInt32() > 1900)
+                        game.ReleaseDate = row[at + 2].GetInt32().ToString(CultureInfo.InvariantCulture);
+                    if (row[at + 3].ValueKind == JsonValueKind.String)
+                    {
+                        var text = (row[at + 3].GetString() ?? "").Trim();
+                        if (text.Length > 0) game.Description = text;
+                    }
                 }
 
                 if (len >= 3 && labels.Length > 0)
@@ -683,10 +709,45 @@ public static class StoreCatalog
         public int Id { get; set; }
         public string Name { get; set; } = "";
         public string[] G { get; set; } = Array.Empty<string>();
+        public string[]? T { get; set; }
         public string? Dev { get; set; }
         public string? Pub { get; set; }
         public string? Year { get; set; }
         public string? About { get; set; }
+    }
+
+    /// <summary>
+    /// Жанры и темы, добытые прошлым обходом магазина, переносим в новую порцию игр
+    /// по appid: файл каталога их не несёт, а фильтрам они нужны.
+    /// </summary>
+    private static void CarryGenres(List<StoreGame> games)
+    {
+        try
+        {
+            if (!File.Exists(CacheFile)) return;
+
+            var old = JsonSerializer.Deserialize<CacheFileModel>(File.ReadAllText(CacheFile));
+            if (old == null || old.Games.Count == 0) return;
+
+            var known = new Dictionary<int, CacheEntry>(old.Games.Count);
+            foreach (var e in old.Games)
+                if (e.G.Length > 0 || (e.T?.Length ?? 0) > 0) known[e.Id] = e;
+
+            var filled = 0;
+            foreach (var game in games)
+            {
+                if (!known.TryGetValue(game.AppId, out var e)) continue;
+                if (game.Genres.Length == 0 && e.G.Length > 0) game.Genres = e.G;
+                if (game.Themes.Length == 0 && e.T is { Length: > 0 }) game.Themes = e.T;
+                filled++;
+            }
+
+            if (filled > 0) AppPaths.Log($"StoreCatalog: жанры восстановлены для {filled} игр из прошлого кэша");
+        }
+        catch (Exception ex)
+        {
+            AppPaths.Log("StoreCatalog carry: " + ex.Message);
+        }
     }
 
     private static DateTime ReadCacheStamp()
@@ -725,6 +786,7 @@ public static class StoreCatalog
                 };
 
                 game.Genres = e.G;
+                if (e.T is { Length: > 0 }) game.Themes = e.T;
                 game.Developer = e.Dev ?? "";
                 game.Publisher = e.Pub ?? "";
                 game.ReleaseDate = e.Year;
@@ -747,10 +809,13 @@ public static class StoreCatalog
         }
     }
 
-    private static void WriteCache(List<StoreGame> games, DateTime? stamp = null)
+    private static void WriteCache(List<StoreGame> games, DateTime? stamp = null, bool withGenreSweep = false)
     {
         try
         {
+            // в готовом файле жанров нет — переносим их из прошлого кэша по appid
+            if (!withGenreSweep) CarryGenres(games);
+
             var model = new CacheFileModel { FetchedUtc = stamp ?? DateTime.UtcNow };
             foreach (var g in games)
             {
@@ -759,6 +824,7 @@ public static class StoreCatalog
                     Id = g.AppId,
                     Name = g.Name,
                     G = g.Genres,
+                    T = g.Themes.Length > 0 ? g.Themes : null,
                     Dev = string.IsNullOrEmpty(g.Developer) ? null : g.Developer,
                     Pub = string.IsNullOrEmpty(g.Publisher) ? null : g.Publisher,
                     Year = g.ReleaseDate,

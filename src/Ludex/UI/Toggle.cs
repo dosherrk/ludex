@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Threading;
 
 namespace Ludex.UI;
 
@@ -35,15 +36,6 @@ public sealed class Toggle : Border
             Margin = new Thickness(3, 0, 0, 0),
             RenderTransform = new TranslateTransform(value ? 18 : 0, 0),
             BoxShadow = new BoxShadows(new BoxShadow { OffsetY = 1, Blur = 4, Color = Color.Parse("#66000000") }),
-            Transitions = new Avalonia.Animation.Transitions
-            {
-                new Avalonia.Animation.TransformOperationsTransition
-                {
-                    Property = Visual.RenderTransformProperty,
-                    Duration = TimeSpan.FromMilliseconds(210),
-                    Easing = new Avalonia.Animation.Easings.CubicEaseInOut(),
-                },
-            },
         };
 
         _track = new Border
@@ -56,19 +48,6 @@ public sealed class Toggle : Border
             BorderThickness = new Thickness(1),
             VerticalAlignment = VerticalAlignment.Center,
             Child = _knob,
-            Transitions = new Avalonia.Animation.Transitions
-            {
-                new Avalonia.Animation.BrushTransition
-                {
-                    Property = Border.BackgroundProperty,
-                    Duration = TimeSpan.FromMilliseconds(190),
-                },
-                new Avalonia.Animation.BrushTransition
-                {
-                    Property = Border.BorderBrushProperty,
-                    Duration = TimeSpan.FromMilliseconds(190),
-                },
-            },
         };
 
         _label = Ui.T(text, fontSize, interactive ? Skin.TextMuted : Skin.TextDim, FontWeight.Medium);
@@ -124,11 +103,32 @@ public sealed class Toggle : Border
         Apply();
     }
 
+    private DispatcherTimer? _move;
+
+    /// <summary>
+    /// Переключение без «залипания»: цвет — сразу, бегунок — коротким ходом 90 мс.
+    /// Раньше ход шёл через TransformOperationsTransition, который на части систем
+    /// стартовал с задержкой и читался как «переключатель тормозит».
+    /// </summary>
     private void Apply()
     {
-        _knob.RenderTransform = new TranslateTransform(_value ? 18 : 0, 0);
         _track.Background = _value ? Skin.Accent : Skin.PanelAlt;
         _track.BorderBrush = _value ? Skin.Accent : Skin.Border;
         _knob.Background = _value ? Skin.OnAccent : Brushes.White;
+
+        var from = _knob.RenderTransform is TranslateTransform t ? t.X : (_value ? 0 : 18);
+        var to = _value ? 18.0 : 0.0;
+
+        _move?.Stop();
+        var started = DateTime.UtcNow;
+        _move = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(12) };
+        _move.Tick += (_, _) =>
+        {
+            var p = Math.Min(1, (DateTime.UtcNow - started).TotalMilliseconds / 90);
+            var e = p < 0.5 ? 2 * p * p : 1 - Math.Pow(-2 * p + 2, 2) / 2;   // ease-in-out
+            _knob.RenderTransform = new TranslateTransform(from + (to - from) * e, 0);
+            if (p >= 1) _move?.Stop();
+        };
+        _move.Start();
     }
 }
