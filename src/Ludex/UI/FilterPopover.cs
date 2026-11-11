@@ -108,7 +108,7 @@ public sealed class FilterPopover
         var genreGrid = new WrapPanel { Orientation = Orientation.Horizontal };
         foreach (var genre in CatalogFacets.Genres)
         {
-            var label = Ui.T(Loc.T("facet.genre." + CatalogFacets.Key(genre)), 12.5, Skin.TextMuted, FontWeight.Medium);
+            var label = Ui.T(CatalogFacets.Label(genre), 12.5, Skin.TextMuted, FontWeight.Medium);
             var frame = Ui.Clickable(label, () => { Toggle(draft.Genres, genre); Sync(); },
                 Brushes.Transparent, Skin.CardHover, new CornerRadius(8), new Thickness(14, 9));
             frame.Margin = new Thickness(0, 0, 6, 6);
@@ -121,7 +121,7 @@ public sealed class FilterPopover
         var tagWrap = new WrapPanel { Orientation = Orientation.Horizontal };
         foreach (var tag in CatalogFacets.Tags)
         {
-            var label = Ui.T(Loc.T("facet.tag." + CatalogFacets.Key(tag)), 11.5, Skin.TextMuted, FontWeight.Medium);
+            var label = Ui.T(CatalogFacets.Label(tag), 11.5, Skin.TextMuted, FontWeight.Medium);
             var frame = Ui.Clickable(label, () => { Toggle(draft.Tags, tag); Sync(); },
                 Brushes.Transparent, Skin.PanelAlt, new CornerRadius(999), new Thickness(11, 5));
             frame.Margin = new Thickness(0, 0, 5, 5);

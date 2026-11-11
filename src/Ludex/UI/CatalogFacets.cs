@@ -30,11 +30,26 @@ public static class CatalogFacets
         "VR", "Free to Play", "1990s", "Cats", "Mystery Dungeon",
     };
 
-    /// <summary>Темы, которые показываем в панели (без повторов жанров и служебных).</summary>
+    /// <summary>
+    /// Темы, которые показываем в панели. В файле каталога темы идут вместе с жанрами
+    /// (в списке есть «Action», «Adventure», «Indie»…), а служебные «Free to Play»
+    /// и «Singleplayer» не полезны — их отсекаем, чтобы не дублировать жанры.
+    /// </summary>
     public static string[] Tags { get; } = ThemeOrder
-        .Where(t => !Genres.Contains(t, StringComparer.CurrentCultureIgnoreCase))
+        .Where(t => !IsGenreTheme(t))
         .Where(t => t is not ("Free to Play" or "Singleplayer"))
         .ToArray();
+
+    /// <summary>Название темы совпадает с жанром («Action», «Racing», «Early Access»…).</summary>
+    public static bool IsGenreTheme(string name) =>
+        GenreThemeNames.Contains(name.Trim().ToLowerInvariant());
+
+    private static readonly HashSet<string> GenreThemeNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "action", "adventure", "indie", "rpg", "strategy", "simulation", "casual",
+        "racing", "sports", "early access", "экшен", "приключения", "инди", "стратегия",
+        "симулятор", "казуальные", "гонки", "спорт", "ранний доступ",
+    };
 
     /// <summary>Варианты сортировки: значение и ключ локализации.</summary>
     public static readonly (string Value, string Key)[] Sorts =
@@ -45,6 +60,27 @@ public static class CatalogFacets
         ("new", "facet.sort.new"),
         ("old", "facet.sort.old"),
     };
+
+    /// <summary>
+    /// Готовая подпись категории. Ключа может не быть (тема пришла из файла и не описана
+    /// в Loc) — тогда показываем само название, но никогда не показываем «facet.tag.…».
+    /// </summary>
+    public static string Label(string name)
+    {
+        var trimmed = name.Trim();
+        if (trimmed.Length == 0) return trimmed;
+
+        var genre = Genres.FirstOrDefault(g => string.Equals(g, trimmed, StringComparison.CurrentCultureIgnoreCase));
+        var genreKey = "facet.genre." + Key(genre ?? trimmed);
+        var genreText = Loc.T(genreKey);
+        if (genreText != genreKey) return genreText;
+
+        var tagKey = "facet.tag." + Key(trimmed);
+        var tagText = Loc.T(tagKey);
+        if (tagText != tagKey) return tagText;
+
+        return trimmed;
+    }
 
     /// <summary>Ключ локализации для жанра: «Экшен» → «action».</summary>
     public static string Key(string name) => name.Trim().ToLowerInvariant() switch

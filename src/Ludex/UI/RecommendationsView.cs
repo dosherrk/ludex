@@ -58,6 +58,7 @@ public sealed class RecommendationsView : Grid
     private readonly WrapPanel _presetRow;
     private readonly TextBlock _presetHint;
     private Control? _filterAnchor;
+    private Border? _resetButton;
 
     /// <summary>Совпадения «игра каталога ↔ библиотека» — считаются один раз на загрузку.</summary>
     private readonly Dictionary<int, bool> _inLib = new();
@@ -145,13 +146,27 @@ public sealed class RecommendationsView : Grid
         filterButton.Height = 38;
         _filterAnchor = filterButton;
 
+        // ---- «Сбросить» — отдельной кнопкой справа от «Фильтров»
+        _resetButton = Ui.GhostButton(Loc.T("facet.reset"), ResetFilters, Skin.TextMuted);
+        _resetButton.Height = 38;
+        _resetButton.Padding = new Thickness(14, 0);
+        _resetButton.Margin = new Thickness(8, 0, 0, 0);
+        _resetButton.IsVisible = false;
+
+        var leftGroup = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center,
+            Children = { filterButton, _resetButton },
+        };
+
         var firstRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto") };
         firstRow.Children.Add(searchBox);
 
         filterButton.Margin = new Thickness(10, 0, 0, 0);
-        Grid.SetColumn(filterButton, 1);
-        filterButton.HorizontalAlignment = HorizontalAlignment.Left;
-        firstRow.Children.Add(filterButton);
+        Grid.SetColumn(leftGroup, 1);
+        leftGroup.HorizontalAlignment = HorizontalAlignment.Left;
+        firstRow.Children.Add(leftGroup);
 
         refresh.Margin = new Thickness(0, 0, 8, 0);
         Grid.SetColumn(refresh, 2);
@@ -411,6 +426,21 @@ public sealed class RecommendationsView : Grid
         var count = _filter.Count;
         _filterCount.IsVisible = count > 0;
         _filterCount.Text = count > 0 ? count.ToString() : "";
+
+        if (_resetButton != null) _resetButton.IsVisible = count > 0;
+    }
+
+    /// <summary>Сброс всех фильтров каталога (кнопка справа от «Фильтров»).</summary>
+    private void ResetFilters()
+    {
+        _filter.CopyFrom(new CatalogFilter());
+        _sort = "catalog";
+        _filter.Sort = _sort;
+        _genre = "all";
+        _shown = PageSize;
+        ApplyChipStyles();
+        UpdateFilterBadge();
+        Refresh();
     }
 
     /// <summary>
@@ -436,6 +466,8 @@ public sealed class RecommendationsView : Grid
         var popular = mine
             .SelectMany(g => g.Themes)
             .Where(t => !string.IsNullOrWhiteSpace(t))
+            .Where(t => !CatalogFacets.IsGenreTheme(t))        // жанры покажем отдельно, без повторов
+            .Where(t => t is not ("Free to Play" or "Singleplayer"))
             .GroupBy(t => t)
             .OrderByDescending(gr => gr.Count())
             .Take(8)
@@ -443,7 +475,7 @@ public sealed class RecommendationsView : Grid
             .ToList();
 
         var genres = mine
-            .SelectMany(g => g.Genres)
+            .SelectMany(g => g.Genres.Concat(g.Themes.Where(CatalogFacets.IsGenreTheme)))
             .Where(t => !string.IsNullOrWhiteSpace(t))
             .GroupBy(t => t)
             .OrderByDescending(gr => gr.Count())
@@ -466,10 +498,10 @@ public sealed class RecommendationsView : Grid
 
         foreach (var item in items)
         {
-            var isGenre = CatalogFacets.Genres.Contains(item, StringComparer.CurrentCultureIgnoreCase);
-            var key = isGenre ? "facet.genre." + CatalogFacets.Key(item) : "facet.tag." + CatalogFacets.Key(item);
-
-            var label = Ui.T(Loc.T(key), 12, Skin.Text, FontWeight.Medium);
+            // тема с названием жанра («Action», «Indie») фильтруется как жанр
+            var isGenre = CatalogFacets.Genres.Contains(item, StringComparer.CurrentCultureIgnoreCase)
+                          || CatalogFacets.IsGenreTheme(item);
+            var label = Ui.T(CatalogFacets.Label(item), 12, Skin.Text, FontWeight.Medium);
             var frame = Ui.Clickable(label, () =>
             {
                 // одно нажатие — подборка по этой категории
@@ -578,7 +610,9 @@ public sealed class RecommendationsView : Grid
 
         // ---- панель фильтров
         if (_filter.Genres.Count > 0)
-            q = q.Where(g => g.Genres.Any(_filter.Genres.Contains));
+            q = q.Where(g => g.Genres.Any(_filter.Genres.Contains)
+                             || g.Genres.Any(any => _filter.Genres.Any(pick =>
+                                 string.Equals(CatalogFacets.Label(pick), any, StringComparison.CurrentCultureIgnoreCase))));
 
         if (_filter.Tags.Count > 0)
             q = q.Where(g => CatalogFacets.HasTheme(g, _filter.Tags));

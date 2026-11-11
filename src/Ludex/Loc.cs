@@ -109,6 +109,8 @@ public static class Loc
         ["facet.genre.racing"] = ("Гонки", "Racing"),
         ["facet.genre.sports"] = ("Спорт", "Sports"),
         ["facet.genre.early"] = ("Ранний доступ", "Early access"),
+        ["facet.tag.singleplayer"] = ("Одиночная игра", "Single-player"),
+        ["facet.tag.freetoplay"] = ("Бесплатная", "Free to play"),
         ["facet.tag.openworld"] = ("Открытый мир", "Open world"),
         ["facet.tag.story"] = ("Глубокий сюжет", "Story rich"),
         ["facet.tag.atmospheric"] = ("Атмосфера", "Atmospheric"),
