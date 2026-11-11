@@ -3,6 +3,14 @@
 Все заметные изменения проекта. Формат — [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/),
 версии — [SemVer](https://semver.org/lang/ru/).
 
+## [1.19.4] — 2026-11-08
+
+### Исправлено
+- Ссылка на поддержку вела на несуществующую страницу DonationAlerts. Теперь везде —
+  **https://www.donationalerts.com/r/c04hbiu** (страница «C04HbIU», подпись «поддержи меня
+  как разработчика Ludex»): на сайте (блок поддержки и подвал), в README и в
+  `.github/FUNDING.yml`.
+
 ## [1.19.3] — 2026-11-08
 
 ### Добавлено

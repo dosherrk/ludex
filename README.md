@@ -13,7 +13,7 @@
 [![Linux](https://img.shields.io/badge/Linux-x64-FCC624?logo=linux&logoColor=black)](#linux)
 [![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet&logoColor=white)](#сборка-из-исходников)
 [![Avalonia](https://img.shields.io/badge/Avalonia-11-8B44AC)](https://avaloniaui.net)
-[![Version](https://img.shields.io/badge/version-1.19.3-3B9EFF)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.19.4-3B9EFF)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-35C48A)](LICENSE)
 [![Website](https://img.shields.io/badge/сайт-ludex--one.vercel.app-3B9EFF)](https://ludex-one.vercel.app)
 
@@ -28,9 +28,9 @@
 Ludex бесплатный: без аккаунтов, подписки и рекламы. Если приложение сэкономило вам время,
 можно сказать спасибо через **DonationAlerts** — разово или подпиской, картой или СБП:
 
-**[donationalerts.com/r/dosherrk](https://www.donationalerts.com/r/dosherrk)**
+**[donationalerts.com/r/c04hbiu](https://www.donationalerts.com/r/c04hbiu)** — страница «C04HbIU»
 
-[![Поддержать на DonationAlerts](https://img.shields.io/badge/DonationAlerts-поддержать%20автора-FF5C5C?logo=data:image/svg%2Bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZD0iTTEyIDIxcy04LTQuOS04LTEwLjVBNC41IDQuNSAwIDAgMSAxMiA3YTQuNSA0LjUgMCAwIDEgOCAzLjVDMjAgMTYuMSAxMiAyMSAxMiAyMXoiIGZpbGw9IndoaXRlIi8+PC9zdmctPg==)](https://www.donationalerts.com/r/dosherrk)
+[![Поддержать на DonationAlerts](https://img.shields.io/badge/DonationAlerts-поддержать%20автора-FF5C5C?logo=data:image/svg%2Bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZD0iTTEyIDIxcy04LTQuOS04LTEwLjVBNC41IDQuNSAwIDAgMSAxMiA3YTQuNSA0LjUgMCAwIDEgOCAzLjVDMjAgMTYuMSAxMiAyMSAxMiAyMXoiIGZpbGw9IndoaXRlIi8+PC9zdmctPg==)](https://www.donationalerts.com/r/c04hbiu)
 
 ## Возможности
 
@@ -110,15 +110,15 @@ Ludex бесплатный: без аккаунтов, подписки и ре�
 
 ### Windows 10/11 (x64)
 
-**Вариант 1 — установщик (рекомендуется).** `Ludex-Setup-1.19.3.exe` → выберите язык → «Далее».
+**Вариант 1 — установщик (рекомендуется).** `Ludex-Setup-1.19.4.exe` → выберите язык → «Далее».
 Ставится в `%LOCALAPPDATA%\Programs\Ludex` (запрос администратора не появляется), создаёт ярлыки
 на рабочем столе и в меню «Пуск», добавляет запись в «Установку и удаление программ» и деинсталлятор.
 
-**Вариант 2 — портативно.** `Ludex-1.19.3-windows.zip` — распакуйте папку целиком куда угодно
+**Вариант 2 — портативно.** `Ludex-1.19.4-windows.zip` — распакуйте папку целиком куда угодно
 (флешка, `D:\Ludex`) и запускайте `Ludex.exe`. Настройки и библиотека хранятся в `%LOCALAPPDATA%\Ludex`.
 
 > Файлы должны лежать вместе: `Ludex.exe` не работает без `Ludex.dll` и папки `runtimes` рядом.
-> Поэтому один exe не перетаскивают на рабочий стол — делают ярлык на него. С 1.19.3 приложение
+> Поэтому один exe не перетаскивают на рабочий стол — делают ярлык на него. С 1.19.4 приложение
 > поставляется набором файлов, а не одним большим exe: так запуск заметно быстрее, потому что
 > не нужно распаковывать встроенный рантайм во временную папку при каждом старте.
 
@@ -134,17 +134,17 @@ Ludex бесплатный: без аккаунтов, подписки и ре�
 **Пакет `.deb`** (Debian, Ubuntu, Mint, Pop!_OS и производные):
 
 ```bash
-sudo apt install ./Ludex-1.19.3-linux-x64.deb
+sudo apt install ./Ludex-1.19.4-linux-x64.deb
 ```
 
 Появится ярлык в меню приложений, `ludex` — в `PATH`; файлы ставятся в `/opt/ludex`.
 Удаление — `sudo apt remove ludex` (данные в `~/.local/share/Ludex` остаются).
 
-**Портативный архив** `Ludex-1.19.3-linux-x64.tar.gz` — для любой системы с glibc 2.31+
+**Портативный архив** `Ludex-1.19.4-linux-x64.tar.gz` — для любой системы с glibc 2.31+
 (Fedora, Arch, openSUSE и т.д.):
 
 ```bash
-mkdir -p ~/Applications && tar -xzf Ludex-1.19.3-linux-x64.tar.gz -C ~/Applications
+mkdir -p ~/Applications && tar -xzf Ludex-1.19.4-linux-x64.tar.gz -C ~/Applications
 ~/Applications/Ludex/Ludex
 ```
 
