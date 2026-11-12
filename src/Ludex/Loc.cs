@@ -140,6 +140,8 @@ public static class Loc
 		dictionary["settings.engineGoogle"] = ("Google", "Google");
 		dictionary["settings.engineYandex"] = ("Яндекс", "Yandex");
 		dictionary["settings.engineDdg"] = ("DuckDuckGo", "DuckDuckGo");
+		dictionary["settings.browser"] = ("Браузер: {0}", "Browser: {0}");
+		dictionary["settings.browserUnknown"] = ("Браузер не определён — ссылки откроются так, как настроено в системе.", "Browser not detected — links open the way your system is configured.");
 		dictionary["catalog.loadingStart"] = ("Собираем каталог игр…", "Building the catalogue…");
 		dictionary["catalog.download"] = ("Скачиваем каталог игр…", "Downloading the game catalogue…");
 		dictionary["catalog.loading"] = ("Загружаем жанры: {0} из {1} · {2}", "Loading genres: {0} of {1} · {2}");

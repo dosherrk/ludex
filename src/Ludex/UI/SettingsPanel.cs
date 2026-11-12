@@ -315,6 +315,12 @@ public sealed class SettingsPanel : Border
 		((AvaloniaList<Control>)(object)((Panel)val16).Children).Add((Control)(object)_engineCombo);
 		((AvaloniaList<Control>)(object)((Panel)val3).Children).Add((Control)(object)val16);
 		((AvaloniaList<Control>)(object)((Panel)val3).Children).Add((Control)(object)Ui.T(Loc.T("settings.webSearchHint"), 11.0, Skin.TextDim, null, (TextWrapping)1));
+		// Показываем, какой браузер Ludex нашёл сам: ссылки открываются в нём,
+		// а не «где-то», куда их отправит система.
+		Browser.Info browser = Browser.Detect();
+		((AvaloniaList<Control>)(object)((Panel)val3).Children).Add((Control)(object)Ui.T(
+			browser.Found ? Loc.F("settings.browser", browser.Name) : Loc.T("settings.browserUnknown"),
+			11.0, Skin.TextDim, null, (TextWrapping)1));
 		((AvaloniaList<Control>)(object)((Panel)val3).Children).Add((Control)(object)Ui.T(Loc.T("settings.sgdb"), 13.0, Skin.Text, (FontWeight)600, (TextWrapping)0));
 		_keyBox = new TextBox
 		{

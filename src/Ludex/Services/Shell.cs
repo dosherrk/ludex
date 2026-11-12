@@ -137,7 +137,68 @@ public static class Shell
 		}
 	}
 
-	public static void OpenUrl(string url)
+	/// <summary>
+	/// Открывает ссылку в браузере пользователя. Сначала пробуем найденный браузер
+	/// по умолчанию напрямую (его имя и путь пишутся в журнал), и только если это
+	/// не вышло — отдаём ссылку оболочке, как раньше.
+	/// </summary>
+	/// <returns>true, если удалось запустить браузер.</returns>
+	public static bool OpenUrl(string url)
+	{
+		if (string.IsNullOrWhiteSpace(url))
+		{
+			return false;
+		}
+		Browser.Info info = Browser.Detect();
+		if (info.Found && TryLaunch(info, url))
+		{
+			return true;
+		}
+		AppPaths.Log("OpenUrl: браузер по умолчанию не сработал (" + info + "), отдаю ссылку оболочке");
+		return OpenUrlViaShell(url);
+	}
+
+	private static bool TryLaunch(Browser.Info info, string url)
+	{
+		try
+		{
+			if (OperatingSystem.IsWindows() && info.ExePath != null)
+			{
+				if (!File.Exists(info.ExePath))
+				{
+					AppPaths.Log("OpenUrl: файл браузера не найден — " + info.ExePath);
+					Browser.Forget();
+					return false;
+				}
+				Process.Start(new ProcessStartInfo(info.ExePath, "\"" + url + "\"")
+				{
+					UseShellExecute = false,
+					WorkingDirectory = System.IO.Path.GetDirectoryName(info.ExePath) ?? ""
+				});
+				AppPaths.Log("OpenUrl: " + info.Name + " → " + url);
+				return true;
+			}
+			if (!OperatingSystem.IsWindows() && !string.IsNullOrWhiteSpace(info.LaunchTarget))
+			{
+				// .desktop-файл или имя браузера: xdg-open умеет и то, и другое
+				Process.Start(new ProcessStartInfo("xdg-open", "\"" + url + "\"")
+				{
+					UseShellExecute = false,
+					CreateNoWindow = true
+				});
+				AppPaths.Log("OpenUrl: " + info.Name + " (xdg-open) → " + url);
+				return true;
+			}
+		}
+		catch (Exception ex)
+		{
+			AppPaths.Log("OpenUrl через браузер по умолчанию: " + ex.Message);
+			Browser.Forget();
+		}
+		return false;
+	}
+
+	private static bool OpenUrlViaShell(string url)
 	{
 		try
 		{
@@ -155,21 +216,12 @@ public static class Shell
 					UseShellExecute = false
 				});
 			}
+			return true;
 		}
 		catch (Exception ex)
 		{
 			AppPaths.Log("OpenUrl failed: " + ex.Message);
-			try
-			{
-				Process.Start(new ProcessStartInfo(url)
-				{
-					UseShellExecute = true
-				});
-			}
-			catch (Exception ex2)
-			{
-				AppPaths.Log("OpenUrl fallback failed: " + ex2.Message);
-			}
+			return false;
 		}
 	}
 }

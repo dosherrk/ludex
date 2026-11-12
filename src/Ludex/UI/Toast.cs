@@ -87,7 +87,17 @@ public sealed class Toast : Border
 		};
 		((Border)this).BoxShadow = new BoxShadows(val);
 		this.Opacity = 0.0;
-		((InputElement)this).IsHitTestVisible = false;
+		// Плашку можно нажать, чтобы она сразу убралась; курсор показывает это.
+		((InputElement)this).IsHitTestVisible = true;
+		try
+		{
+			// Курсор «рука» подсказывает, что плашку можно убрать нажатием.
+			// В окружении без платформы (тесты, headless) фабрика курсоров недоступна.
+			((InputElement)this).Cursor = new Cursor(StandardCursorType.Hand);
+		}
+		catch
+		{
+		}
 		((Layoutable)this).VerticalAlignment = (VerticalAlignment)1;
 		Transitions val2 = new Transitions();
 		((AvaloniaList<ITransition>)val2).Add((ITransition)new DoubleTransition
@@ -125,6 +135,30 @@ public sealed class Toast : Border
 			((AvaloniaList<Control>)(object)((Panel)val3).Children).Add((Control)(object)_strip);
 		}
 		((Decorator)this).Child = (Control)(object)val3;
+		((InputElement)this).PointerPressed += delegate(object? _, PointerPressedEventArgs e)
+		{
+			if (e.GetCurrentPoint((Visual)(object)this).Properties.IsLeftButtonPressed)
+			{
+				e.Handled = true;
+				Dismissed?.Invoke(this);
+				Dismiss();
+			}
+		};
+	}
+
+	/// <summary>Плашку убрали нажатием (подписчик решает, что ещё нужно сбросить).</summary>
+	public event Action<Toast>? Dismissed;
+
+	/// <summary>Мгновенно убирает плашку, не дожидаясь таймера.</summary>
+	public void Dismiss()
+	{
+		_generation++;
+		_busy = false;
+		Busy = false;
+		this.Opacity = 0.0;
+		this.IsVisible = false;
+		_strip?.SetActive(active: false);
+		this.Changed?.Invoke();
 	}
 
 	protected override void OnSizeChanged(SizeChangedEventArgs e)

@@ -831,6 +831,26 @@ public sealed class MainWindow : Window
 		};
 		_processToast.Changed += LayoutToasts;
 		_eventToast.Changed += LayoutToasts;
+		// Нажатие по уведомлению убирает его сразу: гасим таймер, иначе плашка
+		// «вернулась» бы через несколько секунд или осталась висеть анимацией.
+		_eventToast.Dismissed += delegate
+		{
+			DispatcherTimer? timer = _eventTimer;
+			if (timer != null)
+			{
+				timer.Stop();
+			}
+			_eventTimer = null;
+		};
+		_processToast.Dismissed += delegate
+		{
+			_processes.Clear();
+			DispatcherTimer? timer = _toastWatchdog;
+			if (timer != null)
+			{
+				timer.Stop();
+			}
+		};
 		Grid.SetRow((Control)val, 2);
 		return (Control)val;
 	}
