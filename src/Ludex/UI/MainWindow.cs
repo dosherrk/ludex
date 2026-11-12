@@ -2530,7 +2530,12 @@ public sealed class MainWindow : Window
 		// чтобы сразу работала проверка «это игра?». Список подгрузится при открытии рекомендаций.
 		Task catalog = StoreCatalog.PreloadIndexAsync(CancellationToken.None);
 		Task library = Task.CompletedTask;
-		if (_settings.Folders.Count > 0 && (_settings.AutoScanOnStartup || _games.Count == 0))
+		// Раньше здесь требовалось непустое _settings.Folders, поэтому при включённом
+		// автопоиске и пустом списке папок сканирование на старте не запускалось вовсе —
+		// библиотека оставалась пустой, хотя «Сканировать» находило игры.
+		bool autoScanAtStart = _settings.AutoScan && (_settings.AutoScanOnStartup || _games.Count == 0);
+		bool foldersAtStart = _settings.Folders.Count > 0 && (_settings.AutoScanOnStartup || _games.Count == 0);
+		if (autoScanAtStart || foldersAtStart)
 		{
 			library = StartScanAsync();
 		}

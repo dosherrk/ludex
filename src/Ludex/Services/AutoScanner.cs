@@ -237,7 +237,8 @@ public static class AutoScanner
 					return report;
 				}
 				bool flag = IsSystemDrive(item3);
-				Walk(new DirectoryInfo(item3), 0, flag ? 3 : 6, "drive", report, seenFolders, Progress, Cancelled);
+				TrackRoot(item3);
+				Walk(new DirectoryInfo(item3), 0, flag ? 3 : 6, flag ? "system" : "drive", report, seenFolders, Progress, Cancelled);
 			}
 			foreach (string item4 in UserFolders())
 			{
@@ -248,7 +249,8 @@ public static class AutoScanner
 				}
 				if (Directory.Exists(item4))
 				{
-					Walk(new DirectoryInfo(item4), 0, 3, "user", report, seenFolders, Progress, Cancelled);
+					TrackRoot(item4);
+					Walk(new DirectoryInfo(item4), 0, 4, "desktop", report, seenFolders, Progress, Cancelled);
 				}
 			}
 		}
@@ -262,7 +264,14 @@ public static class AutoScanner
 			AppPaths.Log("  · пропущено: " + item5);
 		}
 		return report;
-		void AddRoot(string folder, string origin)
+		void TrackRoot(string folder)
+	{
+		if (!report.Roots.Contains<string>(folder, StringComparer.OrdinalIgnoreCase))
+		{
+			report.Roots.Add(folder);
+		}
+	}
+	void AddRoot(string folder, string origin)
 		{
 			if (!report.Roots.Contains<string>(folder, StringComparer.OrdinalIgnoreCase))
 			{
@@ -481,6 +490,11 @@ public static class AutoScanner
 		case "steam":
 		case "epic":
 		case "known":
+		// Рабочий стол и несистемный диск — места, куда игры ставят руками
+		// (портативные сборки, второй диск «под игры»). Раньше здесь требовалось
+		// 700 МБ данных, и небольшие игры не находились вообще.
+		case "desktop":
+		case "drive":
 			flag2 = true;
 			break;
 		default:
@@ -961,22 +975,93 @@ public static class AutoScanner
 		// «Загрузки» намеренно не обходим: там лежат установщики, архивы и утилиты,
 		// и в библиотеку попадали посторонние файлы (например TqWsProxy_windows.exe).
 		// «Документы» — тоже: игры туда не ставят, зато там проекты и сохранения.
-		string[] array = new string[2] { "Desktop", "Рабочий стол" };
-		string[] array2 = array;
-		foreach (string path in array2)
+		//
+		// Рабочий стол проверяем в нескольких местах: Windows умеет переносить его
+		// в OneDrive («Рабочий стол» на другом языке тоже), и тогда в %USERPROFILE%\Desktop
+		// ничего нет, а игры лежат в OneDrive\Desktop — именно так у людей, которые
+		// «просто положили игры на рабочий стол».
+		List<string> list = new List<string>();
+		string desktop = SafeFolder(Environment.SpecialFolder.DesktopDirectory);
+		if (!string.IsNullOrWhiteSpace(desktop))
 		{
-			string text = System.IO.Path.Combine(home, path);
-			if (Directory.Exists(text))
+			list.Add(desktop);
+		}
+		foreach (string name in new string[2] { "Desktop", "Рабочий стол" })
+		{
+			list.Add(System.IO.Path.Combine(home, name));
+		}
+		foreach (string name in new string[2] { "Desktop", "Рабочий стол" })
+		{
+			list.Add(System.IO.Path.Combine(home, "OneDrive", name));
+		}
+		foreach (string path in list)
+		{
+			if (Directory.Exists(path))
 			{
-				yield return text;
+				yield return path;
 			}
 		}
 	}
 
 	/// <summary>
+	/// Рабочий стол пользователя (включая перенесённый в OneDrive). Туда люди кладут
+	/// портативные игры, поэтому такие папки — не «мусор профиля».
+	/// </summary>
+	public static bool IsUserDesktop(string? path)
+	{
+		if (string.IsNullOrWhiteSpace(path))
+		{
+			return false;
+		}
+		try
+		{
+			string full = System.IO.Path.GetFullPath(path).TrimEnd('\\', '/');
+			string desktop = SafeFolder(Environment.SpecialFolder.DesktopDirectory).TrimEnd('\\', '/');
+			if (desktop.Length > 0 && StartsWithFolder(full, desktop))
+			{
+				return true;
+			}
+			string home = SafeFolder(Environment.SpecialFolder.UserProfile).TrimEnd('\\', '/');
+			if (home.Length == 0)
+			{
+				return false;
+			}
+			foreach (string name in new string[2] { "Desktop", "Рабочий стол" })
+			{
+				if (StartsWithFolder(full, System.IO.Path.Combine(home, name)))
+				{
+					return true;
+				}
+				if (StartsWithFolder(full, System.IO.Path.Combine(home, "OneDrive", name)))
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+		catch
+		{
+			return false;
+		}
+	}
+
+	private static bool StartsWithFolder(string path, string folder)
+	{
+		if (folder.Length == 0)
+		{
+			return false;
+		}
+		return path.Equals(folder, StringComparison.OrdinalIgnoreCase)
+			|| path.StartsWith(folder + System.IO.Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+			|| path.StartsWith(folder + "/", StringComparison.OrdinalIgnoreCase);
+	}
+
+	/// <summary>
 	/// Папка внутри профиля пользователя, но не игровая библиотека: Загрузки, Документы,
-	/// рабочий стол, AppData и прочее. Вторая линия защиты — даже если такой путь попал
+	/// AppData и прочее. Вторая линия защиты — даже если такой путь попал
 	/// в обход другим маршрутом, игрой он не считается.
+	/// Рабочий стол сюда НЕ входит: там держат портативные игры, и раньше такие игры
+	/// не находились, а уже добавленные — вычищались из библиотеки.
 	/// </summary>
 	public static bool LooksLikeUserProfileJunk(string? path)
 	{
@@ -997,10 +1082,25 @@ public static class AutoScanner
 			{
 				return false;
 			}
+			if (IsUserDesktop(full))
+			{
+				return false;
+			}
 			string rest = full.Substring(root.Length).TrimStart('\\', '/');
-			string first = rest.Split(new char[2] { '\\', '/' }, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "";
-			string[] junk = new string[9] { "Downloads", "Загрузки", "Documents", "Документы", "Desktop", "Рабочий стол", "AppData", "OneDrive", "Изображения" };
-			return junk.Any((string name) => name.Equals(first, StringComparison.OrdinalIgnoreCase));
+			string[] parts = rest.Split(new char[2] { '\\', '/' }, StringSplitOptions.RemoveEmptyEntries);
+			string first = parts.FirstOrDefault() ?? "";
+			string[] junk = new string[20]
+			{
+				"Downloads", "Загрузки", "Documents", "Документы", "AppData", "Изображения", "Pictures",
+				"Музыка", "Music", "Видео", "Videos", "Saved Games", "Сохранённые игры",
+				"Contacts", "Контакты", "Favorites", "Избранное", "Links", "Searches", "3D Objects"
+			};
+			if (junk.Any((string name) => name.Equals(first, StringComparison.OrdinalIgnoreCase)))
+			{
+				return true;
+			}
+			// OneDrive целиком — служебный, но OneDrive\Desktop уже отсечён выше.
+			return first.Equals("OneDrive", StringComparison.OrdinalIgnoreCase) && parts.Length > 1;
 		}
 		catch
 		{

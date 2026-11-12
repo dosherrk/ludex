@@ -14,7 +14,7 @@ Unicode true
 !define APPNAME       "Ludex"
 !define APPEXE        "Ludex.exe"
 !ifndef APPVERSION
-  !define APPVERSION  "1.21.6"
+  !define APPVERSION  "1.21.7"
 !endif
 !define PUBLISHER     "Ludex"
 !define APPID         "Ludex"
@@ -81,6 +81,10 @@ LangString SecUninstall    ${LANG_ENGLISH} "Uninstall ${APPNAME}"
 LangString AskWipeData    ${LANG_RUSSIAN} "Удалить также настройки и кэш обложек Ludex?$\r$\n$\r$\nПапка: $LOCALAPPDATA\${APPNAME}$\r$\n(сами игры на диске не затрагиваются)"
 LangString LeftFiles      ${LANG_RUSSIAN} "Часть файлов удалить не удалось: $INSTDIR$\r$\n$\r$\nСкорее всего, Ludex ещё запущен. Закройте его и удалите папку вручную."
 LangString LeftFiles      ${LANG_ENGLISH} "Some files could not be removed: $INSTDIR$\r$\n$\r$\nLudex is probably still running. Close it and delete the folder manually."
+LangString AskCloseRunning ${LANG_RUSSIAN} "Ludex уже запущен.$\r$\n$\r$\nЗакрыть его, чтобы установить новую версию?"
+LangString AskCloseRunning ${LANG_ENGLISH} "Ludex is already running.$\r$\n$\r$\nClose it to install the new version?"
+LangString InstallCancelled ${LANG_RUSSIAN} "Установка отменена: сначала закройте Ludex."
+LangString InstallCancelled ${LANG_ENGLISH} "Installation cancelled: close Ludex first."
 LangString AskWipeData    ${LANG_ENGLISH} "Also delete Ludex settings and artwork cache?$\r$\n$\r$\nFolder: $LOCALAPPDATA\${APPNAME}$\r$\n(The game files on your disks are not touched)"
 
 ; ------------------------------------------------------------------- helpers
@@ -90,34 +94,25 @@ LangString AskWipeData    ${LANG_ENGLISH} "Also delete Ludex settings and artwor
 ; как это делает ярлык — через оболочку Windows (ShellExecute).
 Function LaunchApp
   ${If} ${FileExists} "$INSTDIR\${APPEXE}"
-    ; ShellExecute отдаёт запуск оболочке и сразу возвращает управление: мастер
-    ; закрывается, а Ludex стартует уже сам. Sleep здесь держал окно установщика
-    ; открытым поверх приложения — и провоцировал повторные нажатия «Готово».
-    ExecShell "open" "$INSTDIR\${APPEXE}" "" SW_SHOWNORMAL
-  ${EndIf}
-FunctionEnd
-
-Function .onInit
-  !insertmacro MUI_LANGDLL_DISPLAY
-
-  ; Копия Ludex может уже работать (в том числе молча — без окна, из трея).
-  ; Новая версия в такой ситуации не открывается, поэтому просим закрыть её
-  ; и, если пользователь согласен, завершаем процессы сами.
-  nsExec::ExecToStack 'cmd /c tasklist /FI "IMAGENAME eq ${APPEXE}" /NH /FO CSV'
-  Pop $0
-  Pop $1
-  ${If} $1 != ""
-    ${If} $1 != "INFO: No tasks are running which match the specified criteria."
-    ${AndIf} $1 != "INFO: нет задач, удовлетворяющих указанным условиям."
-      MessageBox MB_YESNO|MB_ICONQUESTION \
-        "Ludex уже запущен.$\r$\n$\r$\nЗакрыть его, чтобы установить новую версию?" \
-        IDYES killcopies
-      Abort "Установка отменена: сначала закройте Ludex."
+    ; SYNCHRONIZE = 0x100000. Открываем мьютекс, который держит приложение.
+    System::Call 'kernel32::OpenMutex(i 0x100000, i 0, t "Global\Ludex.SingleInstance") p .r1 ?e'
+    Pop $2 ; код ошибки GetLastError
+    StrCmp $1 "0" 0 ludex_running
+    ; ERROR_ACCESS_DENIED (5): мьютекс существует, но открыт с другими правами —
+    ; так бывает, когда Ludex запущен от администратора. Это тоже «запущен».
+    StrCmp $2 "5" ludex_running
+    Goto ludex_not_running
+    ludex_running:
+      StrCmp $1 "0" +2
+        System::Call 'kernel32::CloseHandle(p r1)'
+      MessageBox MB_YESNO|MB_ICONQUESTION "$(AskCloseRunning)" IDYES killcopies
+      Abort "$(InstallCancelled)"
       killcopies:
         nsExec::ExecToLog 'taskkill /IM ${APPEXE} /F'
         Sleep 700
-    ${EndIf}
   ${EndIf}
+  ludex_not_running:
+
 FunctionEnd
 Function un.onInit
   !insertmacro MUI_LANGDLL_DISPLAY
