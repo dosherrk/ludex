@@ -81,8 +81,19 @@ public class App : Application
 		((Application)this).Styles.Add((IStyle)(object)val4);
 	}
 
+	private bool _uiStarted;
+
 	public override void OnFrameworkInitializationCompleted()
 	{
+		// Даже однократная инициализация не должна выполняться дважды: второй проход
+		// создал бы вторую заставку, второе главное окно и второй значок в трее.
+		if (_uiStarted)
+		{
+			AppPaths.Log("OnFrameworkInitializationCompleted: повторный вход, пропускаю");
+			base.OnFrameworkInitializationCompleted();
+			return;
+		}
+		_uiStarted = true;
 		IApplicationLifetime applicationLifetime = ((Application)this).ApplicationLifetime;
 		IClassicDesktopStyleApplicationLifetime desktop = (IClassicDesktopStyleApplicationLifetime)(object)((applicationLifetime is IClassicDesktopStyleApplicationLifetime) ? applicationLifetime : null);
 		if (desktop != null)
@@ -114,6 +125,11 @@ public class App : Application
 				splash.Finish();
 			}, default(DispatcherPriority));
 		}
-		((Application)this).OnFrameworkInitializationCompleted();
+		// ВАЖНО: именно base. Метод виртуальный; декомпилятор записал здесь
+		// ((Application)this).OnFrameworkInitializationCompleted(), и вызов уходил
+		// в собственный override — бесконечная рекурсия ещё до Show() окна.
+		// Снаружи это выглядело как «процесс живёт, окна нет», а новый запуск
+		// плодил такой же процесс.
+		base.OnFrameworkInitializationCompleted();
 	}
 }
