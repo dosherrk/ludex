@@ -1088,8 +1088,12 @@ public sealed class MainWindow : Window
 		((Layoutable)starButton).HorizontalAlignment = (HorizontalAlignment)3;
 		((Layoutable)starButton).VerticalAlignment = (VerticalAlignment)1;
 		((Layoutable)starButton).Margin = new Thickness(0.0, 6.0, 6.0, 6.0);
+		// Оптическая прозрачность ≠ кликабельность: раньше у невыбранной карточки
+		// IsHitTestVisible был false, поэтому «В избранное» не нажималось, а у выбранной
+		// звезда горела даже после снятия. Теперь видимостью управляет только hover,
+		// а сама кнопка всегда доступна.
 		starButton.Opacity = (game2.Favorite ? 1 : 0);
-		((InputElement)starButton).IsHitTestVisible = game2.Favorite;
+		((InputElement)starButton).IsHitTestVisible = true;
 		Border obj = starButton;
 		Transitions val6 = new Transitions();
 		((AvaloniaList<ITransition>)val6).Add((ITransition)new DoubleTransition
@@ -1829,7 +1833,9 @@ public sealed class MainWindow : Window
 		}
 		if (_starButtons.TryGetValue(game.Id, out Border value2))
 		{
-			value2.Opacity = 1.0;
+			// 1.0, только пока карточка под курсором; иначе — по состоянию избранного,
+			// так что снятая звезда сразу гаснет, а не остаётся гореть.
+			value2.Opacity = (game.Favorite || value2.IsPointerOver) ? 1.0 : 0.0;
 		}
 	}
 
@@ -3249,11 +3255,17 @@ public sealed class MainWindow : Window
 		List<GameEntry> candidates = _games.Where((GameEntry g) => g.Source == null && !g.Favorite && !string.IsNullOrWhiteSpace(g.Title)).ToList();
 		if (candidates.Count == 0)
 		{
+			// нечего проверять: библиотека уже чистая — сообщаем и выходим
+			_processToast?.SetBusy(false);
 			ShowEvent(Loc.T("status.nothingCleaned"));
 			return;
 		}
+		// Держим плашку «занято» до самого конца: раньше она могла исчезнуть
+		// посреди проверки, и казалось, что кнопка «Убрать всё, что не игра» зависла.
+		_processToast?.SetBusy(true);
 		_processToast?.TogglePulse(on: true);
 		ProcessBegin("cleanup", Loc.T("auto.step.verify"));
+		AppPaths.Log("cleanup: старт, кандидатов " + candidates.Count);
 		try
 		{
 			HashSet<string> keep = new HashSet<string>((await GameVerifier.VerifyAsync(candidates.Select((GameEntry g) => g.Title), delegate(string message)
@@ -3281,10 +3293,18 @@ public sealed class MainWindow : Window
 			UpdateCount();
 			ShowEvent(Loc.F("status.cleaned", num), sticky: true);
 		}
+		catch (Exception ex)
+		{
+			// Ошибка сети или Steam не должна оставлять плашку висеть навсегда.
+			AppPaths.Log("cleanup: ошибка — " + ex.Message);
+			ShowEvent(Loc.T("status.nothingCleaned"));
+		}
 		finally
 		{
 			_processToast?.TogglePulse(on: false);
+			_processToast?.SetBusy(false);
 			ProcessEnd("cleanup");
+			AppPaths.Log("cleanup: готово");
 		}
 	}
 

@@ -457,6 +457,8 @@ public static class Loc
 		dictionary["custom.wallpaperError"] = ("Не удалось скачать картинку по этой ссылке", "Could not download the image from this link");
 		dictionary["custom.favOnHover"] = ("Звезда в углу карточки", "Star in the card corner");
 		dictionary["card.favorite"] = ("В избранное", "Add to favorites");
+		dictionary["btn.favorite"] = ("В избранное", "Add to favorites");
+		dictionary["btn.unfavorite"] = ("В избранном", "In favorites");
 		Map = dictionary;
 	}
 }

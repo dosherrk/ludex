@@ -826,6 +826,10 @@ public static class AutoScanner
 		{
 			return false;
 		}
+		if (LooksLikeUserProfileJunk(folder))
+		{
+			return false;
+		}
 		return true;
 	}
 
@@ -954,7 +958,10 @@ public static class AutoScanner
 		{
 			yield break;
 		}
-		string[] array = new string[6] { "Desktop", "Рабочий стол", "Downloads", "Загрузки", "Documents", "Документы" };
+		// «Загрузки» намеренно не обходим: там лежат установщики, архивы и утилиты,
+		// и в библиотеку попадали посторонние файлы (например TqWsProxy_windows.exe).
+		// «Документы» — тоже: игры туда не ставят, зато там проекты и сохранения.
+		string[] array = new string[2] { "Desktop", "Рабочий стол" };
 		string[] array2 = array;
 		foreach (string path in array2)
 		{
@@ -963,6 +970,41 @@ public static class AutoScanner
 			{
 				yield return text;
 			}
+		}
+	}
+
+	/// <summary>
+	/// Папка внутри профиля пользователя, но не игровая библиотека: Загрузки, Документы,
+	/// рабочий стол, AppData и прочее. Вторая линия защиты — даже если такой путь попал
+	/// в обход другим маршрутом, игрой он не считается.
+	/// </summary>
+	public static bool LooksLikeUserProfileJunk(string? path)
+	{
+		if (string.IsNullOrWhiteSpace(path))
+		{
+			return false;
+		}
+		try
+		{
+			string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+			if (string.IsNullOrWhiteSpace(home))
+			{
+				return false;
+			}
+			string full = System.IO.Path.GetFullPath(path).TrimEnd('\\', '/');
+			string root = System.IO.Path.GetFullPath(home).TrimEnd('\\', '/');
+			if (!full.StartsWith(root + System.IO.Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+			{
+				return false;
+			}
+			string rest = full.Substring(root.Length).TrimStart('\\', '/');
+			string first = rest.Split(new char[2] { '\\', '/' }, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "";
+			string[] junk = new string[9] { "Downloads", "Загрузки", "Documents", "Документы", "Desktop", "Рабочий стол", "AppData", "OneDrive", "Изображения" };
+			return junk.Any((string name) => name.Equals(first, StringComparison.OrdinalIgnoreCase));
+		}
+		catch
+		{
+			return false;
 		}
 	}
 

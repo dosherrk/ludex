@@ -168,6 +168,10 @@ public sealed class Toast : Border
 
 	public void Hide()
 	{
+		if (Busy)
+		{
+			return;
+		}
 		int generation = ++_generation;
 		_busy = false;
 		this.Opacity = 0.0;
@@ -195,5 +199,28 @@ public sealed class Toast : Border
 	public void TogglePulse(bool on)
 	{
 		_strip?.SetActive(on);
+	}
+
+	/// <summary>
+	/// Ждём ли мы завершения длинной операции (проверка библиотеки, чистка).
+	/// Пока ждём — плашка не гаснет сама и не прячется по таймеру.
+	/// </summary>
+	public bool Busy { get; private set; }
+
+	public void SetBusy(bool busy)
+	{
+		Busy = busy;
+		int generation = ++_generation;
+		if (busy)
+		{
+			_busy = true;
+			this.IsVisible = true;
+			this.Opacity = 1.0;
+			_strip?.SetActive(active: true);
+			this.Changed?.Invoke();
+			return;
+		}
+		// конец длинной операции — убираем плашку, но не мгновенно, чтобы не мигала
+		Hide();
 	}
 }
