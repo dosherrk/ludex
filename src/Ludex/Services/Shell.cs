@@ -149,6 +149,15 @@ public static class Shell
 		{
 			return false;
 		}
+		// Кастомные протоколы лаунчеров (steam://, com.epicgames.launcher://,
+		// goggalaxy:// и т.д.) не должны открываться в браузере — передаём
+		// их оболочке, которая запустит соответствующее приложение через
+		// зарегистрированный URI scheme.
+		if (!url.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+			&& !url.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+		{
+			return OpenUrlViaShell(url);
+		}
 		Browser.Info info = Browser.Detect();
 		if (info.Found && TryLaunch(info, url))
 		{
