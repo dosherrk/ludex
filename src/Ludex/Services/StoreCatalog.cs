@@ -172,6 +172,28 @@ public static class StoreCatalog
 		}
 	}
 
+	/// <summary>
+	/// Каталоги для индекса названий: берём оба языка. Русский каталог локализован
+	/// («Хогвартс: Наследие» вместо «Hogwarts Legacy»), поэтому по одному языку
+	/// половина библиотеки не находилась бы.
+	/// </summary>
+	public static string[] IndexCatalogUrls
+	{
+		get
+		{
+			string environmentVariable = Environment.GetEnvironmentVariable("LUDEX_CATALOG_URL");
+			if (!string.IsNullOrWhiteSpace(environmentVariable))
+			{
+				return new string[1] { environmentVariable };
+			}
+			return new string[2]
+			{
+				"https://dosherrk.github.io/ludex/catalog.ru.json.gz",
+				"https://dosherrk.github.io/ludex/catalog.en.json.gz"
+			};
+		}
+	}
+
 	public static DateTime FetchedUtc { get; private set; }
 
 	public static string? LastError { get; private set; }
@@ -194,9 +216,237 @@ public static class StoreCatalog
 
 	private static string CacheFile => System.IO.Path.Combine(CacheDir, "catalog.json");
 
+	/// <summary>Компактный индекс названий: ~1,5 МБ вместо 13–43 МБ полного каталога.</summary>
+	private static string IndexFile => System.IO.Path.Combine(CacheDir, "catalog.index.gz");
+
 	private static string FailFile => System.IO.Path.Combine(CacheDir, "catalog-fail.txt");
 
 	private static string ExcludePath => System.IO.Path.Combine(CacheDir, "exclude.json");
+
+	// Индекс «нормализованное название» для быстрой проверки «это игра?».
+	// Строится один раз и стоит копейки по сравнению с полным списком из 130 тысяч объектов.
+	private static HashSet<string>? _titleKeys;
+
+	/// <summary>
+	/// Предзагрузка для старта приложения: НЕ читает 43-мегабайтный каталог целиком,
+	/// а только разбирает его в индекс названий, чтобы проверка «это игра?» работала
+	/// сразу. Полный список подгружается позже, при открытии раздела рекомендаций.
+	/// Это снимает ~3,5 секунды и ~300 МБ памяти с каждого запуска.
+	/// </summary>
+	public static async Task PreloadIndexAsync(CancellationToken ct = default(CancellationToken))
+	{
+		if (_titleKeys != null)
+		{
+			return;
+		}
+		if (_task != null && _task.IsCompletedSuccessfully)
+		{
+			// полный список уже в памяти — индекс не нужен
+			return;
+		}
+		await Task.Run(delegate
+		{
+			try
+			{
+				EnsureIndex();
+			}
+			catch (Exception ex)
+			{
+				AppPaths.Log("StoreCatalog index: " + ex.Message);
+			}
+		}, ct).ConfigureAwait(continueOnCapturedContext: false);
+	}
+
+	private static void EnsureIndex()
+	{
+		if (_titleKeys != null)
+		{
+			return;
+		}
+		HashSet<string> keys = ReadIndexFile();
+		if (keys == null)
+		{
+			// индекса ещё нет (первый запуск или обновление с прежней версии):
+			// если есть полный кэш — берём из него, иначе качаем компактный индекс
+			keys = ReadIndexFromFullCache();
+			if (keys == null)
+			{
+				keys = DownloadIndex();
+			}
+			if (keys != null && keys.Count > 0)
+			{
+				WriteIndexFile(keys);
+			}
+		}
+		_titleKeys = keys ?? new HashSet<string>(StringComparer.Ordinal);
+		AppPaths.Log($"StoreCatalog: индекс названий {_titleKeys.Count} записей (без загрузки полного списка)");
+	}
+
+	private static HashSet<string>? ReadIndexFile()
+	{
+		try
+		{
+			if (!File.Exists(IndexFile))
+			{
+				return null;
+			}
+			using FileStream stream = File.OpenRead(IndexFile);
+			using GZipStream gzip = new GZipStream(stream, CompressionMode.Decompress);
+			using StreamReader reader = new StreamReader(gzip, Encoding.UTF8);
+			HashSet<string> keys = new HashSet<string>(StringComparer.Ordinal);
+			string? line;
+			while ((line = reader.ReadLine()) != null)
+			{
+				if (line.Length > 0)
+				{
+					keys.Add(line);
+				}
+			}
+			return keys.Count > 0 ? keys : null;
+		}
+		catch (Exception ex)
+		{
+			AppPaths.Log("StoreCatalog index read: " + ex.Message);
+			return null;
+		}
+	}
+
+	private static void WriteIndexFile(HashSet<string> keys)
+	{
+		try
+		{
+			string temp = IndexFile + ".tmp";
+			using (FileStream stream = File.Create(temp))
+			using (GZipStream gzip = new GZipStream(stream, CompressionLevel.Fastest))
+			using (StreamWriter writer = new StreamWriter(gzip, new UTF8Encoding(false)))
+			{
+				foreach (string key in keys)
+				{
+					writer.WriteLine(key);
+				}
+			}
+			File.Move(temp, IndexFile, overwrite: true);
+			AppPaths.Log($"StoreCatalog: индекс сохранён ({new FileInfo(IndexFile).Length / 1024} КБ)");
+		}
+		catch (Exception ex)
+		{
+			AppPaths.Log("StoreCatalog index write: " + ex.Message);
+		}
+	}
+
+	private static HashSet<string>? ReadIndexFromFullCache()
+	{
+		try
+		{
+			if (!File.Exists(CacheFile))
+			{
+				return null;
+			}
+			CacheFileModel model = JsonSerializer.Deserialize<CacheFileModel>(File.ReadAllText(CacheFile));
+			if (model?.Games == null || model.Games.Count == 0)
+			{
+				return null;
+			}
+			HashSet<string> keys = new HashSet<string>(StringComparer.Ordinal);
+			foreach (CacheEntry entry in model.Games)
+			{
+				string key = Normalize(entry.Name);
+				if (key.Length > 0)
+				{
+					keys.Add(key);
+				}
+			}
+			return keys;
+		}
+		catch (Exception ex)
+		{
+			AppPaths.Log("StoreCatalog index from cache: " + ex.Message);
+			return null;
+		}
+	}
+
+	/// <summary>
+	/// Скачивает каталог (5 МБ в gzip), оставляет только названия и сохраняет компактный
+	/// индекс. Полный список в память не попадает — это и есть экономия ~300 МБ.
+	/// </summary>
+	private static HashSet<string>? DownloadIndex()
+	{
+		try
+		{
+			using HttpClient http = MakeClient();
+			HashSet<string>? merged = null;
+			foreach (string url in IndexCatalogUrls)
+			{
+				try
+				{
+					using HttpResponseMessage response = http.GetAsync(url).GetAwaiter().GetResult();
+					if (!response.IsSuccessStatusCode)
+					{
+						continue;
+					}
+					using Stream stream = response.Content.ReadAsStreamAsync().GetAwaiter().GetResult();
+					using GZipStream gzip = new GZipStream(stream, CompressionMode.Decompress);
+					using JsonDocument document = JsonDocument.Parse(gzip);
+					if (!document.RootElement.TryGetProperty("games", out JsonElement games) || games.ValueKind != JsonValueKind.Array)
+					{
+						continue;
+					}
+					HashSet<string> keys = new HashSet<string>(StringComparer.Ordinal);
+					foreach (JsonElement game in games.EnumerateArray())
+					{
+						if (game.ValueKind == JsonValueKind.Array)
+						{
+							// компактный формат: [id, "название", ...]
+							foreach (JsonElement field in game.EnumerateArray())
+							{
+								if (field.ValueKind == JsonValueKind.String)
+								{
+									string key = Normalize(field.GetString() ?? "");
+									if (key.Length > 0)
+									{
+										keys.Add(key);
+									}
+									break;
+								}
+							}
+						}
+						else if (game.ValueKind == JsonValueKind.Object && game.TryGetProperty("name", out JsonElement name))
+						{
+							string key = Normalize(name.GetString() ?? "");
+							if (key.Length > 0)
+							{
+								keys.Add(key);
+							}
+						}
+					}
+					if (keys.Count > 0)
+					{
+						AppPaths.Log($"StoreCatalog: индекс из {url.Split('/').Last()} — {keys.Count} названий");
+						merged ??= new HashSet<string>(StringComparer.Ordinal);
+						merged.UnionWith(keys);
+					}
+				}
+				catch (Exception ex2)
+				{
+					AppPaths.Log("StoreCatalog index download: " + ex2.Message);
+				}
+			}
+			if (merged != null && merged.Count > 0)
+			{
+				return merged;
+			}
+		}
+		catch (Exception ex)
+		{
+			AppPaths.Log("StoreCatalog index download failed: " + ex.Message);
+		}
+		return null;
+	}
+
+	private static string Normalize(string text)
+	{
+		return new string((text ?? "").ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
+	}
 
 	public static Task<List<StoreGame>> LoadAsync(bool force, Action<string>? progress, CancellationToken ct)
 	{
@@ -229,24 +479,43 @@ public static class StoreCatalog
 
 	public static bool MatchesTitle(string title)
 	{
-		if (_loaded == null)
+		if (_titleKeys == null)
 		{
-			_loaded = ReadCache();
+			EnsureIndex();
 		}
-		if (_loaded == null || _loaded.Count == 0)
+		if (_titleKeys == null || _titleKeys.Count == 0)
 		{
 			return false;
 		}
-		string key = new string(title.ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
+		string key = Normalize(title);
 		if (key.Length < 3)
 		{
 			return false;
 		}
-		return _loaded.Any(delegate(StoreGame g)
+		if (_titleKeys.Contains(key))
 		{
-			string text = new string(g.Name.ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
-			return text.Length > 0 && (text.Contains(key, StringComparison.Ordinal) || key.Contains(text, StringComparison.Ordinal));
-		});
+			return true;
+		}
+		// Частичное совпадение допускаем только для близких по длине названий.
+		// Раньше сравнение было «любая строка содержит любую другую», и при 130 тысячах
+		// записей почти всё признавалось игрой (например «TqWsProxy» или «Downloads»):
+		// чистка библиотеки после этого не убирала ничего.
+		if (key.Length < 8)
+		{
+			return false;
+		}
+		foreach (string candidate in _titleKeys)
+		{
+			if (candidate.Length < 8 || Math.Abs(candidate.Length - key.Length) * 100 > Math.Max(candidate.Length, key.Length) * 25)
+			{
+				continue;
+			}
+			if (candidate.Contains(key, StringComparison.Ordinal) || key.Contains(candidate, StringComparison.Ordinal))
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private static void Report(Action<string>? progress, string text, double fraction)

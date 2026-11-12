@@ -492,6 +492,28 @@ public static class Ui
 		}
 	}
 
+	/// <summary>
+	/// Обложка для сетки: картинка 460×215 декодируется в 176×264 на карточке,
+	/// поэтому сразу уменьшаем её вдвое — и память, и время на отрисовку.
+	/// </summary>
+	public static Bitmap? LoadCoverThumb(string? path, int width = 320)
+	{
+		try
+		{
+			if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+			{
+				return null;
+			}
+			using FileStream fileStream = File.OpenRead(path);
+			return Bitmap.DecodeToWidth((Stream)fileStream, width, (BitmapInterpolationMode)2);
+		}
+		catch (Exception ex)
+		{
+			AppPaths.Log("LoadCoverThumb: " + ex.Message);
+			return LoadBitmap(path);
+		}
+	}
+
 	public static Bitmap? LoadBitmap(string? path)
 	{
 		try
