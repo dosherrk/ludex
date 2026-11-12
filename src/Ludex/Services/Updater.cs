@@ -95,6 +95,15 @@ public static class Updater
 {
 	public const string Repo = "dosherrk/ludex";
 
+	// Лента релизов: без лимита запросов, в отличие от REST API.
+	private const string AtomFeedUrl = "https://github.com/dosherrk/ludex/releases.atom";
+
+	private static readonly Regex TagPattern = new Regex("<id>tag:github.com,2008:Repository/\\d+/([^<]+)</id>", RegexOptions.Compiled);
+
+	private static readonly Regex LinkPattern = new Regex("<link type=\"text/html\" rel=\"alternate\" href=\"([^\"]+)\"", RegexOptions.Compiled);
+
+	private static readonly Regex NotesPattern = new Regex("<content type=\"html\">(.*?)</content>", RegexOptions.Singleline | RegexOptions.Compiled);
+
 	public static string FeedUrl
 	{
 		get
@@ -163,6 +172,14 @@ public static class Updater
 		try
 		{
 			json = await http.GetStringAsync(FeedUrl, ct).ConfigureAwait(continueOnCapturedContext: false);
+		}
+		catch (HttpRequestException ex2) when (IsRateLimited(ex2))
+		{
+			// api.github.com даёт всего 60 запросов в час на IP: при частых проверках
+			// (в том числе из одной сети) приходит 403 rate limit. У ленты релизов
+			// такого ограничения нет, поэтому берём данные из неё.
+			AppPaths.Log("Updater: api.github.com — 403 rate limit, беру ленту релизов");
+			return await CheckViaAtomAsync(http, ct).ConfigureAwait(continueOnCapturedContext: false);
 		}
 		catch (Exception ex) when (((ex is HttpRequestException || ex is TaskCanceledException) ? 1 : 0) != 0)
 		{
@@ -249,6 +266,70 @@ public static class Updater
 			AssetUrl = assetUrl,
 			AssetSize = assetSize,
 			Sha256 = sha,
+			PageUrl = pageUrl,
+			Notes = notes
+		};
+	}
+
+	private static bool IsRateLimited(HttpRequestException ex)
+	{
+		if (ex.StatusCode == System.Net.HttpStatusCode.Forbidden || ex.StatusCode == (System.Net.HttpStatusCode)429)
+		{
+			return true;
+		}
+		string text = ex.Message ?? "";
+		return text.Contains("403", StringComparison.Ordinal) || text.Contains("rate limit", StringComparison.OrdinalIgnoreCase);
+	}
+
+	/// <summary>
+	/// Резервный путь: лента релизов GitHub (releases.atom) не имеет лимита запросов.
+	/// В ней есть тег, название, ссылка на страницу и текст заметок, но нет списка файлов —
+	/// поэтому имена файлов собираются по обычному шаблону релиза.
+	/// </summary>
+	private static async Task<UpdateInfo?> CheckViaAtomAsync(HttpClient http, CancellationToken ct)
+	{
+		string xml;
+		try
+		{
+			xml = await http.GetStringAsync(AtomFeedUrl, ct).ConfigureAwait(continueOnCapturedContext: false);
+		}
+		catch (Exception ex)
+		{
+			throw new UpdateException("Не удалось связаться с GitHub: " + ex.Message);
+		}
+		Match entry = Regex.Match(xml, "<entry>(.*?)</entry>", RegexOptions.Singleline);
+		if (!entry.Success)
+		{
+			throw new UpdateException("В ленте релизов GitHub нет записей.");
+		}
+		string body = entry.Groups[1].Value;
+		string tag = TagPattern.Match(body).Groups[1].Value;
+		Version version = ParseVersion(tag);
+		if (version == null)
+		{
+			throw new UpdateException("Не удалось разобрать версию в теге релиза: «" + tag + "»");
+		}
+		if (version <= CurrentVersion)
+		{
+			return null;
+		}
+		string pageUrl = LinkPattern.Match(body).Groups[1].Value;
+		if (string.IsNullOrWhiteSpace(pageUrl))
+		{
+			pageUrl = "https://github.com/" + Repo + "/releases/tag/" + tag;
+		}
+		Match notesMatch = NotesPattern.Match(body);
+		string notes = notesMatch.Success ? WebUtility.HtmlDecode(Regex.Replace(notesMatch.Groups[1].Value, "<.*?>", "")).Trim() : null;
+		string[] candidates = AssetCandidates(version);
+		AppPaths.Log("Updater: из ленты релизов " + tag + ", файл " + candidates[0]);
+		return new UpdateInfo
+		{
+			Version = version,
+			Tag = tag,
+			AssetName = candidates[0],
+			AssetUrl = "https://github.com/" + Repo + "/releases/download/" + tag + "/" + Uri.EscapeDataString(candidates[0]),
+			AssetSize = 0,
+			Sha256 = null,
 			PageUrl = pageUrl,
 			Notes = notes
 		};

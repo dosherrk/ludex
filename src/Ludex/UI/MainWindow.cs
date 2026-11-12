@@ -56,6 +56,12 @@ public sealed class MainWindow : Window
 
 	private const double CardGap = 18.0;
 
+	// Порционная отрисовка библиотеки: строим первые карточки, остальные — по прокрутке.
+	private List<GameEntry> _renderList = new List<GameEntry>();
+	private int _renderedCount;
+	private DispatcherTimer? _renderTimer;
+	private const int InitialCards = 24;
+	private const int CardsPerPortion = 32;
 	private double _cardWidth = 176.0;
 
 	private double _cardHeight = 264.0;
@@ -114,7 +120,7 @@ public sealed class MainWindow : Window
 
 	private Grid _recsHost;
 
-	private Control _recsView;
+	private Control? _recsView;
 
 	private Border? _recChip;
 
@@ -218,10 +224,14 @@ public sealed class MainWindow : Window
 
 	public MainWindow()
 	{
+		System.Diagnostics.Stopwatch clock = System.Diagnostics.Stopwatch.StartNew();
+		Mark = phase => AppPaths.Log($"[запуск] {clock.ElapsedMilliseconds} мс — {phase}");
+
 		_settings = Storage.LoadSettings();
 		Loc.Lang = _settings.Language;
 		Skin.Apply(_settings.Theme, _settings.Accent, _settings.Transparent);
 		_games = Storage.LoadGames();
+		Mark($"настройки и библиотека ({_games.Count} игр)");
 		int num = PrunePhantomGames();
 		if (num > 0)
 		{
@@ -268,8 +278,12 @@ public sealed class MainWindow : Window
 			((Window)this).WindowState = (WindowState)2;
 		}
 		TrySetIcon();
+		Mark("подготовка окна");
 		BuildUi();
+		Mark("BuildUi");
 		RenderGrid();
+		Mark("RenderGrid (сетка карточек)");
+		Mark("конструктор завершён");
 		((TopLevel)this).Opened += OnOpened;
 		((Window)this).Closing += OnClosing;
 		((Control)this).SizeChanged += OnWindowResized;
@@ -335,6 +349,7 @@ public sealed class MainWindow : Window
 		Grid.SetColumnSpan((Control)(object)_wallpaperLayer, 2);
 		((AvaloniaList<Control>)(object)((Panel)val).Children).Add((Control)(object)_wallpaperLayer);
 		RefreshWallpaper();
+		Mark("UI: обои");
 		if (Skin.Transparent)
 		{
 			Grid val2 = new Grid
@@ -359,6 +374,7 @@ public sealed class MainWindow : Window
 			((AvaloniaList<Control>)(object)((Panel)val).Children).Add((Control)(object)val2);
 		}
 		Control val5 = BuildSidebar();
+		Mark("UI: сайдбар");
 		Grid.SetColumn(val5, 0);
 		((AvaloniaList<Control>)(object)((Panel)val).Children).Add(val5);
 		Grid val6 = new Grid
@@ -368,6 +384,7 @@ public sealed class MainWindow : Window
 		Grid.SetColumn((Control)(object)val6, 1);
 		((AvaloniaList<Control>)(object)((Panel)val).Children).Add((Control)(object)val6);
 		((AvaloniaList<Control>)(object)((Panel)val6).Children).Add(BuildTitleStrip());
+		Mark("UI: шапка");
 		Grid val7 = new Grid();
 		Grid val8 = val7;
 		_libraryHost = val7;
@@ -385,9 +402,19 @@ public sealed class MainWindow : Window
 			VerticalScrollBarVisibility = (ScrollBarVisibility)1
 		};
 		Ui.SmoothScroll(_libraryScroll, 130.0);
+		// Страховка для порционной отрисовки: если пользователь прокрутил до низа
+		// раньше, чем достроилась очередная порция, достраиваем сразу.
+		_libraryScroll.ScrollChanged += delegate
+		{
+			if (_renderedCount < _renderList.Count && _libraryScroll.Offset.Y + _libraryScroll.Viewport.Height >= _libraryScroll.Extent.Height - 200.0)
+			{
+				AddCards(_renderList, CardsPerPortion);
+			}
+		};
 		((AvaloniaList<Control>)(object)((Panel)val9).Children).Add((Control)(object)_libraryScroll);
 		_emptyState = BuildEmptyState();
 		((AvaloniaList<Control>)(object)((Panel)val9).Children).Add(_emptyState);
+		Mark("UI: библиотека+пустое состояние");
 		_detailLayer = new Border
 		{
 			Background = Skin.Overlay,
@@ -407,21 +434,11 @@ public sealed class MainWindow : Window
 		{
 			IsVisible = false
 		};
-		_recsView = (Control)(object)new RecommendationsView(TitleInLibrary, delegate(string text)
-		{
-			SetStatus(text);
-		}, delegate(int count)
-		{
-			_recsFound = count;
-			if (_recsVisible)
-			{
-				ShowRecsCount();
-			}
-		}, () => _settings.SearchEngine);
-		((AvaloniaList<Control>)(object)((Panel)_recsHost).Children).Add(_recsView);
+		_recsView = null;
 		Grid.SetRow((Control)(object)_recsHost, 1);
 		((AvaloniaList<Control>)(object)((Panel)val6).Children).Add((Control)(object)_recsHost);
 		Control val10 = BuildStatusBar();
+		Mark("UI: статус-бар");
 		Grid.SetRow(val10, 2);
 		((AvaloniaList<Control>)(object)((Panel)val6).Children).Add(val10);
 		Border val11 = new Border
@@ -473,11 +490,13 @@ public sealed class MainWindow : Window
 			RenderTransformOrigin = RelativePoint.Center,
 			ClipToBounds = false
 		};
+		Mark("UI: слои");
 		((ContentControl)this).Content = _revealHost;
 		UpdateCount();
 		ApplyFavChipState();
 		if (_recsVisible)
 		{
+			EnsureRecsView();
 			_libraryHost.IsVisible = false;
 			_recsHost.IsVisible = true;
 			if (_sectionLabel != null)
@@ -1035,10 +1054,11 @@ public sealed class MainWindow : Window
 		((AvaloniaList<Control>)(object)((Panel)_grid).Children).Clear();
 		UpdateCardMetrics();
 		List<GameEntry> list = VisibleGames().ToList();
-		for (int i = 0; i < list.Count; i++)
-		{
-			((AvaloniaList<Control>)(object)((Panel)_grid).Children).Add(BuildCard(list[i], i));
-		}
+		_renderList = list;
+		_renderedCount = 0;
+		_renderTimer?.Stop();
+		_renderTimer = null;
+		AddCards(list, Math.Min(list.Count, InitialCards));
 		bool isVisible = _emptyState.IsVisible;
 		_emptyState.IsVisible = list.Count == 0;
 		if (_emptyState.IsVisible && _emptyTitle != null && _emptyHint != null)
@@ -1070,6 +1090,59 @@ public sealed class MainWindow : Window
 		}
 	}
 
+	/// <summary>
+	/// Достраивает очередную порцию карточек. Строить сразу все — это ~2 мс на карточку
+	/// (300 игр = 0,6 с на старте), а видно пользователю всё равно 15–20 штук.
+	/// </summary>
+	private void AddCards(List<GameEntry> list, int count)
+	{
+		int limit = Math.Min(list.Count, _renderedCount + count);
+		if (limit <= _renderedCount)
+		{
+			return;
+		}
+		Control? last = null;
+		for (int i = _renderedCount; i < limit; i++)
+		{
+			last = BuildCard(list[i], i);
+			((AvaloniaList<Control>)(object)((Panel)_grid).Children).Add(last);
+		}
+		_renderedCount = limit;
+		if (last != null && _renderedCount < list.Count)
+		{
+			// Продолжаем, как только предыдущая порция реально привязалась к экрану:
+			// в обычном режиме это доли секунды, а первый кадр уже показан.
+			AttachNextPortion(last);
+		}
+	}
+
+	private void AttachNextPortion(Control anchor)
+	{
+		// Первые карточки уже в дереве; остальные достраиваем короткими порциями по таймеру.
+		// Так старт не зависит от того, успело ли окно отрисоваться (свёрнутое в трей,
+		// заблокированный экран и т. п.), и интерфейс не замирает на полсекунды.
+		if (_renderTimer != null)
+		{
+			return;
+		}
+		_renderTimer = new DispatcherTimer
+		{
+			Interval = TimeSpan.FromMilliseconds(80.0)
+		};
+		_renderTimer.Tick += delegate
+		{
+			if (_renderedCount >= _renderList.Count)
+			{
+				_renderTimer?.Stop();
+				_renderTimer = null;
+				AppPaths.Log($"[запуск] сетка достроена: {_renderedCount} карточек");
+				return;
+			}
+			AddCards(_renderList, CardsPerPortion);
+		};
+		_renderTimer.Start();
+	}
+
 	private Control BuildCard(GameEntry game, int index)
 	{
 		GameEntry game2 = game;
@@ -1079,7 +1152,7 @@ public sealed class MainWindow : Window
 			Height = _cardHeight,
 			ClipToBounds = true
 		};
-		Bitmap val2 = Ui.LoadBitmap(game2.CoverFile);
+		Bitmap val2 = Ui.LoadCoverThumb(game2.CoverFile, 320);
 		Image val3 = new Image
 		{
 			Source = (IImage)(object)val2,
@@ -1437,7 +1510,7 @@ public sealed class MainWindow : Window
 			Height = 450.0,
 			ClipToBounds = true
 		};
-		Bitmap val6 = Ui.LoadBitmap(game2.CoverFile);
+		Bitmap val6 = Ui.LoadCoverThumb(game2.CoverFile, 320);
 		if (val6 != null)
 		{
 			((AvaloniaList<Control>)(object)((Panel)val5).Children).Add((Control)new Image
@@ -1678,7 +1751,7 @@ public sealed class MainWindow : Window
 			Height = 356.0,
 			ClipToBounds = true
 		};
-		Bitmap val2 = Ui.LoadBitmap(game.CoverFile);
+		Bitmap val2 = Ui.LoadCoverThumb(game.CoverFile, 320);
 		if (val2 != null)
 		{
 			((AvaloniaList<Control>)(object)((Panel)val).Children).Add((Control)new Image
@@ -2438,10 +2511,24 @@ public sealed class MainWindow : Window
 		}
 	}
 
-	public async Task WarmUpAsync()
+	private static Action<string> Mark = delegate { };
+
+	public Task WarmUpAsync()
 	{
+		// Окно больше не ждёт прогрев: раньше заставка висела, пока качался каталог
+		// и сканировались папки. Теперь всё это идёт в фоне и само обновляет список,
+		// когда закончит, — пользователь видит интерфейс сразу.
+		_ = WarmUpCoreAsync();
+		return Task.CompletedTask;
+	}
+
+	private async Task WarmUpCoreAsync()
+	{
+		System.Diagnostics.Stopwatch warmClock = System.Diagnostics.Stopwatch.StartNew();
 		DateTime started = DateTime.UtcNow;
-		Task<List<StoreGame>> catalog = StoreCatalog.LoadAsync(force: false, null, CancellationToken.None);
+		// Полный каталог (130 тысяч игр) на старте больше не нужен: только индекс названий,
+		// чтобы сразу работала проверка «это игра?». Список подгрузится при открытии рекомендаций.
+		Task catalog = StoreCatalog.PreloadIndexAsync(CancellationToken.None);
 		Task library = Task.CompletedTask;
 		if (_settings.Folders.Count > 0 && (_settings.AutoScanOnStartup || _games.Count == 0))
 		{
@@ -2459,15 +2546,8 @@ public sealed class MainWindow : Window
 		{
 			AppPaths.Log("WarmUp catalog: " + catalog.Exception?.GetBaseException().Message);
 		}
-		if (catalog.IsCompletedSuccessfully)
-		{
-			List<StoreGame> first = catalog.Result.Take(60).ToList();
-			DateTime coversBy = DateTime.UtcNow + TimeSpan.FromSeconds(1.5);
-			while (DateTime.UtcNow < coversBy && first.Any((StoreGame g) => g.CoverPath == null || !File.Exists(g.CoverPath)))
-			{
-				await Task.Delay(150);
-			}
-		}
+
+		AppPaths.Log($"[запуск] прогрев {warmClock.ElapsedMilliseconds} мс (каталог {(catalog.IsCompleted ? "готов" : "догружается")})");
 	}
 
 	private void OnOpened(object? sender, EventArgs e)
@@ -2784,8 +2864,36 @@ public sealed class MainWindow : Window
 		}
 	}
 
+	/// <summary>
+	/// Вид рекомендаций тяжёлый (свои карточки, фильтры, полоса жанров), а нужен только
+	/// при переходе в раздел. Строим один раз — при первом показе.
+	/// </summary>
+	private void EnsureRecsView()
+	{
+		if (_recsView != null)
+		{
+			return;
+		}
+		System.Diagnostics.Stopwatch recsClock = System.Diagnostics.Stopwatch.StartNew();
+		Control view = (Control)(object)new RecommendationsView(TitleInLibrary, delegate(string text)
+		{
+			SetStatus(text);
+		}, delegate(int count)
+		{
+			_recsFound = count;
+			if (_recsVisible)
+			{
+				ShowRecsCount();
+			}
+		}, () => _settings.SearchEngine);
+		_recsView = view;
+		((AvaloniaList<Control>)(object)((Panel)_recsHost).Children).Add(view);
+		Mark($"UI: рекомендации (лениво, {recsClock.ElapsedMilliseconds} мс)");
+	}
+
 	private void ShowRecommendations()
 	{
+		EnsureRecsView();
 		_recsVisible = true;
 		_libraryHost.IsVisible = false;
 		_recsHost.IsVisible = true;
