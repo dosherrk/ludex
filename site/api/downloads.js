@@ -6,6 +6,16 @@ const { configured, setMany } = require('./_lib/redis');
 
 const REPO = 'dosherrk/ludex';
 
+// Ключи кнопок: те же, что понимают /api/go и /api/clicks.
+const KINDS = ['setup', 'portable', 'win-zip', 'linux-tar', 'linux-deb'];
+
+// Тег релиза → сравнимое «число»: v1.21.4 и Ludex-Setup-1.21.4 считаются одной версией.
+function versionKey(tag) {
+  const m = String(tag || '').match(/(\d+)\.(\d+)\.(\d+)/);
+  if (!m) return String(tag || '');
+  return m[1] + '.' + m[2] + '.' + m[3];
+}
+
 // Имена файлов релиза → ключи кнопок на сайте.
 // sources.zip и прочее, что не скачивают кнопками, не считаем.
 function classify(name) {
@@ -32,8 +42,17 @@ function build(releases) {
   const kinds = {};
   let total = 0;
 
+  // Тег текущего релиза — того, что стоит первым в списке (он от новых к старым).
+  // Файлы других версий на кнопки не попадают: подпись «Installer» без версии
+  // означала бы, что человек скачивает не то, что видит в заголовке. Если файла
+  // в текущем релизе ещё нет (сборка не догнала тег), кнопка просто остаётся
+  // без ссылки и включится, когда файл появится.
+  const head = releases.find((r) => r && !r.draft && !r.prerelease) || releases[0] || {};
+  const headVersion = versionKey(head.tag_name);
+
   for (const rel of releases) {
     if (!rel || rel.draft) continue;
+    if (versionKey(rel.tag_name) !== headVersion) continue;
     for (const asset of rel.assets || []) {
       const kind = classify(asset.name);
       if (!kind) continue;
@@ -41,15 +60,12 @@ function build(releases) {
       total += count;
       if (!kinds[kind]) kinds[kind] = { count: 0, url: '', name: asset.name };
       kinds[kind].count += count;
-      // ссылка на самый свежий релиз (список приходит от новых к старым)
       if (!kinds[kind].url) {
         kinds[kind].url = asset.browser_download_url;
         kinds[kind].name = asset.name;
       }
     }
   }
-
-  const head = releases.find((r) => r && !r.draft && !r.prerelease) || releases[0] || {};
 
   return {
     available: true,
