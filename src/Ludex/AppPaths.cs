@@ -118,14 +118,49 @@ public static class AppPaths
 		}
 	}
 
+	/// <summary>
+	/// Второй журнал, рядом с программой. Первый (%LOCALAPPDATA%\Ludex\log.txt) может
+	/// не создаться — например, если папку удалил установщик или её закрывает политика.
+	/// Тогда диагностика старта терялась, и падение выглядело как «процесс без окна».
+	/// </summary>
+	public static string FallbackLogFile
+	{
+		get
+		{
+			try
+			{
+				string dir = System.IO.Path.GetDirectoryName(Environment.ProcessPath ?? "") ?? "";
+				if (dir.Length > 0)
+				{
+					return System.IO.Path.Combine(dir, "ludex-startup.log");
+				}
+			}
+			catch
+			{
+			}
+			return System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ludex-startup.log");
+		}
+	}
+
+	/// <summary>Все места, где искать журнал (для сообщений пользователю).</summary>
+	public static string LogFilesHint => LogFile + "\n" + FallbackLogFile;
+
 	public static void Log(string message)
 	{
+		string line = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss}  {message}{Environment.NewLine}";
 		try
 		{
-			File.AppendAllText(LogFile, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss}  {message}{Environment.NewLine}");
+			File.AppendAllText(LogFile, line);
 		}
 		catch
 		{
+			try
+			{
+				File.AppendAllText(FallbackLogFile, line);
+			}
+			catch
+			{
+			}
 		}
 	}
 }

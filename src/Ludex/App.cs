@@ -87,6 +87,10 @@ public class App : Application
 		IClassicDesktopStyleApplicationLifetime desktop = (IClassicDesktopStyleApplicationLifetime)(object)((applicationLifetime is IClassicDesktopStyleApplicationLifetime) ? applicationLifetime : null);
 		if (desktop != null)
 		{
+			// Приложение живёт в трее: закрытие окна — это не выход. При стандартном
+			// OnLastWindowClose закрытие заставки до показа главного окна завершало
+			// процесс целиком — со стороны это выглядело как «запустился и сразу умер».
+			desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
 			SplashWindow splash = new SplashWindow();
 			((WindowBase)splash).Show();
 			MainWindow main = new MainWindow();

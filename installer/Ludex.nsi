@@ -90,14 +90,34 @@ LangString AskWipeData    ${LANG_ENGLISH} "Also delete Ludex settings and artwor
 ; как это делает ярлык — через оболочку Windows (ShellExecute).
 Function LaunchApp
   ${If} ${FileExists} "$INSTDIR\${APPEXE}"
+    ; ShellExecute отдаёт запуск оболочке и сразу возвращает управление: мастер
+    ; закрывается, а Ludex стартует уже сам. Sleep здесь держал окно установщика
+    ; открытым поверх приложения — и провоцировал повторные нажатия «Готово».
     ExecShell "open" "$INSTDIR\${APPEXE}" "" SW_SHOWNORMAL
-    ; значок в трее и окно появляются не мгновенно — приложение ещё собирается
-    Sleep 1200
   ${EndIf}
 FunctionEnd
 
 Function .onInit
   !insertmacro MUI_LANGDLL_DISPLAY
+
+  ; Копия Ludex может уже работать (в том числе молча — без окна, из трея).
+  ; Новая версия в такой ситуации не открывается, поэтому просим закрыть её
+  ; и, если пользователь согласен, завершаем процессы сами.
+  nsExec::ExecToStack 'cmd /c tasklist /FI "IMAGENAME eq ${APPEXE}" /NH /FO CSV'
+  Pop $0
+  Pop $1
+  ${If} $1 != ""
+    ${If} $1 != "INFO: No tasks are running which match the specified criteria."
+    ${AndIf} $1 != "INFO: нет задач, удовлетворяющих указанным условиям."
+      MessageBox MB_YESNO|MB_ICONQUESTION \
+        "Ludex уже запущен.$\r$\n$\r$\nЗакрыть его, чтобы установить новую версию?" \
+        IDYES killcopies
+      Abort "Установка отменена: сначала закройте Ludex."
+      killcopies:
+        nsExec::ExecToLog 'taskkill /IM ${APPEXE} /F'
+        Sleep 700
+    ${EndIf}
+  ${EndIf}
 FunctionEnd
 Function un.onInit
   !insertmacro MUI_LANGDLL_DISPLAY

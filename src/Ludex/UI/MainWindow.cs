@@ -2524,7 +2524,11 @@ public sealed class MainWindow : Window
 				return;
 			}
 			AppPaths.Log("Update: restarting into " + info.Tag);
-			((Window)this).Close();
+			// Закрыть окно недостаточно: при включённом CloseToTray оно лишь прячется
+			// в трей, процесс остаётся жить и держит файлы. Помощник обновления ждёт
+			// завершения процесса — без Shutdown получался цикл «обновление → старая
+			// копия снова стартует → снова обновление». Выходим по-настоящему.
+			ExitApplication();
 		}
 	}
 

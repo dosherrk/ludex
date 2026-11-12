@@ -61,6 +61,9 @@ internal static class Program
 			AppPaths.Log("Unobserved task: " + e.Exception);
 			e.SetObserved();
 		};
+		// Отметка каждого старта: по ней видно, кто и как часто перезапускает Ludex.
+		AppPaths.Log($"=== старт {Updater.CurrentVersionText} pid={Environment.ProcessId} "
+			+ $"exe={Environment.ProcessPath} args='{string.Join(" ", args)}'");
 		if (args.Any(delegate(string a)
 		{
 			switch (a)
@@ -82,6 +85,12 @@ internal static class Program
 			{
 				return;
 			}
+			string? storm = SingleInstance.CheckRestartStorm();
+			if (storm != null)
+			{
+				ShowFatal(storm);
+				return;
+			}
 			try
 			{
 				ClassicDesktopStyleApplicationLifetimeExtensions.StartWithClassicDesktopLifetime(BuildAvaloniaApp(), args, (Action<IClassicDesktopStyleApplicationLifetime>)null);
@@ -91,25 +100,41 @@ internal static class Program
 				AppPaths.Log("Fatal: " + ex);
 				if (args.All((string a) => !a.StartsWith("-psn", StringComparison.Ordinal)))
 				{
-					try
-					{
-						Console.Error.WriteLine("Ludex не запустился: " + ex.Message);
-						Console.Error.WriteLine("Журнал: " + AppPaths.LogFile);
-						if (!Console.IsErrorRedirected)
-						{
-							Console.Error.WriteLine("Нажмите Enter, чтобы закрыть окно.");
-						}
-						if (!Console.IsErrorRedirected)
-						{
-							Console.ReadLine();
-						}
-					}
-					catch
-					{
-					}
+					// WinExe не имеет консоли: писать в Console.Error бессмысленно, окно
+					// «Ludex не запустился» не появлялось, и старт выглядел как мёртвый процесс.
+					string text = "Ludex не запустился.\n\n" + ex.Message + "\n\nЖурнал: " + AppPaths.LogFilesHint;
+					AppPaths.Log("Fatal: " + text);
+					ShowFatal(text);
 				}
 				throw;
 			}
+		}
+	}
+
+	/// <summary>
+	/// Показывает окно с сообщением о фатальной ошибке. Сначала пробует Win32 MessageBox
+	/// (работает даже когда Avalonia ещё не поднялась), затем — простой диалог Avalonia.
+	/// </summary>
+	private static void ShowFatal(string message)
+	{
+		try
+		{
+			if (NativeMessageBox.Show(message))
+			{
+				return;
+			}
+		}
+		catch (Exception ex)
+		{
+			AppPaths.Log("MessageBox failed: " + ex.Message);
+		}
+		try
+		{
+			Ludex.UI.Dialogs.ShowFatalBlocking("Ludex", message);
+		}
+		catch (Exception ex2)
+		{
+			AppPaths.Log("Fatal dialog failed: " + ex2.Message);
 		}
 	}
 

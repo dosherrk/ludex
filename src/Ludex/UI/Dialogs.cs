@@ -189,6 +189,26 @@ public static class Dialogs
 		ShowMessageAsync(owner, "Ludex", text);
 	}
 
+	/// <summary>
+	/// Сообщение о фатальной ошибке, когда приложение ещё не запустилось: показывает
+	/// простое окно и ждёт, пока его закроют (без этого процесс нечем удержать).
+	/// </summary>
+	public static void ShowFatalBlocking(string title, string text)
+	{
+		Window window = CreateShell(title, 470.0, (Control)(object)new StackPanel
+		{
+			Margin = new Thickness(24.0),
+			Spacing = 16.0,
+			Children = 
+			{
+				(Control)(object)Ui.T(title, 18.0, Skin.Text, (FontWeight)600, (TextWrapping)0),
+				(Control)(object)Ui.T(text, 13.0, Skin.TextMuted, null, (TextWrapping)1)
+			}
+		});
+		window.Show();
+		window.Activate();
+	}
+
 	public static async Task ShowMessageAsync(Window owner, string title, string text)
 	{
 		Window window = null;
