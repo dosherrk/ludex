@@ -113,6 +113,30 @@ public static class Dialogs
 		return result;
 	}
 
+	// 0 — отмена/закрытие, 1 — удалить, 2 — выбрать другую папку.
+	public static async Task<int> ConfirmWithAlternativeAsync(Window owner, string title, string text, string okText, string alternativeText, string cancelText)
+	{
+		int result = 0;
+		Window? window = null;
+		TextBlock message = Ui.T(text, 13.0, Skin.TextMuted, null, (TextWrapping)1);
+		message.MaxWidth = 460.0;
+		StackPanel content = new StackPanel { Margin = new Thickness(24.0), Spacing = 20.0 };
+		content.Children.Add(Ui.T(title, 18.0, Skin.Text, (FontWeight)600, (TextWrapping)0));
+		content.Children.Add(message);
+		WrapPanel buttons = new WrapPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+		Border cancel = Ui.GhostButton(cancelText, () => { result = 0; window?.Close(); });
+		Border alternative = Ui.GhostButton(alternativeText, () => { result = 2; window?.Close(); });
+		Border ok = Ui.PrimaryButton(okText, () => { result = 1; window?.Close(); });
+		cancel.Margin = new Thickness(0, 0, 8, 8);
+		alternative.Margin = new Thickness(0, 0, 8, 8);
+		ok.Margin = new Thickness(0, 0, 0, 8);
+		buttons.Children.Add(cancel); buttons.Children.Add(alternative); buttons.Children.Add(ok);
+		content.Children.Add(buttons);
+		window = CreateShell(title, 520.0, content);
+		await window.ShowDialog(owner);
+		return result;
+	}
+
 	public static async Task<string?> PromptAsync(Window owner, string title, string initial)
 	{
 		string result = null;
