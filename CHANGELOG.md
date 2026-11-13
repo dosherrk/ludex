@@ -3,7 +3,7 @@
 Все заметные изменения проекта. Формат — [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/),
 версии — [SemVer](https://semver.org/lang/ru/).
 
-## [Unreleased]
+## [1.21.10]
 
 ### Изменено
 - При удалении с компьютера Ludex предлагает папку игры по совпадению её имени
