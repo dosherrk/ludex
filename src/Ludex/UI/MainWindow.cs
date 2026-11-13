@@ -2071,33 +2071,47 @@ public sealed class MainWindow : Window
 
 	private async void DeleteFromDisk(GameEntry game)
 	{
-		// Автопоиск может сохранить папку Win64 вместо папки установки.
-		// Не поднимаемся к родителю автоматически: там могут быть другие игры.
-		if (!await Dialogs.ConfirmAsync((Window)(object)this, Loc.T("dlg.deleteTitle"),
-			Loc.F("dlg.deleteChooseIntro", game.Title, game.ExePath), Loc.T("dlg.deleteChooseButton"), Loc.T("btn.cancel"))) return;
-		IReadOnlyList<IStorageFolder> folders;
-		try
+		// Ищем папку по исходному названию игры, а не удаляем папку с exe вслепую.
+		// Предложение всегда показывается и требует отдельного подтверждения.
+		string? folder = Uninstaller.SuggestGameFolder(game, _games, _settings.Folders ?? new List<string>());
+		bool chooseManually = folder == null;
+		if (folder != null)
 		{
-			folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+			int answer = await Dialogs.ConfirmWithAlternativeAsync((Window)(object)this, Loc.T("dlg.deleteTitle"),
+				Loc.F("dlg.deleteSuggested", game.Title, folder), Loc.T("btn.deleteForever"),
+				Loc.T("dlg.deleteOtherFolder"), Loc.T("btn.cancel"));
+			if (answer == 0) return;
+			chooseManually = answer == 2;
+		}
+		if (chooseManually)
+		{
+			if (!await Dialogs.ConfirmAsync((Window)(object)this, Loc.T("dlg.deleteTitle"),
+				Loc.F("dlg.deleteChooseIntro", game.Title, game.ExePath), Loc.T("dlg.deleteChooseButton"), Loc.T("btn.cancel"))) return;
+			IReadOnlyList<IStorageFolder> folders;
+			try
 			{
-				Title = Loc.T("dlg.deletePickFolder"), AllowMultiple = false
-			});
+				folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+				{
+					Title = Loc.T("dlg.deletePickFolder"), AllowMultiple = false
+				});
+			}
+			catch (Exception ex)
+			{
+				AppPaths.Log("delete folder picker: " + ex.Message);
+				Dialogs.ShowError((Window)(object)this, Loc.T("status.deleteFailed") + ": " + ex.Message);
+				return;
+			}
+			if (folders.Count == 0) return;
+			folder = StorageProviderExtensions.TryGetLocalPath(folders[0]);
+			if (string.IsNullOrWhiteSpace(folder) || !Uninstaller.IsValidGameFolder(folder, game, _games, out _))
+			{
+				Dialogs.ShowError((Window)(object)this, Loc.T("dlg.deleteInvalidFolder"));
+				return;
+			}
+			if (!await Dialogs.ConfirmAsync((Window)(object)this, Loc.T("dlg.deleteTitle"),
+				Loc.F("dlg.deleteSelected", game.Title, folder), Loc.T("btn.deleteForever"), Loc.T("btn.cancel"))) return;
 		}
-		catch (Exception ex)
-		{
-			AppPaths.Log("delete folder picker: " + ex.Message);
-			Dialogs.ShowError((Window)(object)this, Loc.T("status.deleteFailed") + ": " + ex.Message);
-			return;
-		}
-		if (folders.Count == 0) return;
-		string? folder = StorageProviderExtensions.TryGetLocalPath(folders[0]);
-		if (string.IsNullOrWhiteSpace(folder) || !Uninstaller.IsValidGameFolder(folder, game, _games, out _))
-		{
-			Dialogs.ShowError((Window)(object)this, Loc.T("dlg.deleteInvalidFolder"));
-			return;
-		}
-		if (!await Dialogs.ConfirmAsync((Window)(object)this, Loc.T("dlg.deleteTitle"),
-			Loc.F("dlg.deleteSelected", game.Title, folder), Loc.T("btn.deleteForever"), Loc.T("btn.cancel"))) return;
+		if (string.IsNullOrWhiteSpace(folder)) return;
 		// Повторная проверка после ожидания подтверждения.
 		if (!Uninstaller.IsValidGameFolder(folder, game, _games, out _))
 		{

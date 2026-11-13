@@ -431,6 +431,8 @@ public static class Loc
 		dictionary["cover.badUrl"] = ("По этой ссылке картинку загрузить не удалось", "Could not load an image from this link");
 		dictionary["cover.tipPortrait"] = ("Вертикальные обложки", "Portrait covers");
 		dictionary["cover.tipWide"] = ("Горизонтальные", "Wide artwork");
+		dictionary["dlg.deleteSuggested"] = ("Для «{0}» найдена папка:\n{1}\n\nВся папка и её содержимое будут удалены безвозвратно. Проверьте, что здесь находится только эта игра. Деинсталлятор не запускается; сохранения и записи лаунчера могут остаться.", "Folder found for “{0}”:\n{1}\n\nThe entire folder and its contents will be permanently deleted. Check that it contains only this game. No uninstaller is run; saves and launcher records may remain.");
+		dictionary["dlg.deleteOtherFolder"] = ("Другая папка…", "Other folder…");
 		dictionary["dlg.deleteChooseIntro"] = ("Выберите полную папку установки «{0}», а не общую папку Games и не подпапку bin/Win64. Все файлы в выбранной папке будут удалены.\n\nФайл запуска: {1}", "Select the complete installation folder for “{0}”, not a shared Games folder or a bin/Win64 subfolder. All files in the selected folder will be deleted.\n\nExecutable: {1}");
 		dictionary["dlg.deleteChooseButton"] = ("Выбрать папку…", "Choose folder…");
 		dictionary["dlg.deletePickFolder"] = ("Выберите полную папку игры", "Select the complete game folder");
