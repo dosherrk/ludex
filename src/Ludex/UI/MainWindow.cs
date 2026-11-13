@@ -2071,67 +2071,55 @@ public sealed class MainWindow : Window
 
 	private async void DeleteFromDisk(GameEntry game)
 	{
-		GameEntry game2 = game;
-		if (!Uninstaller.IsSafeToDelete(game2.FolderPath, out string reason))
-		{
-			Window owner = (Window)(object)this;
-			string text;
-			switch (reason)
-			{
-			case "folder-not-found":
-				text = "Папка игры не найдена — удалять нечего.";
-				break;
-			case "drive-root":
-			case "too-shallow":
-				text = "Папка игры выглядит как корень диска — удаление отменено.";
-				break;
-			case "home":
-				text = "Папка игры указывает на домашний каталог — удаление отменено.";
-				break;
-			case "app-folder":
-				text = "Папка игры пересекается с данными Ludex — удаление отменено.";
-				break;
-			default:
-				text = "Эту папку нельзя удалить.";
-				break;
-			}
-			Dialogs.ShowError(owner, text);
-			return;
-		}
-		string text2 = Loc.F((Uninstaller.Find(game2.FolderPath) != null) ? "dlg.deleteText" : "dlg.deleteTextNoUninstall", game2.Title, game2.FolderPath);
-		if (!(await Dialogs.ConfirmAsync((Window)(object)this, Loc.T("dlg.deleteTitle"), text2, Loc.T("btn.deleteForever"), Loc.T("btn.cancel"))))
-		{
-			return;
-		}
-		_detailLayer.IsVisible = false;
-		ProcessBegin("delete", Loc.F("status.deleting", game2.Title));
-		(bool, bool, string) tuple;
+		// Автопоиск может сохранить папку Win64 вместо папки установки.
+		// Не поднимаемся к родителю автоматически: там могут быть другие игры.
+		if (!await Dialogs.ConfirmAsync((Window)(object)this, Loc.T("dlg.deleteTitle"),
+			Loc.F("dlg.deleteChooseIntro", game.Title, game.ExePath), Loc.T("dlg.deleteChooseButton"), Loc.T("btn.cancel"))) return;
+		IReadOnlyList<IStorageFolder> folders;
 		try
 		{
-			tuple = await Task.Run(() => Uninstaller.RemoveAsync(game2, delegate(string phase)
+			folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
 			{
-				if (phase == "deleting-folder")
-				{
-					ProcessUpdate("delete", Loc.F("status.deleting", game2.Title));
-				}
-			}));
+				Title = Loc.T("dlg.deletePickFolder"), AllowMultiple = false
+			});
 		}
 		catch (Exception ex)
 		{
-			tuple = (false, false, ex.Message);
+			AppPaths.Log("delete folder picker: " + ex.Message);
+			Dialogs.ShowError((Window)(object)this, Loc.T("status.deleteFailed") + ": " + ex.Message);
+			return;
 		}
-		finally
+		if (folders.Count == 0) return;
+		string? folder = StorageProviderExtensions.TryGetLocalPath(folders[0]);
+		if (string.IsNullOrWhiteSpace(folder) || !Uninstaller.IsValidGameFolder(folder, game, _games, out _))
 		{
-			ProcessEnd("delete");
+			Dialogs.ShowError((Window)(object)this, Loc.T("dlg.deleteInvalidFolder"));
+			return;
 		}
-		if (!tuple.Item1)
+		if (!await Dialogs.ConfirmAsync((Window)(object)this, Loc.T("dlg.deleteTitle"),
+			Loc.F("dlg.deleteSelected", game.Title, folder), Loc.T("btn.deleteForever"), Loc.T("btn.cancel"))) return;
+		// Повторная проверка после ожидания подтверждения.
+		if (!Uninstaller.IsValidGameFolder(folder, game, _games, out _))
 		{
+			Dialogs.ShowError((Window)(object)this, Loc.T("dlg.deleteInvalidFolder"));
+			return;
+		}
+		_detailLayer.IsVisible = false;
+		ProcessBegin("delete", Loc.F("status.deleting", game.Title));
+		(bool ok, string error) result;
+		try { result = await Uninstaller.RemoveFolderAsync(folder); }
+		catch (Exception ex) { result = (false, ex.Message); }
+		finally { ProcessEnd("delete"); }
+		if (!result.ok)
+		{
+			AppPaths.Log("delete failed: " + folder + " — " + result.error);
 			ShowEvent(Loc.T("status.deleteFailed"));
-			Dialogs.ShowError((Window)(object)this, string.IsNullOrEmpty(tuple.Item3) ? Loc.T("status.deleteFailed") : (Loc.T("status.deleteFailed") + ": " + tuple.Item3));
+			Dialogs.ShowError((Window)(object)this, Loc.T("dlg.deletePartialFailure") + "\n" + result.error);
 		}
 		else
 		{
-			RemoveFromLibraryOnly(game2);
+			AppPaths.Log("deleted game folder: " + folder);
+			RemoveFromLibraryOnly(game);
 			ShowEvent(Loc.T("status.deleted"));
 		}
 	}

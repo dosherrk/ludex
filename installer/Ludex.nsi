@@ -14,7 +14,7 @@ Unicode true
 !define APPNAME       "Ludex"
 !define APPEXE        "Ludex.exe"
 !ifndef APPVERSION
-  !define APPVERSION  "1.21.8"
+  !define APPVERSION  "1.21.9"
 !endif
 !define PUBLISHER     "Ludex"
 !define APPID         "Ludex"
