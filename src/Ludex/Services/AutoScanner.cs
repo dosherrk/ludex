@@ -716,6 +716,20 @@ public static class AutoScanner
 		return num;
 	}
 
+	/// <summary>Публичная обёртка для проверки названия (диагностика и ручное добавление).</summary>
+	public static bool IsPlausibleGameTitle(string title)
+	{
+		return !string.IsNullOrWhiteSpace(title) && !HasNeverGameWord(title) && !Scanner.LooksLikeProgram(title, null);
+	}
+
+	/// <summary>
+	/// Служебные слова встречаются в названиях игр сплошь и рядом: «Sense», «Studio»,
+	/// «Player», «Screen»… Раньше любое из них, найденное в названии, отбрасывало игру
+	/// целиком, и такие игры пропадали из автопоиска.
+	/// Теперь слово отбрасывает игру, только если стоит в КОНЦЕ названия, а само название
+	/// короткое — одно-два слова: «OBS Studio», «Download Manager», «The Player».
+	/// «Sense: A Cyberpunk Ghost Story» и «Game Dev Studio» проходят.
+	/// </summary>
 	private static bool HasNeverGameWord(string text)
 	{
 		if (string.IsNullOrWhiteSpace(text))
@@ -727,6 +741,9 @@ public static class AutoScanner
 		{
 			return false;
 		}
+		string[] words = Regex.Split(text.ToLowerInvariant(), @"[^\p{L}\p{N}]+")
+			.Where((string w) => w.Length > 0)
+			.ToArray();
 		string[] neverGameWords = NeverGameWords;
 		foreach (string text3 in neverGameWords)
 		{
@@ -735,14 +752,17 @@ public static class AutoScanner
 			{
 				continue;
 			}
-			if (text4.Length >= 6)
+			// Ищем только в конце названия и только у коротких названий: длинное название
+			// почти наверняка игра («Cyberpunk 2077 Night City Wire: Player»).
+			if (words.Length == 0 || words.Length > 2)
 			{
-				if (text2.Contains(text4, StringComparison.Ordinal))
-				{
-					return true;
-				}
+				continue;
 			}
-			else if (Regex.IsMatch(text, "(^|[^\\p{L}\\p{N}])" + Regex.Escape(text3) + "($|[^\\p{L}\\p{N}])", RegexOptions.IgnoreCase))
+			if (!text2.EndsWith(text4, StringComparison.Ordinal))
+			{
+				continue;
+			}
+			if (text4.Length >= 6 || words[words.Length - 1] == text4)
 			{
 				return true;
 			}
