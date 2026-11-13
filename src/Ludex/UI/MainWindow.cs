@@ -3611,6 +3611,84 @@ public sealed class MainWindow : Window
 		catch (Exception ex) when (ex is ArgumentException || ex is NotSupportedException || ex is PathTooLongException) { return null; }
 	}
 
+	// Узнаём только однозначную пару Steam/Unreal: Game/FSD.exe и
+	// Game/FSD/Binaries/Win64/FSD-Win64-Shipping.exe. Одна вложенность или
+	// одно название не являются доказательством одной установки.
+	private static string? UnrealNestedFolder(GameEntry root)
+	{
+		if (!string.Equals(root.Source, "steam", StringComparison.OrdinalIgnoreCase) || !root.SteamAppId.HasValue || root.SteamAppId <= 0)
+			return null;
+		string? folder = InstallationPath(root.FolderPath);
+		string? exe = InstallationPath(root.ExePath);
+		if (folder == null || exe == null || !PathComparer.Equals(InstallationPath(System.IO.Path.GetDirectoryName(exe)), folder) ||
+			!string.Equals(System.IO.Path.GetExtension(exe), ".exe", StringComparison.OrdinalIgnoreCase)) return null;
+		string project = System.IO.Path.GetFileNameWithoutExtension(exe);
+		if (string.IsNullOrWhiteSpace(project)) return null;
+		return InstallationPath(System.IO.Path.Combine(folder, project, "Binaries", "Win64"));
+	}
+
+	private static bool IsUnrealNestedDuplicate(GameEntry root, GameEntry child, bool scanCandidate = false)
+	{
+		if (ReferenceEquals(root, child) || string.IsNullOrWhiteSpace(root.Title) || string.IsNullOrWhiteSpace(child.Title) ||
+			(child.SteamAppId.HasValue && child.SteamAppId != root.SteamAppId) ||
+			(child.Source != null && !string.Equals(child.Source, "steam", StringComparison.OrdinalIgnoreCase)) ||
+			(!string.IsNullOrEmpty(root.ExternalId) && !string.IsNullOrEmpty(child.ExternalId) &&
+			 !string.Equals(root.ExternalId, child.ExternalId, StringComparison.OrdinalIgnoreCase))) return false;
+		string? expectedFolder = UnrealNestedFolder(root);
+		string? childFolder = InstallationPath(child.FolderPath);
+		string? childExe = InstallationPath(child.ExePath);
+		string? rootExe = InstallationPath(root.ExePath);
+		if (expectedFolder == null || childFolder == null || childExe == null || rootExe == null) return false;
+		string project = System.IO.Path.GetFileNameWithoutExtension(rootExe);
+		string? binariesFolder = InstallationPath(System.IO.Path.GetDirectoryName(expectedFolder));
+		string? projectFolder = InstallationPath(binariesFolder == null ? null : System.IO.Path.GetDirectoryName(binariesFolder));
+		if (!PathComparer.Equals(expectedFolder, childFolder) && !PathComparer.Equals(binariesFolder, childFolder) &&
+			!PathComparer.Equals(projectFolder, childFolder)) return false;
+		bool sameName = Normalize(root.Title) == Normalize(child.Title) ||
+			(child.SteamAppId == root.SteamAppId && child.SteamAppId.HasValue &&
+			 !string.IsNullOrWhiteSpace(child.SteamName) && Normalize(root.Title) == Normalize(child.SteamName));
+		bool uncustomizedScan = !child.Locked && !child.Favorite && child.PlayCount == 0 && !child.LastPlayedUtc.HasValue &&
+			string.IsNullOrEmpty(child.CoverFile) && !child.SteamAppId.HasValue && child.Source == null && string.IsNullOrEmpty(child.ExternalId);
+		// До получения данных Steam сканер может использовать имя проекта или Shipping-файла.
+		string rawTitle = Normalize(child.Title);
+		bool projectName = rawTitle == Normalize(project) || rawTitle == Normalize(project + "-Win64-Shipping");
+		if (!sameName && !(projectName && (scanCandidate || uncustomizedScan))) return false;
+		string? expectedExe = InstallationPath(System.IO.Path.Combine(expectedFolder, project + "-Win64-Shipping.exe"));
+		if (!PathComparer.Equals(expectedExe, childExe) || !File.Exists(rootExe) || !File.Exists(childExe)) return false;
+		// Ссылки и точки монтирования делают связь путей неоднозначной.
+		try
+		{
+			string folder = InstallationPath(root.FolderPath)!;
+			string projectPath = System.IO.Path.Combine(folder, project);
+			foreach (string path in new[] { folder, projectPath, System.IO.Path.Combine(projectPath, "Binaries"), expectedFolder, rootExe, childExe })
+				if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0) return false;
+			return true;
+		}
+		catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is System.Security.SecurityException)
+		{
+			return false;
+		}
+	}
+
+	private static void MergeDuplicateMetadata(GameEntry value, GameEntry item)
+	{
+		if (string.IsNullOrEmpty(value.ExePath)) value.ExePath = item.ExePath;
+		if (string.IsNullOrEmpty(value.CoverFile) && !string.IsNullOrEmpty(item.CoverFile))
+		{
+			value.CoverFile = item.CoverFile;
+			value.CoverIsPortrait = item.CoverIsPortrait;
+		}
+		if (!value.SteamAppId.HasValue) value.SteamAppId = item.SteamAppId;
+		if (string.IsNullOrEmpty(value.SteamName)) value.SteamName = item.SteamName;
+		if (string.IsNullOrEmpty(value.ExternalId)) value.ExternalId = item.ExternalId;
+		if (value.Source == null) value.Source = item.Source;
+		if (item.PlayCount > value.PlayCount) value.PlayCount = item.PlayCount;
+		if (item.LastPlayedUtc.HasValue && (!value.LastPlayedUtc.HasValue || item.LastPlayedUtc > value.LastPlayedUtc))
+			value.LastPlayedUtc = item.LastPlayedUtc;
+		value.Favorite |= item.Favorite;
+		value.Locked |= item.Locked;
+	}
+
 	private int RemoveDuplicates()
 	{
 		// Одинаковые названия не доказывают, что это одна установка.
@@ -3632,42 +3710,40 @@ public sealed class MainWindow : Window
 				dictionary[text] = item;
 				continue;
 			}
-			if (string.IsNullOrEmpty(value.ExePath))
-			{
-				value.ExePath = item.ExePath;
-			}
-			if (string.IsNullOrEmpty(value.CoverFile) && !string.IsNullOrEmpty(item.CoverFile))
-			{
-				value.CoverFile = item.CoverFile;
-				value.CoverIsPortrait = item.CoverIsPortrait;
-			}
-			if (!value.SteamAppId.HasValue)
-			{
-				value.SteamAppId = item.SteamAppId;
-			}
-			if (string.IsNullOrEmpty(value.ExternalId))
-			{
-				value.ExternalId = item.ExternalId;
-			}
-			if (value.Source == null)
-			{
-				value.Source = item.Source;
-			}
-			if (item.PlayCount > value.PlayCount)
-			{
-				value.PlayCount = item.PlayCount;
-			}
-			if (item.LastPlayedUtc.HasValue && (!value.LastPlayedUtc.HasValue || item.LastPlayedUtc > value.LastPlayedUtc))
-			{
-				value.LastPlayedUtc = item.LastPlayedUtc;
-			}
-			value.Favorite |= item.Favorite;
+			MergeDuplicateMetadata(value, item);
 			list.Add(item);
 			AppPaths.Log($"Дубль убран: {item.Title} ({item.FolderPath}) → оставлено {value.FolderPath}");
 		}
 		foreach (GameEntry item2 in list)
 		{
 			_games.Remove(item2);
+		}
+
+		// Для уже созданных дублей используем только проверяемую пару Steam/Unreal.
+		// Карточки с недоступными путями или разными Steam ID не затрагиваем.
+		var byFolder = _games.Where(g => InstallationPath(g.FolderPath) != null)
+			.ToLookup(g => InstallationPath(g.FolderPath)!, PathComparer);
+		bool backupCreated = false;
+		foreach (GameEntry root in _games.ToList())
+		{
+			string? nestedFolder = UnrealNestedFolder(root);
+			if (nestedFolder == null) continue;
+			string? binariesFolder = InstallationPath(System.IO.Path.GetDirectoryName(nestedFolder));
+			string? projectFolder = InstallationPath(binariesFolder == null ? null : System.IO.Path.GetDirectoryName(binariesFolder));
+			foreach (GameEntry child in new[] { nestedFolder, binariesFolder, projectFolder }
+				.Where(path => path != null).SelectMany(path => byFolder[path!]))
+			{
+				if (!_games.Contains(child) || !IsUnrealNestedDuplicate(root, child)) continue;
+				if (!backupCreated)
+				{
+					if (!Storage.TryBackupGames(_games)) return list.Count;
+					backupCreated = true;
+				}
+				MergeDuplicateMetadata(root, child);
+				_games.Remove(child);
+				list.Add(child);
+				AppPaths.Log($"Дубль Unreal убран: {child.Title} ({child.FolderPath}) → оставлено {root.FolderPath}");
+			}
 		}
 		return list.Count;
 		static int Score(GameEntry g)
@@ -3684,29 +3760,32 @@ public sealed class MainWindow : Window
 	private int MergeHits(List<ScanHit> hits)
 	{
 		int num = 0;
-		Dictionary<string, GameEntry> dictionary = new Dictionary<string, GameEntry>(StringComparer.OrdinalIgnoreCase);
+		Dictionary<string, GameEntry> dictionary = new Dictionary<string, GameEntry>(PathComparer);
 		foreach (GameEntry game in _games)
 		{
-			if (!dictionary.ContainsKey(game.FolderPath))
-			{
-				dictionary[game.FolderPath] = game;
-			}
+			string key = InstallationPath(game.FolderPath) ?? game.FolderPath;
+			if (!dictionary.ContainsKey(key)) dictionary[key] = game;
 		}
 		foreach (ScanHit hit in hits)
 		{
-			if (IsHiddenFolder(hit.FolderPath))
+			if (IsHiddenFolder(hit.FolderPath)) continue;
+			string key = InstallationPath(hit.FolderPath) ?? hit.FolderPath;
+			string? exeFolder = System.IO.Path.GetDirectoryName(hit.ExePath);
+			GameEntry candidate = new GameEntry { Title = hit.Title, FolderPath = exeFolder ?? hit.FolderPath, ExePath = hit.ExePath };
+			if (dictionary.TryGetValue(key, out var value))
 			{
-				continue;
-			}
-			if (dictionary.TryGetValue(hit.FolderPath, out var value))
-			{
+				// Не подменяем оригинальный Steam-запуск внутренним Shipping.exe.
+				if (IsUnrealNestedDuplicate(value, candidate, scanCandidate: true)) continue;
 				value.ExePath = hit.ExePath;
-				if (!value.Locked)
-				{
-					value.Title = hit.Title;
-				}
+				if (!value.Locked) value.Title = hit.Title;
 				continue;
 			}
+			// Если найден файл из Win64 уже известной Steam-игры, вторую карточку не создаём.
+			string? possibleRoot = null;
+			try { possibleRoot = exeFolder == null ? null : new DirectoryInfo(exeFolder).Parent?.Parent?.Parent?.FullName; }
+			catch (Exception ex) when (ex is ArgumentException || ex is IOException || ex is NotSupportedException) { }
+			if (possibleRoot != null && dictionary.TryGetValue(possibleRoot, out var root) &&
+				IsUnrealNestedDuplicate(root, candidate, scanCandidate: true)) continue;
 			GameEntry gameEntry = new GameEntry
 			{
 				Title = hit.Title,
@@ -3715,7 +3794,7 @@ public sealed class MainWindow : Window
 				AddedUtc = DateTime.UtcNow
 			};
 			_games.Add(gameEntry);
-			dictionary[hit.FolderPath] = gameEntry;
+			dictionary[key] = gameEntry;
 			num++;
 		}
 		// При сканировании не удаляем игры с недоступных путей.
