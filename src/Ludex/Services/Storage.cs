@@ -112,6 +112,34 @@ public static class Storage
 		return new List<GameEntry>();
 	}
 
+	// Перед автоматическим объединением карточек сохраняем восстанавливаемую копию.
+	// Если копию создать не удалось, вызывающий код должен оставить записи как есть.
+	public static bool TryBackupGames(IEnumerable<GameEntry> games)
+	{
+		lock (Sync)
+		{
+			string? path = null;
+			try
+			{
+				path = System.IO.Path.Combine(AppPaths.Root, "library.before-unreal-merge-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N") + ".json");
+				LibraryFile value = new LibraryFile { Games = new List<GameEntry>(games) };
+				using (FileStream stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+				{
+					JsonSerializer.Serialize(stream, value, Options);
+					stream.Flush(flushToDisk: true);
+				}
+				AppPaths.Log("Backup before Unreal dedup: " + path);
+				return true;
+			}
+			catch (Exception ex)
+			{
+				if (path != null) { try { File.Delete(path); } catch { } }
+				AppPaths.Log("Backup before Unreal dedup failed: " + ex.Message);
+				return false;
+			}
+		}
+	}
+
 	public static void SaveGames(IEnumerable<GameEntry> games)
 	{
 		lock (Sync)
