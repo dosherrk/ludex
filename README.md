@@ -13,7 +13,7 @@
 [![Linux](https://img.shields.io/badge/Linux-x64-FCC624?logo=linux&logoColor=black)](#linux)
 [![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet&logoColor=white)](#сборка-из-исходников)
 [![Avalonia](https://img.shields.io/badge/Avalonia-11-8B44AC)](https://avaloniaui.net)
-[![Version](https://img.shields.io/badge/version-1.21.8-3B9EFF)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.21.9-3B9EFF)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-35C48A)](LICENSE)
 [![Website](https://img.shields.io/badge/сайт-ludex--one.vercel.app-3B9EFF)](https://ludex-one.vercel.app)
 
@@ -119,11 +119,11 @@ Ludex бесплатный: без аккаунтов, подписки и ре�
 
 ### Windows 10/11 (x64)
 
-**Вариант 1 — установщик (рекомендуется).** `Ludex-Setup-1.21.8.exe` → выберите язык → «Далее».
+**Вариант 1 — установщик (рекомендуется).** `Ludex-Setup-1.21.9.exe` → выберите язык → «Далее».
 Ставится в `%LOCALAPPDATA%\Programs\Ludex` (запрос администратора не появляется), создаёт ярлыки
 на рабочем столе и в меню «Пуск», добавляет запись в «Установку и удаление программ» и деинсталлятор.
 
-**Вариант 2 — портативно.** `Ludex-1.21.8-windows.zip` — распакуйте папку целиком куда угодно
+**Вариант 2 — портативно.** `Ludex-1.21.9-windows.zip` — распакуйте папку целиком куда угодно
 (флешка, `D:\Ludex`) и запускайте `Ludex.exe`. Настройки и библиотека хранятся в `%LOCALAPPDATA%\Ludex`.
 
 > Файлы должны лежать вместе: `Ludex.exe` не работает без `Ludex.dll` и папки `runtimes` рядом.
@@ -143,17 +143,17 @@ Ludex бесплатный: без аккаунтов, подписки и ре�
 **Пакет `.deb`** (Debian, Ubuntu, Mint, Pop!_OS и производные):
 
 ```bash
-sudo apt install ./Ludex-1.21.8-linux-x64.deb
+sudo apt install ./Ludex-1.21.9-linux-x64.deb
 ```
 
 Появится ярлык в меню приложений, `ludex` — в `PATH`; файлы ставятся в `/opt/ludex`.
 Удаление — `sudo apt remove ludex` (данные в `~/.local/share/Ludex` остаются).
 
-**Портативный архив** `Ludex-1.21.8-linux-x64.tar.gz` — для любой системы с glibc 2.31+
+**Портативный архив** `Ludex-1.21.9-linux-x64.tar.gz` — для любой системы с glibc 2.31+
 (Fedora, Arch, openSUSE и т.д.):
 
 ```bash
-mkdir -p ~/Applications && tar -xzf Ludex-1.21.8-linux-x64.tar.gz -C ~/Applications
+mkdir -p ~/Applications && tar -xzf Ludex-1.21.9-linux-x64.tar.gz -C ~/Applications
 ~/Applications/Ludex/Ludex
 ```
 

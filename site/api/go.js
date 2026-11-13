@@ -11,10 +11,10 @@ const KINDS = ['setup', 'win-zip', 'linux-tar', 'linux-deb'];
 const FALLBACK = {
   // Запасные имена под текущий релиз: /api/downloads подставляет реальные ссылки,
   // а это — только если Redis пуст и API недоступен.
-  setup: 'Ludex-Setup-1.21.8.exe',
-  'win-zip': 'Ludex-1.21.8-windows.zip',
-  'linux-tar': 'Ludex-1.21.8-linux-x64.tar.gz',
-  'linux-deb': 'Ludex-1.21.8-linux-x64.deb',
+  setup: 'Ludex-Setup-1.21.9.exe',
+  'win-zip': 'Ludex-1.21.9-windows.zip',
+  'linux-tar': 'Ludex-1.21.9-linux-x64.tar.gz',
+  'linux-deb': 'Ludex-1.21.9-linux-x64.deb',
 };
 
 // Старые ссылки: «Архив» до 1.5.0 и кнопка «Портативный» до 1.19.4
