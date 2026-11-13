@@ -14,7 +14,7 @@ WHAT="${1:-all}"
 
 # Публикация набором файлов, а не одним exe: single-file с сжатием распаковывает
 # ~150 МБ в temp при каждом запуске, из-за чего старт занимает лишние секунды.
-PUB="dotnet publish src/Ludex -c Release --self-contained true
+PUB="dotnet publish src/Ludex -c Release --self-contained true -m:1 --disable-build-servers
   -p:PublishSingleFile=false
   -p:IncludeNativeLibrariesForSelfExtract=false
   -p:EnableCompressionInSingleFile=false

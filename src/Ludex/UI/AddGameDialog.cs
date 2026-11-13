@@ -77,7 +77,10 @@ public static class AddGameDialog
 
 		if (string.IsNullOrWhiteSpace(exe))
 		{
-			return new AddGameResult(folder, title, "", Loc.T("addGame.noExe"), Ok: false);
+			// При неудаче автопоиска сразу даём выбрать файл, а не закрываем диалог.
+			string? selected = await PickExecutableAsync(owner);
+			if (selected == null) return null;
+			exe = selected;
 		}
 
 		AddGameConfirm? result = await ShowConfirmAsync(owner, folder, title, exe, resolved.Ambiguous);
@@ -242,6 +245,22 @@ public static class AddGameDialog
 		return bad.Any(b => n.Contains(b, StringComparison.Ordinal));
 	}
 
+	private static async Task<string?> PickExecutableAsync(Window owner)
+	{
+		IReadOnlyList<IStorageFile> files = await owner.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+		{
+			Title = Loc.T("addGame.chooseExe"),
+			AllowMultiple = false,
+			FileTypeFilter = new[]
+			{
+				new FilePickerFileType(Loc.T("addGame.allFiles")) { Patterns = new[] { "*" } },
+				new FilePickerFileType("EXE") { Patterns = new[] { "*.exe" } }
+			}
+		});
+		string? path = files.Count == 0 ? null : StorageProviderExtensions.TryGetLocalPath(files[0]);
+		return !string.IsNullOrWhiteSpace(path) && File.Exists(path) ? path : null;
+	}
+
 	private sealed class AddGameConfirm
 	{
 		public string Title = "";
@@ -255,16 +274,17 @@ public static class AddGameDialog
 		{
 			Title = Loc.T("addGame.title"),
 			Width = 560.0,
-			Height = 300.0,
-			CanResize = false,
+			Height = 360.0,
+			MinHeight = 300.0,
+			MinWidth = 500.0,
+			CanResize = true,
 			WindowStartupLocation = WindowStartupLocation.CenterOwner,
 			Background = Skin.Bg
 		};
 
 		StackPanel root = new StackPanel
 		{
-			Spacing = 12.0,
-			Margin = new Thickness(22.0)
+			Spacing = 12.0
 		};
 		root.Children.Add(Ui.T(Loc.T("addGame.title"), 17.0, Skin.Text, FontWeight.SemiBold, TextWrapping.NoWrap));
 		root.Children.Add(Ui.T(folder, 12.0, Skin.TextMuted, FontWeight.Normal, TextWrapping.Wrap));
@@ -298,24 +318,11 @@ public static class AddGameDialog
 		TextBlock otherExe = Ui.T(Loc.T("addGame.chooseExe"), 12.5, Skin.Text, FontWeight.Medium, TextWrapping.NoWrap);
 		Border otherBtn = Ui.Clickable(otherExe, async delegate
 		{
-			IReadOnlyList<IStorageFile> files = await dialog.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+			string? path = await PickExecutableAsync(dialog);
+			if (path != null)
 			{
-				Title = Loc.T("addGame.chooseExe"),
-				AllowMultiple = false,
-				FileTypeFilter = new[]
-				{
-					new FilePickerFileType("EXE") { Patterns = new[] { "*.exe" } },
-					new FilePickerFileType("Все файлы") { Patterns = new[] { "*" } }
-				}
-			});
-			if (files.Count > 0)
-			{
-				string? path = StorageProviderExtensions.TryGetLocalPath(files[0]);
-				if (!string.IsNullOrWhiteSpace(path))
-				{
-					exe = path;
-					exeLabel.Text = Path.GetFileName(path);
-				}
+				exe = path;
+				exeLabel.Text = Path.GetFileName(path);
 			}
 		}, Skin.PanelAlt, Skin.CardHover, new CornerRadius(8.0), new Thickness(14.0, 9.0));
 		buttons.Children.Add(otherBtn);
@@ -338,8 +345,21 @@ public static class AddGameDialog
 		}, Skin.Accent, Skin.AccentHover, new CornerRadius(8.0), new Thickness(16.0, 9.0));
 		buttons.Children.Add(okBtn);
 
-		root.Children.Add(buttons);
-		dialog.Content = root;
+		Grid layout = new Grid
+		{
+			Margin = new Thickness(22.0),
+			RowDefinitions = new RowDefinitions("*,Auto")
+		};
+		ScrollViewer scroll = new ScrollViewer
+		{
+			Content = root,
+			VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
+			HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled
+		};
+		layout.Children.Add(scroll);
+		Grid.SetRow(buttons, 1);
+		layout.Children.Add(buttons);
+		dialog.Content = layout;
 		nameBox.AttachedToVisualTree += delegate
 		{
 			nameBox.Focus();
