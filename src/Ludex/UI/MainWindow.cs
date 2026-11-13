@@ -232,12 +232,7 @@ public sealed class MainWindow : Window
 		Skin.Apply(_settings.Theme, _settings.Accent, _settings.Transparent);
 		_games = Storage.LoadGames();
 		Mark($"настройки и библиотека ({_games.Count} игр)");
-		int num = PrunePhantomGames();
-		if (num > 0)
-		{
-			Storage.SaveGames(_games);
-			AppPaths.Log($"Убрано несуществующих игр: {num}");
-		}
+		// Недоступный путь не означает, что игру удалили: диск или сеть могут быть отключены.
 		int num2 = RemoveDuplicates();
 		if (num2 > 0)
 		{
@@ -673,7 +668,15 @@ public sealed class MainWindow : Window
 		};
 		((Layoutable)dropdown).Margin = new Thickness(8.0, 0.0, 8.0, 0.0);
 		((AvaloniaList<Control>)(object)((Panel)val8).Children).Add((Control)(object)dropdown);
-		((AvaloniaList<Control>)(object)((Panel)val2).Children).Add((Control)(object)val8);
+		// Верхнюю часть панели можно прокручивать, если окно слишком низкое.
+		// Нижние кнопки остаются закреплёнными и не перекрывают сортировку.
+		ScrollViewer sidebarScroll = new ScrollViewer
+		{
+			Content = val8,
+			VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+			HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
+		};
+		((AvaloniaList<Control>)(object)((Panel)val2).Children).Add(sidebarScroll);
 		((Decorator)val).Child = (Control)(object)val2;
 		return (Control)(object)val;
 	}
@@ -1951,15 +1954,10 @@ public sealed class MainWindow : Window
 		{
 			game.Title = text;
 			game.Locked = true;
+			_libraryIndex = null;
 			Storage.SaveGames(_games);
-			if (_titles.TryGetValue(game.Id, out TextBlock value))
-			{
-				value.Text = game.Title;
-			}
-			if (_subtitles.TryGetValue(game.Id, out TextBlock value2))
-			{
-				value2.Text = Subtitle(game);
-			}
+			// Перестроить карточку, фильтрацию и порядок после изменения названия.
+			RenderGrid();
 			if (_detailLayer.IsVisible)
 			{
 				ShowDetail(game);
@@ -3156,13 +3154,6 @@ public sealed class MainWindow : Window
 		}
 	}
 
-	private int PrunePhantomGames()
-	{
-		int count = _games.Count;
-		_games.RemoveAll((GameEntry g) => g.Source != null && !Launchers.LooksInstalled(g.FolderPath));
-		return count - _games.Count;
-	}
-
 	private void ShowEvent(string text, bool sticky = false)
 	{
 		string text2 = text;
@@ -3530,11 +3521,6 @@ public sealed class MainWindow : Window
 			AppPaths.Log($"Отсеяно программ среди игр лаунчеров: {count - found.Count}");
 		}
 		MergeImported(found);
-		int num = PrunePhantomGames();
-		if (num > 0)
-		{
-			AppPaths.Log($"Убрано несуществующих игр: {num}");
-		}
 		int num2 = RemoveDuplicates();
 		if (num2 > 0)
 		{
@@ -3560,18 +3546,11 @@ public sealed class MainWindow : Window
 	private int MergeImported(List<LauncherGame> found)
 	{
 		int num = 0;
-		Dictionary<string, GameEntry> dictionary = new Dictionary<string, GameEntry>(StringComparer.OrdinalIgnoreCase);
+		Dictionary<string, GameEntry> dictionary = new Dictionary<string, GameEntry>(PathComparer);
 		foreach (GameEntry game in _games)
 		{
-			if (!string.IsNullOrWhiteSpace(game.FolderPath) && !dictionary.ContainsKey(game.FolderPath))
-			{
-				dictionary[game.FolderPath] = game;
-			}
-		}
-		Dictionary<string, GameEntry> dictionary2 = new Dictionary<string, GameEntry>(StringComparer.OrdinalIgnoreCase);
-		foreach (GameEntry game2 in _games)
-		{
-			dictionary2.TryAdd(Normalize(game2.Title), game2);
+			string? path = InstallationPath(game.FolderPath);
+			if (path != null) dictionary.TryAdd(path, game);
 		}
 		foreach (LauncherGame item in found)
 		{
@@ -3579,8 +3558,8 @@ public sealed class MainWindow : Window
 			{
 				continue;
 			}
-			GameEntry value2;
-			if (dictionary.TryGetValue(item.Folder, out var value))
+			string? path = InstallationPath(item.Folder);
+			if (path != null && dictionary.TryGetValue(path, out var value))
 			{
 				value.Source = item.Launcher;
 				if (item.AppId.HasValue && !value.SteamAppId.HasValue)
@@ -3600,13 +3579,6 @@ public sealed class MainWindow : Window
 					value.Title = item.Title;
 				}
 			}
-			else if (dictionary2.TryGetValue(Normalize(item.Title), out value2))
-			{
-				if (value2.Source == null)
-				{
-					value2.Source = item.Launcher;
-				}
-			}
 			else
 			{
 				GameEntry gameEntry = new GameEntry
@@ -3621,30 +3593,40 @@ public sealed class MainWindow : Window
 					AddedUtc = DateTime.UtcNow
 				};
 				_games.Add(gameEntry);
-				dictionary[item.Folder] = gameEntry;
+				if (path != null) dictionary[path] = gameEntry;
 				num++;
 			}
 		}
-		HashSet<string> keep = new HashSet<string>(found.Select((LauncherGame f) => f.Folder), StringComparer.OrdinalIgnoreCase);
-		_games.RemoveAll((GameEntry g) => g.FromLauncher && !keep.Contains(g.FolderPath));
-		foreach (GameEntry item2 in _games.Where((GameEntry g) => !g.FromLauncher && g.Source != null && !keep.Contains(g.FolderPath)))
-		{
-			item2.Source = null;
-		}
+		// Пустой или неполный импорт не подтверждает удаление игр из лаунчера.
+		// Сохраняем записи и их источник до явного действия пользователя.
 		return num;
+	}
+
+	private static StringComparer PathComparer => OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+
+	private static string? InstallationPath(string? path)
+	{
+		if (string.IsNullOrWhiteSpace(path) || !System.IO.Path.IsPathFullyQualified(path)) return null;
+		try { return System.IO.Path.TrimEndingDirectorySeparator(System.IO.Path.GetFullPath(path)); }
+		catch (Exception ex) when (ex is ArgumentException || ex is NotSupportedException || ex is PathTooLongException) { return null; }
 	}
 
 	private int RemoveDuplicates()
 	{
-		Dictionary<string, GameEntry> dictionary = new Dictionary<string, GameEntry>(StringComparer.OrdinalIgnoreCase);
+		// Одинаковые названия не доказывают, что это одна установка.
+		Dictionary<string, GameEntry> dictionary = new Dictionary<string, GameEntry>(PathComparer);
 		List<GameEntry> list = new List<GameEntry>();
 		foreach (GameEntry item in _games.OrderByDescending(Score).ThenBy((GameEntry g) => g.AddedUtc))
 		{
-			string text = Normalize(item.Title);
-			if (text.Length == 0)
+			string? folder = InstallationPath(item.FolderPath);
+			string? exe = InstallationPath(item.ExePath);
+			// В общей папке могут лежать несколько игр; без файла запуска
+			// недостаточно данных, чтобы безопасно объединять карточки.
+			if (folder == null || exe == null)
 			{
 				continue;
 			}
+			string text = folder + "\0" + exe;
 			if (!dictionary.TryGetValue(text, out var value))
 			{
 				dictionary[text] = item;
@@ -3736,7 +3718,7 @@ public sealed class MainWindow : Window
 			dictionary[hit.FolderPath] = gameEntry;
 			num++;
 		}
-		_games.RemoveAll((GameEntry g) => !Directory.Exists(g.FolderPath));
+		// При сканировании не удаляем игры с недоступных путей.
 		return num;
 	}
 

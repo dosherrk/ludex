@@ -116,6 +116,7 @@ public static class Loc
 		dictionary["addGame.nameHint"] = ("Название игры", "Game title");
 		dictionary["addGame.exeLabel"] = ("Файл запуска", "Executable");
 		dictionary["addGame.chooseExe"] = ("Другой файл…", "Another file…");
+		dictionary["addGame.allFiles"] = ("Все файлы", "All files");
 		dictionary["addGame.add"] = ("Добавить", "Add");
 		dictionary["addGame.added"] = ("Добавлено: {0}", "Added: {0}");
 		dictionary["addGame.already"] = ("Эта папка уже есть в библиотеке", "This folder is already in the library");
