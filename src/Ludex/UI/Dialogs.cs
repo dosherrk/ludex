@@ -233,6 +233,45 @@ public static class Dialogs
 		window.Activate();
 	}
 
+	private sealed class ReviewCandidate
+	{
+		public required ScanHit Hit { get; init; }
+		public override string ToString() => Hit.Title + "\n" + Hit.FolderPath + "\n" + Loc.T("lbl.exe") + ": " + Hit.ExePath;
+	}
+
+	/// <summary>Сомнительные кандидаты не добавляются без явного выбора.</summary>
+	public static async Task<List<ScanHit>> ReviewCandidatesAsync(Window owner, IReadOnlyList<ScanHit> candidates)
+	{
+		List<ScanHit> result = new List<ScanHit>();
+		if (candidates.Count == 0) return result;
+		Window? window = null;
+		var items = candidates.Select(hit => new ReviewCandidate { Hit = hit }).ToArray();
+		ListBox list = new ListBox
+		{
+			ItemsSource = items,
+			SelectionMode = SelectionMode.Multiple | SelectionMode.Toggle,
+			Height = 300,
+			Background = Skin.PanelAlt,
+			Foreground = Skin.Text
+		};
+		StackPanel content = new StackPanel { Margin = new Thickness(24), Spacing = 14 };
+		content.Children.Add(Ui.T(Loc.T("auto.reviewTitle"), 18, Skin.Text, (FontWeight)600, (TextWrapping)0));
+		content.Children.Add(Ui.T(Loc.T("auto.reviewHint"), 13, Skin.TextMuted, null, TextWrapping.Wrap));
+		content.Children.Add(list);
+		StackPanel buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Spacing = 10 };
+		buttons.Children.Add(Ui.GhostButton(Loc.T("auto.reviewSkip"), () => window?.Close()));
+		buttons.Children.Add(Ui.PrimaryButton(Loc.T("auto.reviewAdd"), () =>
+		{
+			if (list.SelectedItems != null)
+				result.AddRange(list.SelectedItems.Cast<ReviewCandidate>().Select(item => item.Hit));
+			window?.Close();
+		}));
+		content.Children.Add(buttons);
+		window = CreateShell(Loc.T("auto.reviewTitle"), 620, content);
+		await window.ShowDialog(owner);
+		return result;
+	}
+
 	public static async Task ShowMessageAsync(Window owner, string title, string text)
 	{
 		Window window = null;

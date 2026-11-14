@@ -1718,7 +1718,7 @@ public sealed class MainWindow : Window
 		}
 	}
 
-	private void Launch(GameEntry game, bool asAdmin = false)
+	private async void Launch(GameEntry game, bool asAdmin = false)
 	{
 		GameEntry game2 = game;
 		// Explicit "run as administrator" keeps its original direct-exe behaviour:
@@ -1727,8 +1727,26 @@ public sealed class MainWindow : Window
 		bool viaSteam = !asAdmin && SteamGameLaunch.TryGetUri(game2, out steamUri);
 		if (!viaSteam && !game2.ExeExists)
 		{
-			Dialogs.ShowMessageAsync((Window)(object)this, "Ludex", Loc.T("status.launchError") + "\n" + Loc.T("status.exeMissing") + "\n" + game2.ExePath);
-			return;
+			bool choose = await Dialogs.ConfirmAsync(this, "Ludex", Loc.T("status.exeMissing") + "\n" + game2.ExePath + "\n\n" + Loc.T("status.exeChoose"), Loc.T("addGame.chooseExe"), Loc.T("btn.cancel"));
+			if (!choose) return;
+			try
+			{
+				IReadOnlyList<IStorageFile> files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+				{
+					Title = Loc.T("addGame.chooseExe"), AllowMultiple = false,
+					FileTypeFilter = new[] { new FilePickerFileType(Loc.T("addGame.allFiles")) { Patterns = new[] { "*" } }, new FilePickerFileType("EXE") { Patterns = new[] { "*.exe" } } }
+				});
+				string? selected = files.Count == 0 ? null : StorageProviderExtensions.TryGetLocalPath(files[0]);
+				if (string.IsNullOrWhiteSpace(selected) || !File.Exists(selected)) return;
+				game2.ExePath = selected;
+				Storage.SaveGames(_games);
+			}
+			catch (Exception ex)
+			{
+				AppPaths.Log("Select executable failed: " + ex.Message);
+				await Dialogs.ShowMessageAsync(this, "Ludex", Loc.T("status.launchError") + "\n" + ex.Message);
+				return;
+			}
 		}
 		ShowLaunchOverlay(game2);
 		DispatcherTimer.RunOnce((Action)delegate
@@ -3297,7 +3315,7 @@ public sealed class MainWindow : Window
 					ShowEvent(Loc.F("status.filtered", num), sticky: true);
 				}
 				MergeHits(hits);
-				int num2 = await ImportLaunchersAsync(quiet: true);
+				int num2 = await ImportLaunchersAsync(quiet: true, refresh: true);
 				Storage.SaveGames(_games);
 				RenderGrid();
 				string text = ((folders.Count > 0) ? Loc.F("status.found", hits.Count) : "");
@@ -3376,6 +3394,7 @@ public sealed class MainWindow : Window
 
 	private async Task AutoScanAsync(CancellationToken ct)
 	{
+		List<string> extraIgnore = _settings.ExtraIgnoreExe.ToList();
 		AutoScanner.Report report = await Task.Run(() => AutoScanner.Scan(delegate(string message)
 		{
 			string message3 = message;
@@ -3383,7 +3402,7 @@ public sealed class MainWindow : Window
 			{
 				ProcessUpdate("scan", message3);
 			}, default(DispatcherPriority));
-		}, () => ct.IsCancellationRequested), ct);
+		}, () => ct.IsCancellationRequested, extraIgnore), ct);
 		if (ct.IsCancellationRequested)
 		{
 			return;
@@ -3394,7 +3413,8 @@ public sealed class MainWindow : Window
 		{
 			Title = hit.Title,
 			FolderPath = hit.Folder,
-			ExePath = hit.Exe
+			ExePath = hit.Exe,
+			NeedsReview = hit.NeedsReview
 		}).ToList();
 		if (hits.Count > 0)
 		{
@@ -3406,17 +3426,26 @@ public sealed class MainWindow : Window
 					ProcessUpdate("scan", message2);
 				}, default(DispatcherPriority));
 			}, () => ct.IsCancellationRequested, ct);
+			if (ct.IsCancellationRequested) return;
+			HashSet<string> uncertain = new HashSet<string>(result.Rejected.Concat(result.Unverified), StringComparer.OrdinalIgnoreCase);
 			HashSet<string> keep = new HashSet<string>(result.Confirmed, StringComparer.OrdinalIgnoreCase);
-			int count = hits.Count;
-			hits = hits.Where((ScanHit h) => keep.Contains(h.Title)).ToList();
-			AppPaths.Log($"проверено {count}, отсеяно {count - hits.Count}");
-			if (result.Rejected.Count > 0)
+			List<ScanHit> verified = hits.Where(h => keep.Contains(h.Title) && !uncertain.Contains(h.Title) && !h.NeedsReview).ToList();
+			// Уже существующие и скрытые карточки не спрашиваем повторно. Одно имя
+			// может соответствовать нескольким установкам — выбирать нужно по пути.
+			HashSet<string> existing = new HashSet<string>(_games.Select(g => InstallationPath(g.FolderPath) ?? g.FolderPath), PathComparer);
+			List<ScanHit> review = hits.Where(h => (uncertain.Contains(h.Title) || h.NeedsReview) && !IsHiddenFolder(h.FolderPath) && !ScanPathGuard.IsDownloads(h.FolderPath) &&
+				!existing.Contains(InstallationPath(h.FolderPath) ?? h.FolderPath)).ToList();
+			if (review.Count > 0)
 			{
-				ProcessUpdate("scan", Loc.F("auto.verified", hits.Count, count - hits.Count));
+				List<ScanHit> selected = await Dialogs.ReviewCandidatesAsync(this, review);
+				if (ct.IsCancellationRequested) return;
+				verified.AddRange(selected);
 			}
+			AppPaths.Log($"проверено {hits.Count}, требующих проверки {review.Count}, добавлено выбором {verified.Count - hits.Count(h => keep.Contains(h.Title) && !uncertain.Contains(h.Title) && !h.NeedsReview)}");
+			hits = verified;
 		}
 		int added = MergeHits(hits);
-		int num = await ImportLaunchersAsync(quiet: true);
+		int num = await ImportLaunchersAsync(quiet: true, refresh: true);
 		Storage.SaveGames(_games);
 		RenderGrid();
 		string text = Loc.F("status.found", added);
@@ -3498,7 +3527,7 @@ public sealed class MainWindow : Window
 		}
 	}
 
-	private async Task<int> ImportLaunchersAsync(bool quiet = false)
+	private async Task<int> ImportLaunchersAsync(bool quiet = false, bool refresh = false)
 	{
 		List<string> enabled = _settings.Launchers.ToList();
 		if (enabled.Count == 0 && _games.All((GameEntry g) => g.Source == null))
@@ -3508,7 +3537,7 @@ public sealed class MainWindow : Window
 		List<LauncherGame> found;
 		try
 		{
-			List<LauncherGame> list = ((enabled.Count == 0) ? new List<LauncherGame>() : (await Task.Run(() => Launchers.Import(enabled))));
+			List<LauncherGame> list = ((enabled.Count == 0) ? new List<LauncherGame>() : (await Task.Run(() => Launchers.Import(enabled, refresh))));
 			List<LauncherGame> list2 = list;
 			found = list2;
 		}
@@ -3522,6 +3551,11 @@ public sealed class MainWindow : Window
 			ProcessBegin("import", Loc.T("status.importing"));
 		}
 		int count = found.Count;
+		// Не меняем кеш лаунчеров: для исключённого EXE оставляем карточку,
+		// но не сохраняем путь к запрещённому файлу. Steam ID при этом сохраняется.
+		found = found.Select(f => Scanner.IsUserIgnoredExe(f.Exe, _settings.ExtraIgnoreExe)
+			? new LauncherGame { Launcher = f.Launcher, Title = f.Title, Folder = f.Folder, Exe = "", AppId = f.AppId, ExternalId = f.ExternalId }
+			: f).ToList();
 		found = found.Where((LauncherGame f) => !Scanner.LooksLikeProgram(f.Title, string.IsNullOrWhiteSpace(f.Exe) ? f.Folder : f.Exe)).ToList();
 		if (count != found.Count)
 		{
@@ -3561,7 +3595,7 @@ public sealed class MainWindow : Window
 		}
 		foreach (LauncherGame item in found)
 		{
-			if (IsHiddenFolder(item.Folder))
+			if (IsHiddenFolder(item.Folder) || ScanPathGuard.IsDownloads(item.Folder))
 			{
 				continue;
 			}
@@ -3775,7 +3809,7 @@ public sealed class MainWindow : Window
 		}
 		foreach (ScanHit hit in hits)
 		{
-			if (IsHiddenFolder(hit.FolderPath)) continue;
+			if (IsHiddenFolder(hit.FolderPath) || ScanPathGuard.IsDownloads(hit.FolderPath)) continue;
 			string key = InstallationPath(hit.FolderPath) ?? hit.FolderPath;
 			string? exeFolder = System.IO.Path.GetDirectoryName(hit.ExePath);
 			GameEntry candidate = new GameEntry { Title = hit.Title, FolderPath = exeFolder ?? hit.FolderPath, ExePath = hit.ExePath };
@@ -3783,7 +3817,13 @@ public sealed class MainWindow : Window
 			{
 				// Не подменяем оригинальный Steam-запуск внутренним Shipping.exe.
 				if (IsUnrealNestedDuplicate(value, candidate, scanCandidate: true)) continue;
-				value.ExePath = hit.ExePath;
+				// Для существующих записей происхождение пути (в том числе ручной выбор)
+				// неизвестно: не подменяем его предположением сканера, даже если диск
+				// временно недоступен. Заполняем только ранее пустой путь.
+				if (string.IsNullOrWhiteSpace(value.ExePath) && !string.IsNullOrWhiteSpace(hit.ExePath))
+				{
+					value.ExePath = hit.ExePath;
+				}
 				if (!value.Locked) value.Title = hit.Title;
 				continue;
 			}

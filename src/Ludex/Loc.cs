@@ -280,6 +280,10 @@ public static class Loc
 		dictionary["auto.foundOne"] = ("Найдено: {0} ({1})", "Found: {0} ({1})");
 		dictionary["auto.verify.progress"] = ("Проверяю {0} из {1}: {2}", "Checking {0} of {1}: {2}");
 		dictionary["auto.verified"] = ("Проверено магазином: осталось {0}, отсеяно {1}", "Verified: {0} kept, {1} dropped");
+		dictionary["auto.reviewTitle"] = ("Неподтверждённые находки", "Unverified discoveries");
+		dictionary["auto.reviewHint"] = ("Название или файл запуска не удалось определить надёжно. Здесь могут быть программы. Выбирайте только игры с правильным файлом запуска.", "The title or executable could not be identified reliably. These may be applications. Select only games with the correct executable.");
+		dictionary["auto.reviewAdd"] = ("Добавить выбранное", "Add selected");
+		dictionary["auto.reviewSkip"] = ("Пропустить", "Skip");
 		dictionary["status.autoFound"] = ("Автопоиск: найдено {0}", "Auto search: {0} found");
 		dictionary["status.cleaned"] = ("Убрано из библиотеки: {0}", "Removed from the library: {0}");
 		dictionary["status.nothingCleaned"] = ("В библиотеке нет ничего лишнего", "Nothing to remove from the library");
@@ -327,6 +331,7 @@ public static class Loc
 		dictionary["status.launched"] = ("Запущено: {0}", "Launched: {0}");
 		dictionary["status.launchError"] = ("Не удалось запустить игру", "Failed to launch the game");
 		dictionary["status.exeMissing"] = ("Исполняемый файл не найден:", "Executable file not found:");
+		dictionary["status.exeChoose"] = ("Выбрать файл запуска вручную?", "Choose the executable manually?");
 		dictionary["status.steamLaunchError"] = ("Не удалось передать запрос Steam. Проверьте установку Steam и запустите игру из клиента.", "Could not send the request to Steam. Check your Steam installation and launch the game from the client.");
 		dictionary["status.steamRequested"] = ("Запрос на запуск отправлен Steam: {0}", "Launch request sent to Steam: {0}");
 		dictionary["status.removed"] = ("Игра удалена из библиотеки навсегда", "Game removed from library for good");

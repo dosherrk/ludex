@@ -63,6 +63,9 @@ public static class GameVerifier
 
 		public List<string> Rejected { get; } = new List<string>();
 
+		// На случай недоступного каталога Confirmed сохраняется для совместимости
+		// с существующей очисткой библиотеки; автопоиск предлагает эти имена вручную.
+		public List<string> Unverified { get; } = new List<string>();
 
 		public bool Offline { get; set; }
 	}
@@ -117,6 +120,7 @@ public static class GameVerifier
 				foreach (string item in list.Skip(done - 1))
 				{
 					result.Confirmed.Add(item);
+					result.Unverified.Add(item);
 				}
 				break;
 			}
@@ -131,7 +135,7 @@ public static class GameVerifier
 		}
 		foreach (string item2 in result.Rejected)
 		{
-			AppPaths.Log("не игра: " + item2);
+			AppPaths.Log("название не подтверждено каталогом: " + item2);
 		}
 		return result;
 	}

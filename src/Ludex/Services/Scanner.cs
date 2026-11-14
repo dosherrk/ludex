@@ -54,6 +54,8 @@ public sealed class ScanHit
 	public string ExePath = "";
 
 	public string Title = "";
+
+	public bool NeedsReview;
 }
 
 public static class Scanner
@@ -157,6 +159,7 @@ public static class Scanner
 		return hits;
 		void Walk(DirectoryInfo dir, int depth, bool isRoot, DirectoryInfo rootDir)
 		{
+			if (ScanPathGuard.IsDownloads(dir.FullName)) return;
 			if ((isCancelled2 == null || !isCancelled2()) && hits.Count <= 4000)
 			{
 				visited++;
@@ -252,6 +255,13 @@ public static class Scanner
 				}
 			}
 		}
+	}
+
+	public static bool IsUserIgnoredExe(string? fileName, IEnumerable<string>? ignored)
+	{
+		if (string.IsNullOrWhiteSpace(fileName) || ignored == null) return false;
+		string name = System.IO.Path.GetFileNameWithoutExtension(fileName);
+		return ignored.Any(item => !string.IsNullOrWhiteSpace(item) && name.Contains(item.Trim(), StringComparison.OrdinalIgnoreCase));
 	}
 
 	private static bool IsIgnored(string fileName, List<string> ignore)

@@ -60,6 +60,8 @@ public static class AutoScanner
 		public string Root = "";
 
 		public string Origin = "";
+
+		public bool NeedsReview;
 	}
 
 	public sealed class Report
@@ -194,7 +196,7 @@ public static class AutoScanner
 
 	private static readonly HashSet<string> IgnoreSubstrings = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "wallpaper", "soundpad", "voicemod", "crosshair", "porthole" };
 
-	public static Report Scan(Action<string>? onProgress = null, Func<bool>? isCancelled = null)
+	public static Report Scan(Action<string>? onProgress = null, Func<bool>? isCancelled = null, IReadOnlyCollection<string>? extraIgnore = null)
 	{
 		Action<string> onProgress2 = onProgress;
 		Func<bool> isCancelled2 = isCancelled;
@@ -238,7 +240,7 @@ public static class AutoScanner
 				}
 				bool flag = IsSystemDrive(item3);
 				TrackRoot(item3);
-				Walk(new DirectoryInfo(item3), 0, flag ? 3 : 6, flag ? "system" : "drive", report, seenFolders, Progress, Cancelled);
+				Walk(new DirectoryInfo(item3), 0, flag ? 3 : 6, flag ? "system" : "drive", report, seenFolders, Progress, Cancelled, extraIgnore);
 			}
 			foreach (string item4 in UserFolders())
 			{
@@ -250,7 +252,7 @@ public static class AutoScanner
 				if (Directory.Exists(item4))
 				{
 					TrackRoot(item4);
-					Walk(new DirectoryInfo(item4), 0, 4, "desktop", report, seenFolders, Progress, Cancelled);
+					Walk(new DirectoryInfo(item4), 0, 4, "desktop", report, seenFolders, Progress, Cancelled, extraIgnore);
 				}
 			}
 		}
@@ -277,7 +279,8 @@ public static class AutoScanner
 			{
 				report.Roots.Add(folder);
 			}
-			Walk(new DirectoryInfo(folder), 0, 6, origin, report, seenFolders, Progress, Cancelled);
+			// Явно найденные игровые библиотеки могут содержать глубокие структуры.
+			Walk(new DirectoryInfo(folder), 0, SourceExtraDepth, origin, report, seenFolders, Progress, Cancelled, extraIgnore);
 		}
 		bool Cancelled()
 		{
@@ -300,8 +303,9 @@ public static class AutoScanner
 		}
 	}
 
-	private static void Walk(DirectoryInfo dir, int depth, int maxDepth, string origin, Report report, HashSet<string> seenFolders, Action<string> progress, Func<bool> cancelled)
+	private static void Walk(DirectoryInfo dir, int depth, int maxDepth, string origin, Report report, HashSet<string> seenFolders, Action<string> progress, Func<bool> cancelled, IReadOnlyCollection<string>? extraIgnore)
 	{
+		if (ScanPathGuard.IsDownloads(dir.FullName)) return;
 		if (cancelled())
 		{
 			report.Cancelled = true;
@@ -312,10 +316,7 @@ public static class AutoScanner
 			{
 				return;
 			}
-			if (depth == 0 && maxDepth < 8)
-			{
-				maxDepth = 8;
-			}
+			// maxDepth задаётся вызывающим для диска, рабочего стола или библиотеки.
 			report.FoldersVisited++;
 			if (report.FoldersVisited % 40 == 0)
 			{
@@ -343,7 +344,7 @@ public static class AutoScanner
 			}
 			if (!seenFolders.Contains(dir.FullName))
 			{
-				Hit hit = DetectGame(dir, origin);
+				Hit hit = DetectGameCore(dir, origin, extraIgnore);
 				if (hit != null && !AlreadyFound(report, hit))
 				{
 					seenFolders.Add(dir.FullName);
@@ -364,19 +365,16 @@ public static class AutoScanner
 					report.Cancelled = true;
 					break;
 				}
-				Walk(dir2, depth + 1, maxDepth, origin, report, seenFolders, progress, cancelled);
+				Walk(dir2, depth + 1, maxDepth, origin, report, seenFolders, progress, cancelled, extraIgnore);
 			}
 		}
 	}
 
 	private static bool AlreadyFound(Report report, Hit hit)
 	{
-		Hit hit2 = hit;
-		if (!report.Hits.Any((Hit h) => SameFolder(h.Folder, hit2.Folder)))
-		{
-			return report.Hits.Any((Hit h) => string.Equals(h.Title, hit2.Title, StringComparison.OrdinalIgnoreCase));
-		}
-		return true;
+		// Одинаковые названия не означают одну установку: версии или копии игры
+		// могут находиться на разных дисках. Повторный обход той же папки отсекаем.
+		return report.Hits.Any(h => SameFolder(h.Folder, hit.Folder));
 	}
 
 	private static bool SameFolder(string a, string b)
@@ -408,7 +406,9 @@ public static class AutoScanner
 		return false;
 	}
 
-	private static Hit? DetectGame(DirectoryInfo dir, string origin)
+	private static Hit? DetectGame(DirectoryInfo dir, string origin) => DetectGameCore(dir, origin, null);
+
+	private static Hit? DetectGameCore(DirectoryInfo dir, string origin, IReadOnlyCollection<string>? extraIgnore)
 	{
 		DirectoryInfo dir2 = dir;
 		if (IgnoreSubstrings.Any((string x) => dir2.Name.Contains(x, StringComparison.OrdinalIgnoreCase)))
@@ -438,9 +438,11 @@ public static class AutoScanner
 		FileInfo[] array;
 		try
 		{
-			array = (from f in dir2.GetFiles()
-				where f.Extension.Equals(".exe", StringComparison.OrdinalIgnoreCase)
-				select f).ToArray();
+			// Windows-игры (.exe) по-прежнему доступны на Linux/Wine; нативные
+			// исполняемые файлы дополнительно определяются правилами платформы.
+			IEnumerable<FileInfo> files = dir2.GetFiles().Where(f => f.Extension.Equals(".exe", StringComparison.OrdinalIgnoreCase));
+			if (!OperatingSystem.IsWindows()) files = files.Concat(Platform.GameFiles(dir2));
+			array = files.GroupBy(f => f.FullName, OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal).Select(g => g.First()).ToArray();
 		}
 		catch
 		{
@@ -451,8 +453,8 @@ public static class AutoScanner
 			return null;
 		}
 		List<FileInfo> list = (from f in array
-			where !IsIgnoredExe(f.Name)
-			where f.Length >= 2097152 || (f.Length >= 307200 && IsUnityPlayerExe(dir2, f))
+			where !IsIgnoredExe(f.Name) && !Scanner.IsUserIgnoredExe(f.Name, extraIgnore)
+			where f.Length >= 2097152 || (f.Length >= 65536 && IsStrongSmallGame(dir2, f))
 			orderby f.Length descending
 			select f).ToList();
 		if (list.Count == 0)
@@ -469,6 +471,10 @@ public static class AutoScanner
 		{
 			return null;
 		}
+		var chosen = ExecutableRanking.Select(list, text, dir2.FullName);
+		if (chosen.File == null) return null;
+		list.Remove(chosen.File);
+		list.Insert(0, chosen.File);
 		if (HasNeverGameWord(text) || HasNeverGameWord(System.IO.Path.GetFileNameWithoutExtension(list[0].Name)))
 		{
 			return null;
@@ -502,10 +508,10 @@ public static class AutoScanner
 			break;
 		}
 		long num = (flag2 ? 157286400 : (flag ? 209715200 : 734003200));
-		if (FolderDataSize(directoryInfo, num) < num)
-		{
-			return null;
-		}
+		bool small = FolderDataSize(directoryInfo, num) < num;
+		// Небольшие игры допускаем лишь при проверяемом признаке движка;
+		// они попадут в отдельное подтверждение, а не в библиотеку автоматически.
+		if (small && !IsStrongSmallGame(dir2, list[0])) return null;
 		if (LooksTechnical(text))
 		{
 			return null;
@@ -516,8 +522,24 @@ public static class AutoScanner
 			Exe = list[0].FullName,
 			Title = Scanner.CleanTitle(text),
 			Root = directoryInfo.FullName,
-			Origin = origin
+			Origin = origin,
+			NeedsReview = chosen.NeedsReview || small || list[0].Length < 2097152
 		};
+	}
+
+	private static bool IsStrongSmallGame(DirectoryInfo dir, FileInfo exe)
+	{
+		try
+		{
+			if (IsUnityPlayerExe(dir, exe)) return true;
+			string name = System.IO.Path.GetFileNameWithoutExtension(exe.Name);
+			// Godot: исполняемый файл и одноимённый .pck рядом друг с другом.
+			return !string.IsNullOrWhiteSpace(name) && File.Exists(System.IO.Path.Combine(dir.FullName, name + ".pck"));
+		}
+		catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is ArgumentException || ex is System.Security.SecurityException)
+		{
+			return false;
+		}
 	}
 
 	private static DirectoryInfo? TitleFolder(DirectoryInfo dir)

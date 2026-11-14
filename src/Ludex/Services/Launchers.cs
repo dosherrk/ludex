@@ -199,10 +199,10 @@ public static class Launchers
 		return launcherState;
 	}
 
-	public static List<LauncherGame> Import(IEnumerable<string> enabled)
+	public static List<LauncherGame> Import(IEnumerable<string> enabled, bool refresh = false)
 	{
 		List<LauncherGame> list = new List<LauncherGame>();
-		foreach (LauncherState item in ScanAll(enabled))
+		foreach (LauncherState item in refresh ? RescanAll(enabled) : ScanAll(enabled))
 		{
 			if (enabled.Contains<string>(item.Key, StringComparer.OrdinalIgnoreCase))
 			{
@@ -963,10 +963,11 @@ public static class Launchers
 					}
 				}
 			}
-			return (from p in list
-				where !ExeIgnore.Any((string bad) => System.IO.Path.GetFileName(p).ToLowerInvariant().Contains(bad))
-				orderby System.IO.Path.GetFileName(p).Length descending, p
-				select p).FirstOrDefault() ?? list.FirstOrDefault() ?? "";
+			var files = list.Where(p => !ExeIgnore.Any(bad => System.IO.Path.GetFileName(p).ToLowerInvariant().Contains(bad)))
+				.Select(p => new FileInfo(p));
+			var choice = ExecutableRanking.Select(files, System.IO.Path.GetFileName(folder.TrimEnd(System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar)), folder);
+			// При неоднозначности не запускаем сервер/настройку вместо игры.
+			return choice.NeedsReview ? "" : (choice.File?.FullName ?? "");
 		}
 		catch
 		{
