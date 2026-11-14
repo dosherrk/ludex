@@ -326,6 +326,9 @@ public static class Loc
 		dictionary["status.noFolders"] = ("Сначала добавьте хотя бы одну папку в настройках", "Add at least one folder in settings first");
 		dictionary["status.launched"] = ("Запущено: {0}", "Launched: {0}");
 		dictionary["status.launchError"] = ("Не удалось запустить игру", "Failed to launch the game");
+		dictionary["status.exeMissing"] = ("Исполняемый файл не найден:", "Executable file not found:");
+		dictionary["status.steamLaunchError"] = ("Не удалось передать запрос Steam. Проверьте установку Steam и запустите игру из клиента.", "Could not send the request to Steam. Check your Steam installation and launch the game from the client.");
+		dictionary["status.steamRequested"] = ("Запрос на запуск отправлен Steam: {0}", "Launch request sent to Steam: {0}");
 		dictionary["status.removed"] = ("Игра удалена из библиотеки навсегда", "Game removed from library for good");
 		dictionary["status.deleting"] = ("Удаляю «{0}» с диска…", "Deleting «{0}» from the disk…");
 		dictionary["status.deleted"] = ("Игра удалена с диска", "Game deleted from the disk");

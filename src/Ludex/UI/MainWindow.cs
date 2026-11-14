@@ -1721,15 +1721,22 @@ public sealed class MainWindow : Window
 	private void Launch(GameEntry game, bool asAdmin = false)
 	{
 		GameEntry game2 = game;
-		if (!game2.ExeExists)
+		// Explicit "run as administrator" keeps its original direct-exe behaviour:
+		// a Steam URI cannot promise to elevate the game or the existing client.
+		string steamUri = "";
+		bool viaSteam = !asAdmin && SteamGameLaunch.TryGetUri(game2, out steamUri);
+		if (!viaSteam && !game2.ExeExists)
 		{
-			Dialogs.ShowMessageAsync((Window)(object)this, "Ludex", Loc.T("status.launchError") + "\n" + game2.ExePath);
+			Dialogs.ShowMessageAsync((Window)(object)this, "Ludex", Loc.T("status.launchError") + "\n" + Loc.T("status.exeMissing") + "\n" + game2.ExePath);
 			return;
 		}
 		ShowLaunchOverlay(game2);
 		DispatcherTimer.RunOnce((Action)delegate
 		{
-			if (Shell.LaunchGame(game2.ExePath, out string error, asAdmin))
+			string error = "";
+			bool started = viaSteam ? Shell.OpenUrl(steamUri) : Shell.LaunchGame(game2.ExePath, out error, asAdmin);
+			if (viaSteam && !started) error = Loc.T("status.steamLaunchError");
+			if (started)
 			{
 				game2.LastPlayedUtc = DateTime.UtcNow;
 				game2.PlayCount++;
@@ -1738,7 +1745,7 @@ public sealed class MainWindow : Window
 				{
 					value.Text = Subtitle(game2);
 				}
-				ShowEvent(Loc.F("status.launched", game2.Title));
+				ShowEvent(Loc.F(viaSteam ? "status.steamRequested" : "status.launched", game2.Title));
 				HideLaunchOverlay(1500, delegate
 				{
 					if (_detailLayer.IsVisible)
