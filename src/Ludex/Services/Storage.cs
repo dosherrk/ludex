@@ -81,14 +81,30 @@ public static class Storage
 	{
 		lock (Sync)
 		{
+			try { File.WriteAllText(AppPaths.SettingsFile, JsonSerializer.Serialize(settings, Options)); }
+			catch (Exception ex) { AppPaths.Log("SaveSettings failed: " + ex); }
+		}
+	}
+
+	// Для действий, о сохранении которых необходимо сообщить пользователю.
+	// Временный файл находится рядом с настройками, чтобы не повредить их при ошибке записи.
+	public static bool TrySaveSettings(AppSettings settings)
+	{
+		lock (Sync)
+		{
+			string temp = AppPaths.SettingsFile + "." + Guid.NewGuid().ToString("N") + ".tmp";
 			try
 			{
-				File.WriteAllText(AppPaths.SettingsFile, JsonSerializer.Serialize(settings, Options));
+				File.WriteAllText(temp, JsonSerializer.Serialize(settings, Options));
+				File.Move(temp, AppPaths.SettingsFile, overwrite: true);
+				return true;
 			}
 			catch (Exception ex)
 			{
 				AppPaths.Log("SaveSettings failed: " + ex);
+				return false;
 			}
+			finally { try { if (File.Exists(temp)) File.Delete(temp); } catch { } }
 		}
 	}
 

@@ -134,6 +134,8 @@ public sealed class AppSettings
 
 	public List<string> ExtraIgnoreExe { get; set; } = new List<string>();
 
+	// Только для диалога неподтверждённых находок; библиотеку и импорт не меняет.
+	public List<string> IgnoredReviewPaths { get; set; } = new List<string>();
 
 	public double WindowWidth { get; set; } = 1280.0;
 

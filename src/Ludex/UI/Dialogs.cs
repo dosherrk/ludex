@@ -240,12 +240,12 @@ public static class Dialogs
 	}
 
 	/// <summary>Сомнительные кандидаты не добавляются без явного выбора.</summary>
-	public static async Task<List<ScanHit>> ReviewCandidatesAsync(Window owner, IReadOnlyList<ScanHit> candidates)
+	public static async Task<List<ScanHit>> ReviewCandidatesAsync(Window owner, IReadOnlyList<ScanHit> candidates, Func<IReadOnlyList<ScanHit>, bool> ignoreSelected)
 	{
 		List<ScanHit> result = new List<ScanHit>();
 		if (candidates.Count == 0) return result;
 		Window? window = null;
-		var items = candidates.Select(hit => new ReviewCandidate { Hit = hit }).ToArray();
+		var items = new System.Collections.ObjectModel.ObservableCollection<ReviewCandidate>(candidates.Select(hit => new ReviewCandidate { Hit = hit }));
 		ListBox list = new ListBox
 		{
 			ItemsSource = items,
@@ -260,6 +260,18 @@ public static class Dialogs
 		content.Children.Add(list);
 		StackPanel buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Spacing = 10 };
 		buttons.Children.Add(Ui.GhostButton(Loc.T("auto.reviewSkip"), () => window?.Close()));
+		buttons.Children.Add(Ui.GhostButton(Loc.T("auto.reviewIgnore"), async () =>
+		{
+			var selected = list.SelectedItems?.Cast<ReviewCandidate>().ToList() ?? new List<ReviewCandidate>();
+			if (selected.Count == 0) return;
+			if (!ignoreSelected(selected.Select(item => item.Hit).ToList()))
+			{
+				if (window != null) await ShowMessageAsync(window, "Ludex", Loc.T("auto.reviewSaveFailed"));
+				return;
+			}
+			foreach (var item in selected) items.Remove(item);
+			if (items.Count == 0) window?.Close();
+		}));
 		buttons.Children.Add(Ui.PrimaryButton(Loc.T("auto.reviewAdd"), () =>
 		{
 			if (list.SelectedItems != null)

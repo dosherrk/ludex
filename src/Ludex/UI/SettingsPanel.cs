@@ -61,6 +61,8 @@ public sealed class SettingsPanel : Border
 
 	private TextBox _ignoreBox;
 
+	private Border? _ignoredReviewReset;
+
 	private Dropdown _langCombo;
 
 	private Dropdown _engineCombo;
@@ -120,6 +122,13 @@ public sealed class SettingsPanel : Border
 	public event Action? UpdateCheckRequested;
 
 	public event Action? HiddenListRequested;
+
+	public event Action? ResetIgnoredReviewRequested;
+
+	public void RefreshIgnoredReviewButton()
+	{
+		if (_ignoredReviewReset != null) _ignoredReviewReset.IsVisible = (_original.IgnoredReviewPaths?.Count ?? 0) > 0;
+	}
 
 	public SettingsPanel(AppSettings settings)
 	{
@@ -259,6 +268,10 @@ public sealed class SettingsPanel : Border
 		}
 		((AvaloniaList<Control>)(object)((Panel)val3).Children).Add((Control)(object)val4);
 		BuildAutoScanSection(val3);
+		_ignoredReviewReset = Ui.GhostButton(Loc.F("auto.reviewReset", _original.IgnoredReviewPaths?.Count ?? 0), () => ResetIgnoredReviewRequested?.Invoke());
+		_ignoredReviewReset.HorizontalAlignment = HorizontalAlignment.Left;
+		RefreshIgnoredReviewButton();
+		val3.Children.Add(_ignoredReviewReset);
 		((AvaloniaList<Control>)(object)((Panel)val3).Children).Add((Control)(object)Ui.Divider());
 		WrapPanel val12 = new WrapPanel
 		{

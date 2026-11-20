@@ -2194,6 +2194,17 @@ public sealed class MainWindow : Window
 			CheckUpdatesAsync(silent: false);
 		};
 		_settingsPanel.HiddenListRequested += ShowHiddenGames;
+		_settingsPanel.ResetIgnoredReviewRequested += async () =>
+		{
+			if (!await Dialogs.ConfirmAsync(this, "Ludex", Loc.T("auto.reviewResetHint"), Loc.T("auto.reviewResetConfirm"), Loc.T("btn.cancel"))) return;
+			if (!ReviewIgnorePaths.Clear(_settings))
+			{
+				await Dialogs.ShowMessageAsync(this, "Ludex", Loc.T("auto.reviewSaveFailed"));
+				return;
+			}
+			_settingsPanel?.RefreshIgnoredReviewButton();
+			ShowEvent(Loc.T("auto.reviewResetDone"));
+		};
 		_settingsPanel.CleanupRequested += delegate
 		{
 			CloseSettings();
@@ -3434,10 +3445,12 @@ public sealed class MainWindow : Window
 			// может соответствовать нескольким установкам — выбирать нужно по пути.
 			HashSet<string> existing = new HashSet<string>(_games.Select(g => InstallationPath(g.FolderPath) ?? g.FolderPath), PathComparer);
 			List<ScanHit> review = hits.Where(h => (uncertain.Contains(h.Title) || h.NeedsReview) && !IsHiddenFolder(h.FolderPath) && !ScanPathGuard.IsDownloads(h.FolderPath) &&
+				!ReviewIgnorePaths.Contains(_settings.IgnoredReviewPaths, h.FolderPath) &&
 				!existing.Contains(InstallationPath(h.FolderPath) ?? h.FolderPath)).ToList();
 			if (review.Count > 0)
 			{
-				List<ScanHit> selected = await Dialogs.ReviewCandidatesAsync(this, review);
+				List<ScanHit> selected = await Dialogs.ReviewCandidatesAsync(this, review,
+					ignored => ReviewIgnorePaths.Add(_settings, ignored.Select(h => h.FolderPath)));
 				if (ct.IsCancellationRequested) return;
 				verified.AddRange(selected);
 			}

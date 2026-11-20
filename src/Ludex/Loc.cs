@@ -281,9 +281,15 @@ public static class Loc
 		dictionary["auto.verify.progress"] = ("Проверяю {0} из {1}: {2}", "Checking {0} of {1}: {2}");
 		dictionary["auto.verified"] = ("Проверено магазином: осталось {0}, отсеяно {1}", "Verified: {0} kept, {1} dropped");
 		dictionary["auto.reviewTitle"] = ("Неподтверждённые находки", "Unverified discoveries");
-		dictionary["auto.reviewHint"] = ("Название или файл запуска не удалось определить надёжно. Здесь могут быть программы. Выбирайте только игры с правильным файлом запуска.", "The title or executable could not be identified reliably. These may be applications. Select only games with the correct executable.");
+		dictionary["auto.reviewHint"] = ("Название или файл запуска не удалось определить надёжно. Выберите игры для добавления или отметьте ненужные пути и нажмите «Игнорировать».", "The title or executable could not be identified reliably. Select games to add, or select unwanted paths and choose Ignore.");
 		dictionary["auto.reviewAdd"] = ("Добавить выбранное", "Add selected");
 		dictionary["auto.reviewSkip"] = ("Пропустить", "Skip");
+		dictionary["auto.reviewIgnore"] = ("Игнорировать", "Ignore");
+		dictionary["auto.reviewSaveFailed"] = ("Не удалось сохранить исключения. Проверьте доступ к файлу настроек и попробуйте снова.", "Could not save ignored paths. Check access to the settings file and try again.");
+		dictionary["auto.reviewReset"] = ("Сбросить игнорируемые находки ({0})", "Reset ignored discoveries ({0})");
+		dictionary["auto.reviewResetHint"] = ("Снова предлагать все ранее игнорируемые неподтверждённые находки? Уже добавленные игры не изменятся.", "Offer all previously ignored unverified discoveries again? Existing library entries will not be changed.");
+		dictionary["auto.reviewResetDone"] = ("Список игнорируемых находок очищен", "Ignored discoveries cleared");
+		dictionary["auto.reviewResetConfirm"] = ("Сбросить", "Reset");
 		dictionary["status.autoFound"] = ("Автопоиск: найдено {0}", "Auto search: {0} found");
 		dictionary["status.cleaned"] = ("Убрано из библиотеки: {0}", "Removed from the library: {0}");
 		dictionary["status.nothingCleaned"] = ("В библиотеке нет ничего лишнего", "Nothing to remove from the library");
